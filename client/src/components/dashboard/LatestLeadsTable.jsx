@@ -1,4 +1,4 @@
-// src/components/dashboard/LatestLeadsTable.jsx
+  // src/components/dashboard/LatestLeadsTable.jsx
 import React from 'react';
 
 const LatestLeadsTable = ({ leads }) => {

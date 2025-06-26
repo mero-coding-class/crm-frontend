@@ -35,6 +35,9 @@ const LeadTableDisplay = ({ leads, handleEdit, handleDelete }) => {
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Next Call
             </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Next Call
+            </th>
             <th className="relative px-3 py-3">
               <span className="sr-only">Actions</span>
             </th>
