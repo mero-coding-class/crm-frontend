@@ -13,6 +13,7 @@ import Leads from './pages/Leads';
 // Import Layout
 import MainLayout from './layouts/MainLayout';
 import EnrolledStudents from "./pages/EnrolledStudents";
+import AddLeadModal from "./components/AddLeadModal";
 
 // Create Auth Context
 export const AuthContext = createContext(null);
@@ -61,6 +62,7 @@ const App = () => {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="leads" element={<Leads />} />
             <Route path="enrolled-students" element={<EnrolledStudents />} />
+            <Route path="add-leads" element={<AddLeadModal />} />
             {/* Add more private routes here */}
           </Route>
 
