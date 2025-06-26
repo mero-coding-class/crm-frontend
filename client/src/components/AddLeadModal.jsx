@@ -30,7 +30,8 @@ const AddLeadModal = ({ onClose, onSave }) => {
     remarks: "",
     shift: "",
     paymentType: "",
-    laptop: "",
+    // Changed 'laptop' to 'device' here to match the new field name
+    device: "", // New field name and default empty value
     invoice: [], // Assuming invoice is an array of files/strings
     courseType: "",
     previousCodingExp: "",
@@ -122,6 +123,9 @@ const AddLeadModal = ({ onClose, onSave }) => {
     "Regular",
   ];
   const paymentTypeOptions = ["Select", "Cash", "Online"];
+
+  // New: Device options
+  const deviceOptions = ["Select", "Laptop", "PC"];
 
   return (
     // Attach the onClick handler to the outermost overlay div
@@ -492,24 +496,29 @@ const AddLeadModal = ({ onClose, onSave }) => {
             </select>
           </div>
 
-          {/* Laptop/PC */}
           <div>
             <label
-              htmlFor="laptop"
+              htmlFor="device"
               className="block text-sm font-medium text-gray-700"
             >
-              Laptop/PC
+              Device
             </label>
             <select
-              id="laptop"
-              name="laptop"
-              value={formData.laptop}
+              id="device"
+              name="device"
+              value={formData.device} // Now bound to formData.device
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              <option value="">Select</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
+              {deviceOptions.map(
+                (
+                  option // Using new deviceOptions
+                ) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                )
+              )}
             </select>
           </div>
 

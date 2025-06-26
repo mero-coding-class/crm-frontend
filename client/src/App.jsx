@@ -8,7 +8,7 @@ import Register from './pages/Register';
 import OTPConfirm from './pages/OTPConfirm';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Leads from './pages/Leads';
+import Leads from "./pages/Leads";
 
 // Import Layout
 import MainLayout from './layouts/MainLayout';

@@ -1,5 +1,5 @@
 // src/components/LeadTableDisplay.jsx
-import React from "react"; // Removed useState and useEffect
+import React from "react";
 import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 const LeadTableDisplay = ({
@@ -7,7 +7,9 @@ const LeadTableDisplay = ({
   handleEdit,
   handleDelete,
   onStatusChange,
+  onDeviceChange, // New prop for device change
 }) => {
+  // Ensure statusOptions match the full list in Leads.jsx and mockLeads.js
   const statusOptions = [
     "New",
     "Open",
@@ -15,10 +17,16 @@ const LeadTableDisplay = ({
     "Followup",
     "Interested",
     "inProgress",
+    "Contacted", // Added to match Leads.jsx
+    "Qualified", // Added to match Leads.jsx
+    "Closed", // Added to match Leads.jsx
     "Converted",
     "Lost",
     "Junk",
   ];
+
+  // Expanded deviceOptions for more flexibility, consistent with mock data
+  const deviceOptions = ["Laptop", "PC", "Tablet", "Mobile", "Other", "N/A"];
 
   // Helper function to dynamically apply Tailwind CSS classes based on status.
   const getStatusClasses = (status) => {
@@ -33,6 +41,12 @@ const LeadTableDisplay = ({
         return "bg-indigo-100 text-indigo-800 border-indigo-200";
       case "inProgress":
         return "bg-purple-100 text-purple-800 border-purple-200";
+      case "Contacted":
+        return "bg-cyan-100 text-cyan-800 border-cyan-200"; // Specific class for Contacted
+      case "Qualified":
+        return "bg-teal-100 text-teal-800 border-teal-200"; // Specific class for Qualified
+      case "Closed":
+        return "bg-gray-200 text-gray-800 border-gray-300"; // Specific class for Closed
       case "Converted":
         return "bg-green-100 text-green-800 border-green-200";
       case "Lost":
@@ -96,6 +110,9 @@ const LeadTableDisplay = ({
               Next Call
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Device
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Status
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -148,6 +165,22 @@ const LeadTableDisplay = ({
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.nextCall}
               </td>
+              {/* Device Selection */}
+              <td className="px-3 py-4 whitespace-nowrap text-sm">
+                <select
+                  value={lead.laptop || "N/A"} // Use lead.laptop and default to 'N/A' if undefined
+                  onChange={(e) => onDeviceChange(lead._id, e.target.value)}
+                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6"
+                  style={{ minWidth: "100px" }}
+                >
+                  {deviceOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              {/* Status Selection */}
               <td className="px-3 py-4 whitespace-nowrap text-sm">
                 <select
                   value={lead.status}
@@ -160,8 +193,6 @@ const LeadTableDisplay = ({
                     <option
                       key={option}
                       value={option}
-                      // Styling for individual options within the dropdown list can be inconsistent across browsers.
-                      // Applying classes here for best effort.
                       className={`${getStatusClasses(option)}`}
                     >
                       {option}
