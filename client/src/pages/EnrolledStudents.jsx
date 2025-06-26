@@ -1,40 +1,27 @@
-// C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Leads.jsx
+// src/pages/EnrolledStudents.jsx
 
-import React, { useContext, useState, useEffect, useMemo } from "react";
-import Loader from "../components/common/Loader";
-import { AuthContext } from "../App";
-// import api from "../services/api"; // Keep this import if you plan to use it later
+import React, { useContext, useState, useEffect, useMemo } from 'react';
+import Loader from '../components/common/Loader';
+import { AuthContext } from '../App';
+import LeadTableDisplay from '../components/LeadTableDisplay';
+import LeadEditModal from "../components/LeadEditModal";
 
-// Import the new reusable table component and the modal component
-import LeadTableDisplay from "../components/LeadTableDisplay";
-import LeadEditModal from "../components/LeadEditModal"; // Make sure this is imported
-
-import {
-  PlusIcon,
-  ArrowPathIcon,
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  ArrowUpTrayIcon,
-  ArrowDownTrayIcon
-} from "@heroicons/react/24/outline";
-
-const Leads = () => {
+const EnrolledStudents = () => {
   const { authToken } = useContext(AuthContext);
   const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
 
   useEffect(() => {
-    const fetchInitialLeads = async () => {
+    const fetchLeadsData = async () => {
       setLoading(true);
       setError(null);
 
       const mockLeads = [
+        // ... (your existing mock data) ...
         {
           _id: '1', studentName: 'Alice Johnson', parentsName: 'Mr. & Mrs. Johnson', email: 'alice.j@example.com',
           phone: '123-456-7890', ageGrade: '10', contactWhatsapp: '123-456-7890', course: 'Full Stack Web Dev',
@@ -54,7 +41,7 @@ const Leads = () => {
         {
           _id: '3', studentName: 'Charlie Brown', parentsName: 'Mr. David Brown', email: 'charlie.b@example.com',
           phone: '555-123-4567', ageGrade: '11', contactWhatsapp: '555-123-4567', course: 'UI/UX Design',
-          source: 'Website Form', recentCall: '2024-06-18', nextCall: 'N/A', status: 'Qualified',
+          source: 'Website Form', recentCall: '2024-06-18', nextCall: 'N/A', status: 'Qualified', // This is an enrolled student
           address: '789 Pine Rd, Smalltown', classType: 'Online', value: '$2000',
           adsetName: 'Organic-Search', remarks: 'Looking for part-time course.', shift: 'Afternoon',
           paymentType: 'Installment', laptop: 'Yes', invoice: [], courseType: 'Long-term', previousCodingExp: 'None'
@@ -62,7 +49,7 @@ const Leads = () => {
         {
           _id: '4', studentName: 'Diana Prince', parentsName: 'Ms. Martha Prince', email: 'diana.p@example.com',
           phone: '999-888-7777', ageGrade: '9', contactWhatsapp: '999-888-7777', course: 'Game Development',
-          source: 'Referral', recentCall: '2024-06-01', nextCall: '2024-07-01', status: 'Closed',
+          source: 'Referral', recentCall: '2024-06-01', nextCall: '2024-07-01', status: 'Closed', // This is an enrolled student
           address: '101 Wonder Ln, Metropolis', classType: 'Offline', value: '$4000',
           adsetName: 'Referral-Program', remarks: 'Enrolled in advanced course.', shift: 'Morning',
           paymentType: 'Full', laptop: 'Yes', invoice: [], courseType: 'Long-term', previousCodingExp: 'Intermediate C++'
@@ -86,7 +73,7 @@ const Leads = () => {
         {
           _id: '7', studentName: 'Grace Lee', parentsName: 'Mrs. Emily Lee', email: 'grace.l@example.com',
           phone: '777-888-9999', ageGrade: '9', contactWhatsapp: '777-888-9999', course: 'Digital Marketing',
-          source: 'Referral', recentCall: '2024-06-19', nextCall: 'N/A', status: 'Qualified',
+          source: 'Referral', recentCall: '2024-06-19', nextCall: 'N/A', status: 'Qualified', // This is an enrolled student
           address: '800 Growth Way, Marketown', classType: 'Offline', value: '$1800',
           adsetName: 'Referral-2024', remarks: 'Looking for a practical course.', shift: 'Afternoon',
           paymentType: 'Installment', laptop: 'Yes', invoice: [], courseType: 'Short-term', previousCodingExp: 'None'
@@ -102,7 +89,7 @@ const Leads = () => {
         {
           _id: '9', studentName: 'Ivy Chen', parentsName: 'Mr. Wei Chen', email: 'ivy.c@example.com',
           phone: '666-777-8888', ageGrade: '10', contactWhatsapp: '666-777-8888', course: 'Mobile App Dev',
-          source: 'Website Form', recentCall: '2024-06-16', nextCall: 'N/A', status: 'Closed',
+          source: 'Website Form', recentCall: '2024-06-16', nextCall: 'N/A', status: 'Closed', // This is an enrolled student
           address: '10 Mobile Hts, Silicon Valley', classType: 'Online', value: '$3200',
           adsetName: 'Dev-Summit', remarks: 'Enrolled in iOS development.', shift: 'Morning',
           paymentType: 'Installment', laptop: 'Yes', invoice: [], courseType: 'Long-term', previousCodingExp: 'Basic Java'
@@ -116,70 +103,46 @@ const Leads = () => {
           paymentType: 'N/A', laptop: 'Yes', invoice: [], courseType: 'Long-term', previousCodingExp: 'Arduino'
         }
       ];
+
       setAllLeads(mockLeads);
       setLoading(false);
     };
 
-    fetchInitialLeads();
+    fetchLeadsData();
   }, [authToken]);
 
-  const displayedLeads = useMemo(() => {
-    let filtered = allLeads;
-
-    // Apply search filter
-    if (searchTerm) {
-      const lowerCaseSearchTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter(lead =>
-        lead.email.toLowerCase().includes(lowerCaseSearchTerm) ||
-        lead.phone.toLowerCase().includes(lowerCaseSearchTerm) ||
-        lead.studentName.toLowerCase().includes(lowerCaseSearchTerm) ||
-        lead.course.toLowerCase().includes(lowerCaseSearchTerm) ||
-        lead.source.toLowerCase().includes(lowerCaseSearchTerm) ||
-        lead.status.toLowerCase().includes(lowerCaseSearchTerm)
-      );
-    }
-
-    // Apply status filter
-    if (filterStatus !== 'All') {
-      filtered = filtered.filter(lead => lead.status === filterStatus);
-    }
-
+  const enrolledStudents = useMemo(() => {
+    const filtered = allLeads.filter(
+      (lead) => lead.status === 'Qualified' || lead.status === 'Closed'
+    );
+    console.log("Enrolled Students (Memoized):", filtered); // Add this log
     return filtered;
-  }, [allLeads, searchTerm, filterStatus]);
+  }, [allLeads]);
 
-  // Handler for opening the edit modal
   const handleEdit = (leadToEdit) => {
+    console.log("handleEdit called with:", leadToEdit); // Add this log
     setEditingLead(leadToEdit);
     setIsModalOpen(true);
+    console.log("isModalOpen set to true, editingLead set:", leadToEdit); // Add this log
   };
 
-  // Handler for closing the edit modal
   const handleCloseModal = () => {
+    console.log("handleCloseModal called."); // Add this log
     setIsModalOpen(false);
-    setEditingLead(null); // Clear the editing lead
+    setEditingLead(null);
   };
 
-  // Handler for saving changes from the edit modal
   const handleSaveEdit = (updatedLead) => {
-    // Update the allLeads state with the modified lead
+    console.log("handleSaveEdit called with:", updatedLead); // Add this log
     setAllLeads((prevLeads) =>
       prevLeads.map((lead) => (lead._id === updatedLead._id ? updatedLead : lead))
     );
-    handleCloseModal(); // Close the modal after saving
+    handleCloseModal();
   };
-
 
   const handleDelete = (leadId) => {
-    console.log("Delete lead:", leadId);
+    console.log("Delete enrolled student:", leadId);
     setAllLeads(prevLeads => prevLeads.filter(lead => lead._id !== leadId));
-  };
-
-  const handleImport = () => {
-    console.log("Import CSV clicked");
-  };
-
-  const handleExport = () => {
-    console.log("Export CSV clicked");
   };
 
   if (loading) {
@@ -190,76 +153,33 @@ const Leads = () => {
     return <div className="text-red-500 p-4 bg-red-100 rounded-md">Error: {error}</div>;
   }
 
-  const statusOptions = ['All', 'New', 'Contacted', 'Qualified', 'Closed', 'Lost'];
+  // Debugging: Check the state just before rendering the modal
+  console.log(`EnrolledStudents: isModalOpen=${isModalOpen}, editingLead is ${editingLead ? 'set' : 'null/undefined'}`);
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
-      <h1 className="text-3xl font-bold mb-6">Leads Management</h1>
-
-      {/* Action Buttons & Filters */}
-      <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
-        <div className="flex gap-3">
-          <button className="bg-blue-600 text-white font-medium py-2 px-4 rounded-md hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 flex items-center">
-            <PlusIcon className="h-5 w-5 inline-block mr-2" />
-            Add New Lead
-          </button>
-          <button onClick={handleImport} className="bg-gray-200 text-gray-800 font-medium py-2 px-4 rounded-md hover:bg-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 flex items-center">
-            <ArrowUpTrayIcon className="h-5 w-5 inline-block mr-2" />
-            Import CSV
-          </button>
-          <button onClick={handleExport} className="bg-gray-200 text-gray-800 font-medium py-2 px-4 rounded-md hover:bg-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-50 flex items-center">
-            <ArrowDownTrayIcon className="h-5 w-5 inline-block mr-2" />
-            Export CSV
-          </button>
-          <button onClick={() => window.location.reload()} className="bg-transparent text-blue-600 border border-blue-600 font-medium py-2 px-4 rounded-md hover:bg-blue-600 hover:text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 flex items-center">
-            <ArrowPathIcon className="h-5 w-5 inline-block mr-2" />
-            Refresh
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-grow">
-            <input
-              type="text"
-              placeholder="Search by Email, Phone, Name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
-            />
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-          </div>
-          <div className="relative">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {statusOptions.map(status => (
-                <option key={status} value={status}>{status}</option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
+      <h1 className="text-3xl font-bold mb-6">Enrolled Students</h1>
 
       <div className="bg-white p-6 rounded-lg shadow-md">
         <LeadTableDisplay
-          leads={displayedLeads}
+          leads={enrolledStudents}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
         />
       </div>
 
       {isModalOpen && editingLead && (
-        <LeadEditModal
-          lead={editingLead}
-          onClose={handleCloseModal}
-          onSave={handleSaveEdit}
-        />
+        <>
+          {console.log("EnrolledStudents: Rendering LeadEditModal with lead:", editingLead)} {/* Add this log */}
+          <LeadEditModal
+            lead={editingLead}
+            onClose={handleCloseModal}
+            onSave={handleSaveEdit}
+          />
+        </>
       )}
     </div>
   );
 };
 
-export default Leads;
+export default EnrolledStudents;
