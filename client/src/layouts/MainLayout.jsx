@@ -25,14 +25,25 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
     <div className="flex h-screen bg-gray-100 font-sans antialiased">
       {/* Mobile Sidebar Toggle */}
       <div className="md:hidden p-4">
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md">
-          {sidebarOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md"
+        >
+          {sidebarOpen ? (
+            <XMarkIcon className="h-6 w-6" />
+          ) : (
+            <Bars3Icon className="h-6 w-6" />
+          )}
         </button>
       </div>
 
       {/* Sidebar - Conditional rendering for mobile */}
-      <aside className={`fixed inset-y-0 left-0 bg-gray-800 text-white w-64 p-4 flex flex-col transition-transform duration-300 ease-in-out z-40
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:relative md:flex`}>
+      <aside
+        className={`fixed inset-y-0 left-0 bg-gray-800 text-white w-64 p-4 flex flex-col transition-transform duration-300 ease-in-out z-40
+        ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        } md:relative md:flex`}
+      >
         <div className="text-2xl font-bold mb-8 text-center">EDU CRM</div>
 
         <nav className="flex-grow space-y-2">
@@ -40,7 +51,11 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/dashboard"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${isActive ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300'}`
+               ${
+                 isActive
+                   ? "bg-blue-600 text-white shadow-md"
+                   : "hover:bg-gray-700 text-gray-300"
+               }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
@@ -52,12 +67,31 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/leads"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${isActive ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-gray-700 text-gray-300'}`
+               ${
+                 isActive
+                   ? "bg-blue-600 text-white shadow-md"
+                   : "hover:bg-gray-700 text-gray-300"
+               }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
             <UsersIcon className="h-6 w-6 mr-3" />
             Leads
+          </NavLink>
+          <NavLink
+            to="/enrolled-students"
+            className={({ isActive }) =>
+              `flex items-center p-3 rounded-lg transition-colors duration-200
+               ${
+                 isActive
+                   ? "bg-blue-600 text-white shadow-md"
+                   : "hover:bg-gray-700 text-gray-300"
+               }`
+            }
+            onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
+          >
+            <UsersIcon className="h-6 w-6 mr-3" />
+            Enrolled Students
           </NavLink>
           {/* Add more navigation links here */}
         </nav>
