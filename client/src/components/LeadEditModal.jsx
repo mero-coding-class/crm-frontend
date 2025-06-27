@@ -4,10 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
 const LeadEditModal = ({ lead, onClose, onSave }) => {
-  // Initialize formData with the lead prop's data
   const [formData, setFormData] = useState(lead);
 
-  // Ensure form data updates if lead prop changes (e.g., if another lead is selected for editing)
   useEffect(() => {
     setFormData(lead);
   }, [lead]);
@@ -22,54 +20,89 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData); // Pass the updated lead data up to the parent component
+    onSave(formData);
   };
 
-  if (!lead) {
-    console.log("LeadEditModal: No lead prop received, rendering null.");
-    return null;
-  }
+  if (!lead) return null;
 
-  // Define dropdown options - IMPORTANT: Keep these consistent with AddLeadModal.jsx and your data
-  const statusOptions = ['New', 'Open', 'Average', 'Followup', 'Interested', 'inProgress', 'Converted', 'Lost', 'Junk'];
-  const courseOptions = ['Select', 'Scratch Beginner', 'Scratch Advanced', 'Python Beginner', 'Python Advanced', 'Web Development', 'HTML & CSS', 'Robotics', 'Artificial Intelligence(AI)', 'AI With Python'];
-  const sourceOptions = ['Select', 'WhatsApp/Viber', 'Facebook', 'Website', 'Email', 'Office Visit', 'Direct call'];
-  const classTypeOptions = ['Select', 'Physical', 'Online'];
-  const shiftOptions = ['Select', '7 A.M. - 9 A.M.', '8 A.M. - 10 A.M.', '10 A.M. - 12 P.M.', '11 A.M. - 1 P.M.', '12 P.M. - 2 P.M.', '2 P.M. - 4 P.M.', '2:30 P.M. - 4:30 P.M.', '4 P.M. - 6 P.M.', '4:30 P.M. - 6:30 P.M.', '5 P.M - 7 P.M.', '6 P.M. - 7 P.M.', '6 P.M - 8 P.M.', '7 P.M. - 8 P.M.'];
-  const courseTypeOptions = ['Select', 'Winter coding Camp', 'Coding Kickstart', 'Regular'];
-  const paymentTypeOptions = ['Select', 'Cash', 'Online'];
+  const statusOptions = [
+    "New",
+    "Open",
+    "Active",
+    "Average",
+    "Followup",
+    "Interested",
+    "inProgress",
+    "Converted",
+    "Lost",
+    "Junk",
+  ];
+  const courseOptions = [
+    "Select",
+    "Scratch Beginner",
+    "Scratch Advanced",
+    "Python Beginner",
+    "Python Advanced",
+    "Web Development",
+    "HTML & CSS",
+    "Robotics",
+    "Artificial Intelligence(AI)",
+    "AI With Python",
+  ];
+  const sourceOptions = [
+    "Select",
+    "WhatsApp/Viber",
+    "Facebook",
+    "Website",
+    "Email",
+    "Office Visit",
+    "Direct call",
+  ];
+  const classTypeOptions = ["Select", "Physical", "Online"];
+  const shiftOptions = [
+    "Select",
+    "7 A.M. - 9 A.M.",
+    "8 A.M. - 10 A.M.",
+    "10 A.M. - 12 P.M.",
+    "11 A.M. - 1 P.M.",
+    "12 P.M. - 2 P.M.",
+    "2 P.M. - 4 P.M.",
+    "2:30 P.M. - 4:30 P.M.",
+    "4 P.M. - 6 P.M.",
+    "4:30 P.M. - 6:30 P.M.",
+    "5 P.M - 7 P.M.",
+    "6 P.M. - 7 P.M.",
+    "6 P.M - 8 P.M.",
+    "7 P.M. - 8 P.M.",
+  ];
+  const courseTypeOptions = [
+    "Select",
+    "Winter coding Camp",
+    "Coding Kickstart",
+    "Regular",
+  ];
+  const paymentTypeOptions = ["Select", "Cash", "Online"];
 
-
-  // Helper function to safely format date for input type="date"
   const getFormattedDate = (dateString) => {
     try {
-      // Handle null, undefined, or 'N/A' explicitly
       if (!dateString || dateString === "N/A") return "";
-
       const date = new Date(dateString);
-      // Check if the date object is valid
-      if (isNaN(date.getTime())) {
-        console.warn(
-          "LeadEditModal: Invalid date string received for date input (will be empty):",
-          dateString
-        );
-        return ""; // Return empty string for invalid dates
-      }
-      return date.toISOString().split("T")[0]; // Format to YYYY-MM-DD
-    } catch (error) {
-      console.error(
-        "Error formatting date in LeadEditModal:",
-        error,
-        "Original string:",
-        dateString
-      );
-      return ""; // Fallback for any unexpected parsing error
+      if (isNaN(date.getTime())) return "";
+      return date.toISOString().split("T")[0];
+    } catch {
+      return "";
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all sm:w-full sm:max-w-4xl animate-scale-up">
+    <div
+      className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 p-4 animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all animate-scale-up"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h2 className="text-2xl font-semibold text-gray-800">
             Edit Lead: {lead.studentName}
@@ -82,6 +115,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             <XMarkIcon className="h-6 w-6" />
           </button>
         </div>
+
         <form
           onSubmit={handleSubmit}
           className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4"
@@ -99,7 +133,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="status"
               value={formData.status || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm sm:text-sm"
             >
               {statusOptions.map((option) => (
                 <option key={option} value={option}>
@@ -123,8 +157,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="parentsName"
               value={formData.parentsName || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g., John & Jane Doe"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -142,8 +175,8 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="studentName"
               value={formData.studentName || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -161,18 +194,18 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="email"
               value={formData.email || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
-          {/* Phone Number */}
+          {/* Phone */}
           <div>
             <label
               htmlFor="phone"
               className="block text-sm font-medium text-gray-700"
             >
-              Phone Number
+              Phone
             </label>
             <input
               type="tel"
@@ -180,17 +213,17 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="phone"
               value={formData.phone || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
-          {/* WhatsApp Number */}
+          {/* WhatsApp */}
           <div>
             <label
               htmlFor="contactWhatsapp"
               className="block text-sm font-medium text-gray-700"
             >
-              WhatsApp Number
+              WhatsApp
             </label>
             <input
               type="tel"
@@ -198,7 +231,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="contactWhatsapp"
               value={formData.contactWhatsapp || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -216,7 +249,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="ageGrade"
               value={formData.ageGrade || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -233,7 +266,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="source"
               value={formData.source || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               {sourceOptions.map((option) => (
                 <option key={option} value={option}>
@@ -256,7 +289,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="course"
               value={formData.course || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               {courseOptions.map((option) => (
                 <option key={option} value={option}>
@@ -279,7 +312,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="classType"
               value={formData.classType || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               {classTypeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -302,7 +335,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="shift"
               value={formData.shift || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               {shiftOptions.map((option) => (
                 <option key={option} value={option}>
@@ -312,13 +345,13 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             </select>
           </div>
 
-          {/* Previous Coding Experience */}
+          {/* Previous Coding Exp */}
           <div>
             <label
               htmlFor="previousCodingExp"
               className="block text-sm font-medium text-gray-700"
             >
-              Previous Coding Experience
+              Previous Coding Exp
             </label>
             <input
               type="text"
@@ -326,18 +359,17 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="previousCodingExp"
               value={formData.previousCodingExp || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g., Basic Python, None"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
-          {/* Last Call */}
+          {/* Recent Call */}
           <div>
             <label
               htmlFor="recentCall"
               className="block text-sm font-medium text-gray-700"
             >
-              Last Call
+              Recent Call
             </label>
             <input
               type="date"
@@ -345,7 +377,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="recentCall"
               value={getFormattedDate(formData.recentCall)}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -363,7 +395,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="nextCall"
               value={getFormattedDate(formData.nextCall)}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -381,7 +413,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="value"
               value={formData.value || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -398,7 +430,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="courseType"
               value={formData.courseType || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               {courseTypeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -421,7 +453,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="paymentType"
               value={formData.paymentType || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               {paymentTypeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -431,7 +463,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             </select>
           </div>
 
-          {/* Laptop/PC */}
+          {/* Laptop */}
           <div>
             <label
               htmlFor="laptop"
@@ -444,7 +476,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="laptop"
               value={formData.laptop || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             >
               <option value="">Select</option>
               <option value="Yes">Yes</option>
@@ -452,7 +484,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             </select>
           </div>
 
-          {/* Workshop Batch (if applicable) */}
+          {/* Workshop Batch */}
           <div>
             <label
               htmlFor="workshopBatch"
@@ -466,12 +498,11 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="workshopBatch"
               value={formData.workshopBatch || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g., Summer 2024 - Batch A"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
-          {/* Remarks (full width) */}
+          {/* Remarks */}
           <div className="md:col-span-3">
             <label
               htmlFor="remarks"
@@ -485,20 +516,21 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               rows="3"
               value={formData.remarks || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             ></textarea>
           </div>
 
-          {/* Address Fields (as provided, can be grouped or simplified) */}
+          {/* Address */}
           <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
             Address
           </div>
+
           <div>
             <label
               htmlFor="temporaryAddress"
               className="block text-sm font-medium text-gray-700"
             >
-              Temporary Address {/* Corrected label */}
+              Temporary Address
             </label>
             <input
               type="text"
@@ -506,9 +538,10 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="temporaryAddress"
               value={formData.temporaryAddress || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
+
           <div>
             <label
               htmlFor="permanentAddress"
@@ -522,9 +555,10 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="permanentAddress"
               value={formData.permanentAddress || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
+
           <div>
             <label
               htmlFor="city"
@@ -538,9 +572,10 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="city"
               value={formData.city || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
+
           <div>
             <label
               htmlFor="county"
@@ -554,9 +589,10 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="county"
               value={formData.county || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
+
           <div>
             <label
               htmlFor="postCode"
@@ -570,22 +606,22 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="postCode"
               value={formData.postCode || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
-          {/* Form Actions */}
+          {/* Actions */}
           <div className="md:col-span-3 flex justify-end gap-3 pt-4 border-t border-gray-200">
             <button
               type="button"
               onClick={onClose}
-              className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="py-2 px-4 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
             >
               Save Changes
             </button>

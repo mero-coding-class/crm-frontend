@@ -42,14 +42,14 @@ const Leads = () => {
 
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All"); // Default filter status
+  const [filterStatus, setFilterStatus] = useState("Active");
 
   // New filter states
   const [filterAgeGrade, setFilterAgeGrade] = useState("");
-  const [filterLastCall, setFilterLastCall] = useState(""); // For "Last Call" date string
+  const [filterLastCall, setFilterLastCall] = useState("");
   const [filterClassType, setFilterClassType] = useState("All");
   const [filterShift, setFilterShift] = useState("All");
-  const [filterDevice, setFilterDevice] = useState("All"); // For "laptop" field
+  const [filterDevice, setFilterDevice] = useState("All");
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("All");
 
   // State to control visibility of the filter section
@@ -121,7 +121,7 @@ const Leads = () => {
       console.log("Adding new lead:", newLeadData);
       setAllLeads((prevLeads) => [
         ...prevLeads,
-        { ...newLeadData, _id: Date.now().toString() }, // Add a temporary ID
+        { ...newLeadData, _id: Date.now().toString(), changeLog: [] }, // Add a temporary ID and empty changeLog
       ]);
       handleCloseAddModal();
     },
@@ -142,7 +142,7 @@ const Leads = () => {
   const handleSaveEdit = useCallback(
     (updatedLead) => {
       // In a real app, you'd send this to your backend
-      console.log("Saving edited lead:", updatedLead);
+      console.log("Saving edited lead from modal:", updatedLead);
       setAllLeads((prevLeads) =>
         prevLeads.map((lead) =>
           lead._id === updatedLead._id ? updatedLead : lead
@@ -153,26 +153,94 @@ const Leads = () => {
     [handleCloseEditModal]
   );
 
-  // --- Functions to handle status and device changes from LeadTableDisplay ---
-  const handleStatusChange = useCallback((leadId, newStatus) => {
+  // --- Functions to handle direct inline changes from LeadTableDisplay ---
+  const updateLeadField = useCallback((leadId, fieldName, newValue) => {
     setAllLeads((prevLeads) =>
-      prevLeads.map((lead) =>
-        lead._id === leadId ? { ...lead, status: newStatus } : lead
-      )
+      prevLeads.map((lead) => {
+        if (lead._id === leadId) {
+          const updatedLead = { ...lead, [fieldName]: newValue };
+          let logEntry = "";
+          const currentDateTime = new Date().toLocaleString(); // Keep for detailed logging if needed elsewhere
+
+          // Add to change log if status, remarks, or call dates change
+          if (fieldName === "status" && lead.status !== newValue) {
+            logEntry = `Status changed from '${lead.status}' to '${newValue}'.`;
+            updatedLead.changeLog = [
+              ...(updatedLead.changeLog || []),
+              logEntry,
+            ];
+          } else if (fieldName === "remarks" && lead.remarks !== newValue) {
+            logEntry = `Remarks updated.`;
+            updatedLead.changeLog = [
+              ...(updatedLead.changeLog || []),
+              logEntry,
+            ];
+          } else if (
+            fieldName === "recentCall" &&
+            lead.recentCall !== newValue
+          ) {
+            logEntry = `Last Call date changed from '${lead.recentCall}' to '${newValue}'.`;
+            updatedLead.changeLog = [
+              ...(updatedLead.changeLog || []),
+              logEntry,
+            ];
+          } else if (fieldName === "nextCall" && lead.nextCall !== newValue) {
+            logEntry = `Next Call date changed from '${lead.nextCall}' to '${newValue}'.`;
+            updatedLead.changeLog = [
+              ...(updatedLead.changeLog || []),
+              logEntry,
+            ];
+          } else if (fieldName === "laptop" && lead.laptop !== newValue) {
+            logEntry = `Device changed from '${lead.laptop}' to '${newValue}'.`;
+            updatedLead.changeLog = [
+              ...(updatedLead.changeLog || []),
+              logEntry,
+            ];
+          }
+
+          return updatedLead;
+        }
+        return lead;
+      })
     );
+    console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
     // In a real application, you would also send this update to your backend API
-    console.log(`Lead ${leadId} status changed to: ${newStatus}`);
   }, []);
 
-  const handleDeviceChange = useCallback((leadId, newDevice) => {
-    setAllLeads((prevLeads) =>
-      prevLeads.map((lead) =>
-        lead._id === leadId ? { ...lead, laptop: newDevice } : lead
-      )
-    );
-    // In a real application, you would also send this update to your backend API
-    console.log(`Lead ${leadId} device changed to: ${newDevice}`);
-  }, []);
+  const handleStatusChange = useCallback(
+    (leadId, newStatus) => {
+      updateLeadField(leadId, "status", newStatus);
+    },
+    [updateLeadField]
+  );
+
+  const handleDeviceChange = useCallback(
+    (leadId, newDevice) => {
+      updateLeadField(leadId, "laptop", newDevice);
+    },
+    [updateLeadField]
+  );
+
+  const handleRemarkChange = useCallback(
+    (leadId, newRemark) => {
+      updateLeadField(leadId, "remarks", newRemark);
+    },
+    [updateLeadField]
+  );
+
+  const handleRecentCallChange = useCallback(
+    (leadId, newDate) => {
+      updateLeadField(leadId, "recentCall", newDate);
+    },
+    [updateLeadField]
+  );
+
+  const handleNextCallChange = useCallback(
+    (leadId, newDate) => {
+      updateLeadField(leadId, "nextCall", newDate);
+    },
+    [updateLeadField]
+  );
   // --- End of new functions ---
 
   // Placeholder functions for buttons, updated to use console.log
@@ -188,7 +256,10 @@ const Leads = () => {
     setLoading(true);
     setError(null);
     // Directly use the mock data as a refresh
-    setAllLeads(mockLeads);
+    // Ensure that mockLeads also includes 'changeLog: []' for new mock entries
+    setAllLeads(
+      mockLeads.map((lead) => ({ ...lead, changeLog: lead.changeLog || [] }))
+    );
     setLoading(false);
   }, []);
 
@@ -215,7 +286,8 @@ const Leads = () => {
     }
 
     // Apply status filter
-    if (filterStatus && filterStatus !== "All") {
+    // Only apply if filterStatus is set and not 'All' or 'Status' (the placeholder option)
+    if (filterStatus && filterStatus !== "All" && filterStatus !== "Status") {
       currentLeads = currentLeads.filter(
         (lead) => lead.status === filterStatus
       );
@@ -232,6 +304,7 @@ const Leads = () => {
     }
 
     // Apply Last Call filter (date string search)
+    // Only apply if filterLastCall is not empty
     if (filterLastCall) {
       // Assuming lead.recentCall is in a format compatible with filterLastCall (e.g., "YYYY-MM-DD")
       currentLeads = currentLeads.filter(
@@ -283,12 +356,15 @@ const Leads = () => {
       setLoading(true);
       setError(null);
 
-      setAllLeads(mockLeads);
+      // Load mock data here and ensure each lead has a changeLog array
+      setAllLeads(
+        mockLeads.map((lead) => ({ ...lead, changeLog: lead.changeLog || [] }))
+      );
       setLoading(false);
     };
 
     fetchInitialLeads();
-  }, [authToken]);
+  }, [authToken]); // Dependency array includes authToken, re-fetches if it changes
 
   if (loading) {
     return <Loader />;
@@ -390,7 +466,7 @@ const Leads = () => {
           </div>
           <div className="relative w-full sm:w-auto">
             <input
-              type="date" // Changed to type="date"
+              type="date"
               value={filterLastCall}
               onChange={(e) => setFilterLastCall(e.target.value)}
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
@@ -467,6 +543,9 @@ const Leads = () => {
             handleDelete={handleDelete}
             onStatusChange={handleStatusChange}
             onDeviceChange={handleDeviceChange}
+            onRemarkChange={handleRemarkChange}
+            onRecentCallChange={handleRecentCallChange}
+            onNextCallChange={handleNextCallChange}
           />
         )}
       </div>
