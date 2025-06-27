@@ -14,6 +14,7 @@ import Leads from "./pages/Leads";
 import MainLayout from './layouts/MainLayout';
 import EnrolledStudents from "./pages/EnrolledStudents";
 import AddLeadModal from "./components/AddLeadModal";
+import Trash from "./pages/Trash";
 
 // Create Auth Context
 export const AuthContext = createContext(null);
@@ -63,6 +64,7 @@ const App = () => {
             <Route path="leads" element={<Leads />} />
             <Route path="enrolled-students" element={<EnrolledStudents />} />
             <Route path="add-leads" element={<AddLeadModal />} />
+            <Route path="trash" element={<Trash />} />
             {/* Add more private routes here */}
           </Route>
 

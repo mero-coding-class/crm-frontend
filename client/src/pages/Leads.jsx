@@ -52,6 +52,9 @@ const Leads = () => {
   const [filterDevice, setFilterDevice] = useState("All"); // For "laptop" field
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("All");
 
+  // State to control visibility of the filter section
+  const [showFilters, setShowFilters] = useState(false);
+
   // Define status options here, or import them if they are common.
   const statusOptions = [
     "Status",
@@ -61,8 +64,7 @@ const Leads = () => {
     "Followup",
     "Interested",
     "inProgress",
-    "Contacted",
-    "Qualified",
+    "Active",
     "Closed",
     "Converted",
     "Lost",
@@ -231,11 +233,9 @@ const Leads = () => {
 
     // Apply Last Call filter (date string search)
     if (filterLastCall) {
-      const lowerCaseLastCallFilter = filterLastCall.toLowerCase();
+      // Assuming lead.recentCall is in a format compatible with filterLastCall (e.g., "YYYY-MM-DD")
       currentLeads = currentLeads.filter(
-        (lead) =>
-          lead.recentCall &&
-          lead.recentCall.toLowerCase().includes(lowerCaseLastCallFilter)
+        (lead) => lead.recentCall && lead.recentCall === filterLastCall
       );
     }
 
@@ -347,6 +347,22 @@ const Leads = () => {
             />
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           </div>
+
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <FunnelIcon className="h-5 w-5 inline-block mr-2" />
+            {showFilters ? "Hide Filters" : "Show Filters"}
+          </button>
+        </div>
+      </div>
+
+      {/* Conditional Filter Section */}
+      {showFilters && (
+        <div className="flex flex-wrap items-center justify-end mb-6 gap-3 p-4 border border-gray-200 rounded-md bg-white shadow-sm">
+          <h3 className="text-lg font-semibold mr-4">Advanced Filters:</h3>
           <div className="relative w-full sm:w-auto">
             <select
               value={filterStatus}
@@ -374,8 +390,7 @@ const Leads = () => {
           </div>
           <div className="relative w-full sm:w-auto">
             <input
-              type="text"
-              placeholder="Filter by Last Call Date (YYYY-MM-DD)..."
+              type="date" // Changed to type="date"
               value={filterLastCall}
               onChange={(e) => setFilterLastCall(e.target.value)}
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
@@ -438,7 +453,7 @@ const Leads = () => {
             <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
           </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-white p-6 rounded-lg shadow-md">
         {loading ? (
