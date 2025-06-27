@@ -11,22 +11,28 @@ const LeadTableDisplay = ({
 }) => {
   // Ensure statusOptions match the full list in Leads.jsx and mockLeads.js
   const statusOptions = [
+    "Active",
     "New",
     "Open",
     "Average",
     "Followup",
     "Interested",
     "inProgress",
-    "Contacted", // Added to match Leads.jsx
-    "Qualified", // Added to match Leads.jsx
-    "Closed", // Added to match Leads.jsx
+    "Closed",
     "Converted",
     "Lost",
     "Junk",
   ];
 
-  // Expanded deviceOptions for more flexibility, consistent with mock data
-  const deviceOptions = ["Laptop", "PC", "Tablet", "Mobile", "Other", "N/A"];
+  // Corrected deviceOptions to match values found in mockLeads.js
+  const deviceOptions = [
+    "N/A", // Added 'N/A' as a default/fallback option
+    "Laptop",
+    "PC",
+    "Tablet",
+    "Mobile",
+    "Other",
+  ];
 
   // Helper function to dynamically apply Tailwind CSS classes based on status.
   const getStatusClasses = (status) => {
@@ -41,14 +47,12 @@ const LeadTableDisplay = ({
         return "bg-indigo-100 text-indigo-800 border-indigo-200";
       case "inProgress":
         return "bg-purple-100 text-purple-800 border-purple-200";
-      case "Contacted":
-        return "bg-cyan-100 text-cyan-800 border-cyan-200"; // Specific class for Contacted
-      case "Qualified":
-        return "bg-teal-100 text-teal-800 border-teal-200"; // Specific class for Qualified
-      case "Closed":
-        return "bg-gray-200 text-gray-800 border-gray-300"; // Specific class for Closed
+      case "Active":
+        return "bg-cyan-100 text-cyan-800 border-cyan-200";
       case "Converted":
-        return "bg-green-100 text-green-800 border-green-200";
+        return "bg-teal-100 text-teal-800 border-teal-200";
+      case "Closed":
+        return "bg-gray-200 text-gray-800 border-gray-300";
       case "Lost":
       case "Junk":
         return "bg-red-100 text-red-800 border-red-200";
@@ -165,7 +169,7 @@ const LeadTableDisplay = ({
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.nextCall}
               </td>
-              {/* Device Selection */}
+              {/* Device Selection - Updated options */}
               <td className="px-3 py-4 whitespace-nowrap text-sm">
                 <select
                   value={lead.laptop || "N/A"} // Use lead.laptop and default to 'N/A' if undefined

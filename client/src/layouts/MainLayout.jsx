@@ -93,6 +93,21 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             <UsersIcon className="h-6 w-6 mr-3" />
             Enrolled Students
           </NavLink>
+          <NavLink
+            to="/trash"
+            className={({ isActive }) =>
+              `flex items-center p-3 rounded-lg transition-colors duration-200
+               ${
+                 isActive
+                   ? "bg-blue-600 text-white shadow-md"
+                   : "hover:bg-gray-700 text-gray-300"
+               }`
+            }
+            onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
+          >
+            <UsersIcon className="h-6 w-6 mr-3" />
+            Trash
+          </NavLink>
           {/* Add more navigation links here */}
         </nav>
 
