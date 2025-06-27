@@ -1,98 +1,111 @@
 // src/components/LeadEditModal.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
-const LeadEditModal = ({ lead, onClose, onSave }) => {
-  const [formData, setFormData] = useState(lead);
+// Helper function to get current date in YYYY-MM-DD format
+const getTodayDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
+// Helper function to safely format date for input type="date"
+const getFormattedDate = (dateString) => {
+  try {
+    if (!dateString || dateString === "N/A") return "";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    return date.toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
+
+const LeadEditModal = ({ lead, onClose, onSave }) => {
+  // Initialize formData with the lead prop's data
+  const [formData, setFormData] = useState(() => ({
+    ...lead,
+    // Add Date remains as the original creation date, formatted
+    addDate: getFormattedDate(lead.addDate),
+    // New: lastUpdatedDate is managed automatically. Initialize with existing or current date.
+    lastUpdatedDate: getFormattedDate(lead.lastUpdatedDate || getTodayDate()),
+    recentCall: getFormattedDate(lead.recentCall),
+    nextCall: getFormattedDate(lead.nextCall),
+    status: lead.status?.trim() || "New",
+    device: lead.device || "No", // Consistent with mockLeads "Yes"/"No"
+    invoice: lead.invoice ? [...lead.invoice] : [],
+    changeLog: lead.changeLog ? [...lead.changeLog] : [],
+  }));
+
+  // Ensure form data updates if lead prop changes (e.g., if another lead is selected for editing)
   useEffect(() => {
-    setFormData(lead);
+    setFormData({
+      ...lead,
+      addDate: getFormattedDate(lead.addDate), // Add Date remains static on prop change
+      lastUpdatedDate: getFormattedDate(lead.lastUpdatedDate || getTodayDate()), // Initialize or update lastUpdatedDate
+      recentCall: getFormattedDate(lead.recentCall),
+      nextCall: getFormattedDate(lead.nextCall),
+      status: lead.status?.trim() || "New",
+      device: lead.device || "No",
+      invoice: lead.invoice ? [...lead.invoice] : [],
+      changeLog: lead.changeLog ? [...lead.changeLog] : [],
+    });
   }, [lead]);
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
       [name]: value,
     }));
-  };
+  }, []);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = useCallback((e) => {
     e.preventDefault();
-    onSave(formData);
-  };
+    // Create a copy to update specific fields before saving
+    const updatedLeadData = {
+      ...formData,
+      lastUpdatedDate: getTodayDate(), // AUTOMATICALLY UPDATE lastUpdatedDate on save
+    };
+    onSave(updatedLeadData); // Pass the updated lead data up to the parent component
+  }, [formData, onSave]);
 
   if (!lead) return null;
 
   const statusOptions = [
-    "New",
-    "Open",
-    "Active",
-    "Average",
-    "Followup",
-    "Interested",
-    "inProgress",
-    "Converted",
-    "Lost",
-    "Junk",
+    "New", "Open", "Average", "Followup", "Interested", "inProgress",
+    "Active", "Closed", "Converted", "Lost", "Junk",
   ];
   const courseOptions = [
-    "Select",
-    "Scratch Beginner",
-    "Scratch Advanced",
-    "Python Beginner",
-    "Python Advanced",
-    "Web Development",
-    "HTML & CSS",
-    "Robotics",
-    "Artificial Intelligence(AI)",
-    "AI With Python",
+    "Select", "Full Stack Web Dev", "Data Science", "UI/UX Design", "Game Development",
+    "Cybersecurity", "Cloud Computing", "Digital Marketing", "AI & Machine Learning",
+    "Mobile App Dev", "Robotics", "Scratch Beginner", "Scratch Advanced",
+    "Python Beginner", "Python Advanced", "Web Development", "HTML & CSS",
+    "Artificial Intelligence(AI)", "AI With Python", "Other"
   ];
   const sourceOptions = [
-    "Select",
-    "WhatsApp/Viber",
-    "Facebook",
-    "Website",
-    "Email",
-    "Office Visit",
-    "Direct call",
+    "Select", "WhatsApp/Viber", "Facebook", "Website", "Email", "Office Visit", "Direct call",
   ];
   const classTypeOptions = ["Select", "Physical", "Online"];
   const shiftOptions = [
-    "Select",
-    "7 A.M. - 9 A.M.",
-    "8 A.M. - 10 A.M.",
-    "10 A.M. - 12 P.M.",
-    "11 A.M. - 1 P.M.",
-    "12 P.M. - 2 P.M.",
-    "2 P.M. - 4 P.M.",
-    "2:30 P.M. - 4:30 P.M.",
-    "4 P.M. - 6 P.M.",
-    "4:30 P.M. - 6:30 P.M.",
-    "5 P.M - 7 P.M.",
-    "6 P.M. - 7 P.M.",
-    "6 P.M - 8 P.M.",
-    "7 P.M. - 8 P.M.",
+    "Select", "7 A.M. - 9 A.M.", "8 A.M. - 10 A.M.", "10 A.M. - 12 P.M.",
+    "11 A.M. - 1 P.M.", "12 P.M. - 2 P.M.", "2 P.M. - 4 P.M.",
+    "2:30 P.M. - 4:30 P.M.", "4 P.M. - 6 P.M.", "4:30 P.M. - 6:30 P.M.",
+    "5 P.M - 7 P.M.", "6 P.M. - 7 P.M.", "6 P.M - 8 P.M.", "7 P.M. - 8 P.M.",
   ];
   const courseTypeOptions = [
-    "Select",
-    "Winter coding Camp",
-    "Coding Kickstart",
-    "Regular",
+    "Select", "Winter coding Camp", "Coding Kickstart", "Regular", "Summer coding Camp",
   ];
-  const paymentTypeOptions = ["Select", "Cash", "Online"];
+  const paymentTypeOptions = ["Select", "Cash", "Online", "Bank Transfer", "Cheque"];
+  const previousCodingExpOptions = [
+    'Select', 'None', 'Basic Python', 'Intermediate C++', 'Arduino', 'Some Linux',
+    "Advanced Python", "Basic Java", "Other"
+  ];
+  const deviceOptions = ["Yes", "No"]; // Consistent with mockLeads.js
 
-  const getFormattedDate = (dateString) => {
-    try {
-      if (!dateString || dateString === "N/A") return "";
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "";
-      return date.toISOString().split("T")[0];
-    } catch {
-      return "";
-    }
-  };
 
   return (
     <div
@@ -131,9 +144,9 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             <select
               id="status"
               name="status"
-              value={formData.status || ""}
+              value={formData.status}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {statusOptions.map((option) => (
                 <option key={option} value={option}>
@@ -141,6 +154,42 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Add Date - This is the original creation date */}
+          <div>
+            <label
+              htmlFor="addDate"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Add Date
+            </label>
+            <input
+              type="date"
+              id="addDate"
+              name="addDate"
+              value={formData.addDate}
+              onChange={handleChange} // Still allow manual change if needed, but won't auto-update on save for original purpose
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+          </div>
+
+          {/* Last Updated Date - NEW FIELD */}
+          <div>
+            <label
+              htmlFor="lastUpdatedDate"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Last Updated
+            </label>
+            <input
+              type="date"
+              id="lastUpdatedDate"
+              name="lastUpdatedDate"
+              value={formData.lastUpdatedDate}
+              readOnly // This field is automatically updated, not manually edited
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-600 cursor-not-allowed sm:text-sm"
+            />
           </div>
 
           {/* Parents Name */}
@@ -157,7 +206,8 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="parentsName"
               value={formData.parentsName || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              placeholder="e.g., John & Jane Doe"
             />
           </div>
 
@@ -175,8 +225,8 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="studentName"
               value={formData.studentName || ""}
               onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -194,8 +244,8 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="email"
               value={formData.email || ""}
               onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
             />
           </div>
 
@@ -213,7 +263,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="phone"
               value={formData.phone || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -231,7 +281,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="contactWhatsapp"
               value={formData.contactWhatsapp || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -249,7 +299,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="ageGrade"
               value={formData.ageGrade || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -266,7 +316,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="source"
               value={formData.source || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {sourceOptions.map((option) => (
                 <option key={option} value={option}>
@@ -289,7 +339,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="course"
               value={formData.course || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {courseOptions.map((option) => (
                 <option key={option} value={option}>
@@ -312,7 +362,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="classType"
               value={formData.classType || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {classTypeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -335,7 +385,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="shift"
               value={formData.shift || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {shiftOptions.map((option) => (
                 <option key={option} value={option}>
@@ -353,14 +403,19 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             >
               Previous Coding Exp
             </label>
-            <input
-              type="text"
+            <select
               id="previousCodingExp"
               name="previousCodingExp"
               value={formData.previousCodingExp || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
-            />
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              {previousCodingExpOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Recent Call */}
@@ -377,7 +432,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="recentCall"
               value={getFormattedDate(formData.recentCall)}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -395,7 +450,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="nextCall"
               value={getFormattedDate(formData.nextCall)}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -413,7 +468,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="value"
               value={formData.value || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -430,7 +485,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="courseType"
               value={formData.courseType || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {courseTypeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -453,7 +508,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="paymentType"
               value={formData.paymentType || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {paymentTypeOptions.map((option) => (
                 <option key={option} value={option}>
@@ -463,25 +518,49 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             </select>
           </div>
 
-          {/* Laptop */}
+          {/* Device */}
           <div>
             <label
-              htmlFor="laptop"
+              htmlFor="device"
               className="block text-sm font-medium text-gray-700"
             >
-              Laptop/PC
+              Device
             </label>
             <select
-              id="laptop"
-              name="laptop"
-              value={formData.laptop || ""}
+              id="device"
+              name="device"
+              value={formData.device || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              <option value="">Select</option>
-              <option value="Yes">Yes</option>
-              <option value="No">No</option>
+              {deviceOptions.map(
+                (
+                  option
+                ) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                )
+              )}
             </select>
+          </div>
+
+          {/* Adset Name */}
+          <div>
+            <label
+              htmlFor="adsetName"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Adset Name
+            </label>
+            <input
+              type="text"
+              id="adsetName"
+              name="adsetName"
+              value={formData.adsetName || ""}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
           </div>
 
           {/* Workshop Batch */}
@@ -498,7 +577,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="workshopBatch"
               value={formData.workshopBatch || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -516,15 +595,14 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               rows="3"
               value={formData.remarks || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             ></textarea>
           </div>
 
-          {/* Address */}
+          {/* Address Fields */}
           <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
-            Address
+            Main Address
           </div>
-
           <div>
             <label
               htmlFor="temporaryAddress"
@@ -538,10 +616,9 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="temporaryAddress"
               value={formData.temporaryAddress || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label
               htmlFor="permanentAddress"
@@ -555,10 +632,9 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="permanentAddress"
               value={formData.permanentAddress || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label
               htmlFor="city"
@@ -572,10 +648,9 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="city"
               value={formData.city || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label
               htmlFor="county"
@@ -589,10 +664,9 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="county"
               value={formData.county || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
-
           <div>
             <label
               htmlFor="postCode"
@@ -606,7 +680,7 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               name="postCode"
               value={formData.postCode || ""}
               onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md sm:text-sm"
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
@@ -615,13 +689,13 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
             <button
               type="button"
               onClick={onClose}
-              className="py-2 px-4 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="py-2 px-4 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-500"
             >
               Save Changes
             </button>

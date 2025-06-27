@@ -9,6 +9,7 @@ const mockLeads = [
     ageGrade: "10",
     course: "Full Stack Web Dev",
     source: "Facebook",
+    addDate: "2024-06-01", // New field: Date student was added
     recentCall: "2024-06-15",
     nextCall: "2024-06-20",
     status: "New",
@@ -40,6 +41,7 @@ const mockLeads = [
     ageGrade: "12",
     course: "Data Science",
     source: "Website",
+    addDate: "2024-05-28", // New field: Date student was added
     recentCall: "2024-06-10",
     nextCall: "2024-06-25",
     status: "Active",
@@ -71,6 +73,7 @@ const mockLeads = [
     ageGrade: "11",
     course: "UI/UX Design",
     source: "Email",
+    addDate: "2024-06-05", // New field: Date student was added
     recentCall: "2024-06-18",
     nextCall: "N/A",
     status: "Qualified",
@@ -102,6 +105,7 @@ const mockLeads = [
     ageGrade: "9",
     course: "Game Development",
     source: "Direct call",
+    addDate: "2024-05-15", // New field: Date student was added
     recentCall: "2024-06-01",
     nextCall: "2024-07-01",
     status: "Closed",
@@ -133,6 +137,7 @@ const mockLeads = [
     ageGrade: "10",
     course: "Cybersecurity",
     source: "WhatsApp/Viber",
+    addDate: "2024-06-02", // New field: Date student was added
     recentCall: "2024-06-12",
     nextCall: "2024-06-21",
     status: "Active",
@@ -164,6 +169,7 @@ const mockLeads = [
     ageGrade: "11",
     course: "Cloud Computing",
     source: "Facebook",
+    addDate: "2024-05-20", // New field: Date student was added
     recentCall: "2024-06-05",
     nextCall: "2024-06-28",
     status: "Active",
@@ -195,6 +201,7 @@ const mockLeads = [
     ageGrade: "9",
     course: "Digital Marketing",
     source: "Website",
+    addDate: "2024-06-10", // New field: Date student was added
     recentCall: "2024-06-19",
     nextCall: "N/A",
     status: "Converted",
@@ -226,6 +233,7 @@ const mockLeads = [
     ageGrade: "13",
     course: "AI & Machine Learning",
     source: "Facebook",
+    addDate: "2024-06-03", // New field: Date student was added
     recentCall: "2024-06-14",
     nextCall: "2024-06-22",
     status: "Active",
@@ -257,6 +265,7 @@ const mockLeads = [
     ageGrade: "10",
     course: "Mobile App Dev",
     source: "Email",
+    addDate: "2024-06-07", // New field: Date student was added
     recentCall: "2024-06-16",
     nextCall: "N/A",
     status: "Closed",
@@ -288,6 +297,7 @@ const mockLeads = [
     ageGrade: "11",
     course: "Robotics",
     source: "WhatsApp/Viber",
+    addDate: "2024-05-25", // New field: Date student was added
     recentCall: "2024-06-08",
     nextCall: "2024-06-26",
     status: "Active",
