@@ -2,12 +2,34 @@
 import React from "react";
 import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 
+// Helper function to safely format date for input type="date"
+const getFormattedDate = (dateString) => {
+  try {
+    // Handle null, undefined, or 'N/A' explicitly
+    if (!dateString || dateString === 'N/A') return '';
+    
+    const date = new Date(dateString);
+    // Check if the date object is valid
+    if (isNaN(date.getTime())) {
+      console.warn("LeadTableDisplay: Invalid date string received for date input (will be empty):", dateString);
+      return ''; // Return empty string for invalid dates
+    }
+    return date.toISOString().split('T')[0]; // Format to YYYY-MM-DD
+  } catch (error) {
+    console.error("Error formatting date in LeadTableDisplay:", error, "Original string:", dateString);
+    return ''; // Fallback for any unexpected parsing error
+  }
+};
+
 const LeadTableDisplay = ({
   leads,
   handleEdit,
   handleDelete,
   onStatusChange,
-  onDeviceChange, // New prop for device change
+  // onDeviceChange is explicitly removed as the device column is no longer directly editable here.
+  onRemarkChange, // Prop for remarks change
+  onRecentCallChange, // Prop for recentCall change
+  onNextCallChange, // Prop for nextCall change
 }) => {
   // Ensure statusOptions match the full list in Leads.jsx and mockLeads.js
   const statusOptions = [
@@ -22,16 +44,6 @@ const LeadTableDisplay = ({
     "Converted",
     "Lost",
     "Junk",
-  ];
-
-  // Corrected deviceOptions to match values found in mockLeads.js
-  const deviceOptions = [
-    "N/A", // Added 'N/A' as a default/fallback option
-    "Laptop",
-    "PC",
-    "Tablet",
-    "Mobile",
-    "Other",
   ];
 
   // Helper function to dynamically apply Tailwind CSS classes based on status.
@@ -120,6 +132,12 @@ const LeadTableDisplay = ({
               Status
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Remarks
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Change Log
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Edit
             </th>
             <th className="relative px-3 py-3">
@@ -163,26 +181,27 @@ const LeadTableDisplay = ({
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.previousCodingExp}
               </td>
+              {/* Last Call - Editable Date */}
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.recentCall}
+                <input
+                  type="date"
+                  value={getFormattedDate(lead.recentCall)}
+                  onChange={(e) => onRecentCallChange(lead._id, e.target.value)}
+                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                />
               </td>
+              {/* Next Call - Editable Date */}
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.nextCall}
+                <input
+                  type="date"
+                  value={getFormattedDate(lead.nextCall)}
+                  onChange={(e) => onNextCallChange(lead._id, e.target.value)}
+                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                />
               </td>
-              {/* Device Selection - Updated options */}
-              <td className="px-3 py-4 whitespace-nowrap text-sm">
-                <select
-                  value={lead.laptop || "N/A"} // Use lead.laptop and default to 'N/A' if undefined
-                  onChange={(e) => onDeviceChange(lead._id, e.target.value)}
-                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6"
-                  style={{ minWidth: "100px" }}
-                >
-                  {deviceOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+              {/* Device - Now a read-only text display, using lead.device */}
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                {lead.device || "N/A"} {/* Changed from lead.laptop to lead.device */}
               </td>
               {/* Status Selection */}
               <td className="px-3 py-4 whitespace-nowrap text-sm">
@@ -203,6 +222,27 @@ const LeadTableDisplay = ({
                     </option>
                   ))}
                 </select>
+              </td>
+              {/* Remarks - Editable Textarea */}
+              <td className="px-3 py-4 text-sm text-gray-700">
+                <textarea
+                  value={lead.remarks || ""}
+                  onChange={(e) => onRemarkChange(lead._id, e.target.value)}
+                  rows="2"
+                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
+                  style={{ minWidth: "150px" }}
+                ></textarea>
+              </td>
+              {/* Change Log - Display Only */}
+              <td className="px-3 py-4 text-sm text-gray-700">
+                <div
+                  className="whitespace-pre-wrap max-h-20 overflow-y-auto text-xs"
+                  style={{ minWidth: "200px" }}
+                >
+                  {(lead.changeLog && lead.changeLog.length > 0)
+                    ? lead.changeLog.join("\n")
+                    : "No log entries."}
+                </div>
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button
