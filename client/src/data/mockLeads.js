@@ -1,3 +1,5 @@
+// src/data/mockLeads.js (or wherever your mock leads file is located)
+
 const mockLeads = [
   {
     _id: "1",
@@ -9,7 +11,7 @@ const mockLeads = [
     ageGrade: "10",
     course: "Full Stack Web Dev",
     source: "Facebook",
-    addDate: "2024-06-01", // New field: Date student was added
+    addDate: "2024-06-01",
     recentCall: "2024-06-15",
     nextCall: "2024-06-20",
     status: "New",
@@ -22,7 +24,7 @@ const mockLeads = [
     classType: "Online",
     value: "2500",
     adsetName: "Summer-Campaign-2024",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "7 P.M. - 9 P.M.",
     paymentType: "Cash",
     device: "Yes",
@@ -30,6 +32,14 @@ const mockLeads = [
     courseType: "Regular",
     previousCodingExp: "None",
     workshopBatch: "Summer 2024 - Batch A",
+    // Add payment related fields here, even if null for non-enrolled
+    totalPayment: null,
+    installment1: null,
+    installment1Date: null,
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "2",
@@ -41,7 +51,7 @@ const mockLeads = [
     ageGrade: "12",
     course: "Data Science",
     source: "Website",
-    addDate: "2024-05-28", // New field: Date student was added
+    addDate: "2024-05-28",
     recentCall: "2024-06-10",
     nextCall: "2024-06-25",
     status: "Active",
@@ -54,7 +64,7 @@ const mockLeads = [
     classType: "Physical",
     value: "3000",
     adsetName: "Spring-Campaign-2024",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "10 A.M. - 12 P.M.",
     paymentType: "Online",
     device: "Yes",
@@ -62,6 +72,13 @@ const mockLeads = [
     courseType: "Coding Kickstart",
     previousCodingExp: "Basic Python",
     workshopBatch: "Winter 2024 - Batch C",
+    totalPayment: null,
+    installment1: null,
+    installment1Date: null,
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "3",
@@ -73,10 +90,10 @@ const mockLeads = [
     ageGrade: "11",
     course: "UI/UX Design",
     source: "Email",
-    addDate: "2024-06-05", // New field: Date student was added
+    addDate: "2024-06-05",
     recentCall: "2024-06-18",
     nextCall: "N/A",
-    status: "Qualified",
+    status: "Qualified", // Enrolled
     address: "789 Pine Rd",
     temporaryAddress: "789 Pine Rd",
     permanentAddress: "Suite 100",
@@ -86,7 +103,7 @@ const mockLeads = [
     classType: "Online",
     value: "2000",
     adsetName: "Organic-Search",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "2 P.M. - 4 P.M.",
     paymentType: "Cash",
     device: "Yes",
@@ -94,6 +111,13 @@ const mockLeads = [
     courseType: "Regular",
     previousCodingExp: "None",
     workshopBatch: "Spring 2025 - Batch B",
+    totalPayment: 2000,
+    installment1: 1000,
+    installment1Date: "2024-01-10", // Example: 1st installment paid
+    installment2: 500,
+    installment2Date: "2024-03-05", // Example: 2nd installment paid
+    installment3: 500,
+    installment3Date: "2024-05-20", // Example: 3rd installment paid
   },
   {
     _id: "4",
@@ -105,10 +129,10 @@ const mockLeads = [
     ageGrade: "9",
     course: "Game Development",
     source: "Direct call",
-    addDate: "2024-05-15", // New field: Date student was added
+    addDate: "2024-05-15",
     recentCall: "2024-06-01",
     nextCall: "2024-07-01",
-    status: "Closed",
+    status: "Closed", // Enrolled (full payment)
     address: "101 Wonder Ln",
     temporaryAddress: "101 Wonder Ln",
     permanentAddress: "",
@@ -118,7 +142,7 @@ const mockLeads = [
     classType: "Physical",
     value: "4000",
     adsetName: "Referral-Program",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "8 A.M. - 10 A.M.",
     paymentType: "Online",
     device: "Yes",
@@ -126,6 +150,13 @@ const mockLeads = [
     courseType: "Winter coding Camp",
     previousCodingExp: "Intermediate C++",
     workshopBatch: "Fall 2024 - Batch X",
+    totalPayment: 4000,
+    installment1: 4000, // Full payment in 1st installment
+    installment1Date: "2024-06-01", // Example: Full payment date
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "5",
@@ -137,7 +168,7 @@ const mockLeads = [
     ageGrade: "10",
     course: "Cybersecurity",
     source: "WhatsApp/Viber",
-    addDate: "2024-06-02", // New field: Date student was added
+    addDate: "2024-06-02",
     recentCall: "2024-06-12",
     nextCall: "2024-06-21",
     status: "Active",
@@ -150,7 +181,7 @@ const mockLeads = [
     classType: "Online",
     value: "2800",
     adsetName: "Cyber-Campaign",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "4 P.M. - 6 P.M.",
     paymentType: "Cash",
     device: "Yes",
@@ -158,6 +189,13 @@ const mockLeads = [
     courseType: "Regular",
     previousCodingExp: "None",
     workshopBatch: "Summer 2025 - Batch D",
+    totalPayment: null,
+    installment1: null,
+    installment1Date: null,
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "6",
@@ -169,7 +207,7 @@ const mockLeads = [
     ageGrade: "11",
     course: "Cloud Computing",
     source: "Facebook",
-    addDate: "2024-05-20", // New field: Date student was added
+    addDate: "2024-05-20",
     recentCall: "2024-06-05",
     nextCall: "2024-06-28",
     status: "Active",
@@ -182,7 +220,7 @@ const mockLeads = [
     classType: "Online",
     value: "3500",
     adsetName: "Cloud-Masterclass",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "12 P.M. - 2 P.M.",
     paymentType: "Online",
     device: "Yes",
@@ -190,6 +228,13 @@ const mockLeads = [
     courseType: "Coding Kickstart",
     previousCodingExp: "Some Linux",
     workshopBatch: "Winter 2025 - Batch F",
+    totalPayment: null,
+    installment1: null,
+    installment1Date: null,
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "7",
@@ -201,10 +246,10 @@ const mockLeads = [
     ageGrade: "9",
     course: "Digital Marketing",
     source: "Website",
-    addDate: "2024-06-10", // New field: Date student was added
+    addDate: "2024-06-10",
     recentCall: "2024-06-19",
     nextCall: "N/A",
-    status: "Converted",
+    status: "Converted", // Enrolled
     address: "800 Growth Way",
     temporaryAddress: "800 Growth Way",
     permanentAddress: "",
@@ -214,7 +259,7 @@ const mockLeads = [
     classType: "Physical",
     value: "1800",
     adsetName: "Referral-2024",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "2:30 P.M. - 4:30 P.M.",
     paymentType: "Cash",
     device: "Yes",
@@ -222,6 +267,13 @@ const mockLeads = [
     courseType: "Regular",
     previousCodingExp: "None",
     workshopBatch: "Summer 2025 - Batch G",
+    totalPayment: 1800,
+    installment1: 900,
+    installment1Date: "2024-04-10", // Example: 1st installment paid
+    installment2: 900,
+    installment2Date: "2024-06-25", // Example: 2nd installment paid
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "8",
@@ -233,7 +285,7 @@ const mockLeads = [
     ageGrade: "13",
     course: "AI & Machine Learning",
     source: "Facebook",
-    addDate: "2024-06-03", // New field: Date student was added
+    addDate: "2024-06-03",
     recentCall: "2024-06-14",
     nextCall: "2024-06-22",
     status: "Active",
@@ -246,7 +298,7 @@ const mockLeads = [
     classType: "Online",
     value: "4500",
     adsetName: "AI-Ignite",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "5 P.M - 7 P.M.",
     paymentType: "Online",
     device: "Yes",
@@ -254,6 +306,13 @@ const mockLeads = [
     courseType: "Winter coding Camp",
     previousCodingExp: "Advanced Python",
     workshopBatch: "Spring 2025 - Batch H",
+    totalPayment: null,
+    installment1: null,
+    installment1Date: null,
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
   },
   {
     _id: "9",
@@ -265,10 +324,10 @@ const mockLeads = [
     ageGrade: "10",
     course: "Mobile App Dev",
     source: "Email",
-    addDate: "2024-06-07", // New field: Date student was added
+    addDate: "2024-06-07",
     recentCall: "2024-06-16",
     nextCall: "N/A",
-    status: "Closed",
+    status: "Closed", // Enrolled
     address: "10 Mobile Hts",
     temporaryAddress: "10 Mobile Hts",
     permanentAddress: "",
@@ -278,7 +337,7 @@ const mockLeads = [
     classType: "Online",
     value: "3200",
     adsetName: "Dev-Summit",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "6 P.M. - 7 P.M.",
     paymentType: "Cash",
     device: "Yes",
@@ -286,6 +345,13 @@ const mockLeads = [
     courseType: "Coding Kickstart",
     previousCodingExp: "Basic Java",
     workshopBatch: "Fall 2024 - Batch I",
+    totalPayment: 3200,
+    installment1: 1500,
+    installment1Date: "2024-02-01", // Example: 1st installment paid
+    installment2: 1000,
+    installment2Date: "2024-04-15", // Example: 2nd installment paid
+    installment3: 700,
+    installment3Date: "2024-06-10", // Example: 3rd installment paid
   },
   {
     _id: "10",
@@ -297,7 +363,7 @@ const mockLeads = [
     ageGrade: "11",
     course: "Robotics",
     source: "WhatsApp/Viber",
-    addDate: "2024-05-25", // New field: Date student was added
+    addDate: "2024-05-25",
     recentCall: "2024-06-08",
     nextCall: "2024-06-26",
     status: "Active",
@@ -310,7 +376,7 @@ const mockLeads = [
     classType: "Physical",
     value: "5000",
     adsetName: "Robotics-Expo",
-    remarks: "", // Set to empty string
+    remarks: "",
     shift: "7 P.M. - 8 P.M.",
     paymentType: "Online",
     device: "No",
@@ -318,6 +384,93 @@ const mockLeads = [
     courseType: "Regular",
     previousCodingExp: "Arduino",
     workshopBatch: "Summer 2025 - Batch J",
+    totalPayment: null,
+    installment1: null,
+    installment1Date: null,
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
+  },
+  // Added Peter Parker: Enrolled with only 1st installment paid recently
+  {
+    _id: "11",
+    studentName: "Peter Parker",
+    parentsName: "Aunt May",
+    email: "peter.p@example.com",
+    phone: "555-000-1111",
+    contactWhatsapp: "555-000-1111",
+    ageGrade: "16",
+    course: "Python Programming",
+    source: "Referral",
+    addDate: "2024-06-20",
+    recentCall: "2024-06-20",
+    nextCall: "N/A",
+    status: "Qualified",
+    address: "Queens, NY",
+    temporaryAddress: "123 Forest Hills",
+    permanentAddress: "",
+    city: "New York",
+    county: "Queens",
+    postCode: "11375",
+    classType: "Online",
+    value: "1200",
+    adsetName: "Code-Camp",
+    remarks: "Very enthusiastic to learn.",
+    shift: "Evening",
+    paymentType: "Installment",
+    device: "Yes",
+    invoice: [],
+    courseType: "Short-term",
+    previousCodingExp: "Basic HTML",
+    workshopBatch: "Summer 2024 - Batch P",
+    totalPayment: 1200,
+    installment1: 600,
+    installment1Date: "2024-06-28", // Only 1st installment paid recently
+    installment2: null,
+    installment2Date: null,
+    installment3: null,
+    installment3Date: null,
+  },
+  // Added Mary Jane: Enrolled with 1st and 2nd installments paid
+  {
+    _id: "12",
+    studentName: "Mary Jane",
+    parentsName: "Mr. Watson",
+    email: "mj.w@example.com",
+    phone: "555-222-3333",
+    contactWhatsapp: "555-222-3333",
+    ageGrade: "15",
+    course: "Web Design Fundamentals",
+    source: "Website",
+    addDate: "2024-05-10",
+    recentCall: "2024-05-10",
+    nextCall: "N/A",
+    status: "Closed",
+    address: "Midtown, NY",
+    temporaryAddress: "456 Broadway",
+    permanentAddress: "Apt 2A",
+    city: "New York",
+    county: "Manhattan",
+    postCode: "10012",
+    classType: "Physical",
+    value: "1500",
+    adsetName: "Design-Studio",
+    remarks: "Creative and eager to start.",
+    shift: "Morning",
+    paymentType: "Installment",
+    device: "Yes",
+    invoice: [],
+    courseType: "Short-term",
+    previousCodingExp: "None",
+    workshopBatch: "Summer 2024 - Batch M",
+    totalPayment: 1500,
+    installment1: 750,
+    installment1Date: "2024-05-15",
+    installment2: 750,
+    installment2Date: "2024-06-29", // 2nd installment paid today
+    installment3: null,
+    installment3Date: null,
   },
 ];
 
