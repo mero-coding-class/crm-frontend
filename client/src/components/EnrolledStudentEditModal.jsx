@@ -1,39 +1,47 @@
 // src/components/EnrolledStudentEditModal.jsx
-import React, { useState, useEffect, useRef } from 'react'; // Import useRef
+import React, { useState, useEffect, useRef } from 'react';
 import { XMarkIcon, DocumentArrowDownIcon, TrashIcon } from "@heroicons/react/24/outline";
-import { courseOptions } from '../constants/leadOptions'; // Reusing course options for consistency
+import { courseOptions } from '../constants/leadOptions';
 
 const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    studentName: '',
-    parentsName: '',
-    email: '',
-    phone: '',
-    course: '',
-    totalPayment: '',
-    installment1: '',
-    installment2: '',
-    installment3: '',
-    invoice: [], // Array to hold invoice objects { name: string, url: string }
-    remarks: ''
-  });
+  // Initialize formData with ALL properties from the student prop
+  // This ensures that even fields not directly editable in the modal
+  // are retained and passed back.
+  const [formData, setFormData] = useState({}); // Initialize as empty object first
 
-  const modalRef = useRef(null); // Create a ref for the modal content
+  const modalRef = useRef(null);
+
+  // Helper to format date to YYYY-MM-DD
+  const formatDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   // Populate form data when the student prop changes
   useEffect(() => {
     if (student) {
+      // **Crucial Change:** Spread the entire student object
+      // then override/set the specific fields the modal manages.
       setFormData({
+        ...student, // This copies all existing fields (like addDate, status, etc.)
         studentName: student.studentName || '',
         parentsName: student.parentsName || '',
         email: student.email || '',
         phone: student.phone || '',
         course: student.course || '',
-        totalPayment: student.totalPayment || '',
-        installment1: student.installment1 || '',
-        installment2: student.installment2 || '',
-        installment3: student.installment3 || '',
-        invoice: student.invoice ? [...student.invoice] : [], // Deep copy the array
+        totalPayment: student.totalPayment !== undefined && student.totalPayment !== null ? student.totalPayment : '',
+        installment1: student.installment1 !== undefined && student.installment1 !== null ? student.installment1 : '',
+        installment1Date: student.installment1Date || null,
+        installment2: student.installment2 !== undefined && student.installment2 !== null ? student.installment2 : '',
+        installment2Date: student.installment2Date || null,
+        installment3: student.installment3 !== undefined && student.installment3 !== null ? student.installment3 : '',
+        installment3Date: student.installment3Date || null,
+        invoice: student.invoice ? [...student.invoice] : [], // Deep copy array
         remarks: student.remarks || ''
       });
     }
@@ -42,28 +50,39 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
   // Handle outside click to close modal
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // If the click is outside the modal content (but on the overlay), close the modal
       if (modalRef.current && !modalRef.current.contains(event.target)) {
         onClose();
       }
     };
 
-    // Attach the event listener to the document when the modal is open
     document.addEventListener('mousedown', handleClickOutside);
-
-    // Clean up the event listener when the component unmounts or modal closes
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [onClose]); // Dependency array: re-run effect if onClose changes (though it's stable here)
-
+  }, [onClose]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+
+    setFormData((prev) => {
+      const newState = { ...prev, [name]: value };
+
+      // Logic to update installmentXDate when installmentX value changes
+      if (name.startsWith('installment') && name.endsWith('Date') === false) { // Ensure it's an amount field
+        const dateFieldName = `${name}Date`;
+        // Convert current and previous values to numbers for comparison
+        const currentValue = parseFloat(value);
+        const previousValue = parseFloat(prev[name]);
+
+        // Only update the date if the value is a number and has changed from its previous numeric value
+        if (!isNaN(currentValue) && currentValue !== previousValue) {
+            newState[dateFieldName] = formatDate(new Date()); // Set to current date
+        } else if (value === '' && prev[name] !== '') { // If amount is cleared, clear the date
+            newState[dateFieldName] = null;
+        }
+      }
+      return newState;
+    });
   };
 
   const handleInvoiceChange = (index, field, value) => {
@@ -91,26 +110,22 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
     e.preventDefault();
     // Ensure numeric values are numbers, not strings, and filter out empty invoice entries
     const savedData = {
-      ...formData,
+      ...formData, // Spreading formData now includes ALL original fields + updated ones
       totalPayment: formData.totalPayment ? parseFloat(formData.totalPayment) : null,
       installment1: formData.installment1 ? parseFloat(formData.installment1) : null,
       installment2: formData.installment2 ? parseFloat(formData.installment2) : null,
       installment3: formData.installment3 ? parseFloat(formData.installment3) : null,
+      // installmentXDate fields are already correctly managed in formData by handleChange
       invoice: formData.invoice.filter(inv => inv.name && inv.url)
     };
     onSave({ ...savedData, _id: student._id }); // Pass the _id back for identification
   };
 
   return (
-    // The outer div should not capture clicks for closing, but the inner one
-    // The overlay itself will trigger the close, but we need to ensure the click isn't *inside* the modal box.
-    <div className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 overflow-y-auto p-4 animate-fade-in"
-         // No onClick here, the useEffect handles it via document listener
-    >
+    <div className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 overflow-y-auto p-4 animate-fade-in">
       <div
-        ref={modalRef} // Attach the ref to the actual modal content div
+        ref={modalRef}
         className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-auto my-8 transform transition-all animate-scale-up"
-        // Prevent clicks inside the modal from bubbling up to the document listener
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4 border-b pb-3">
@@ -124,6 +139,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Input fields for studentName, parentsName, email, phone, course, totalPayment, installment1, installment2, installment3, remarks, and invoice... */}
+          {/* ... (Your existing input structure) ... */}
+
           <div>
             <label htmlFor="studentName" className="block text-sm font-medium text-gray-700">Student Name</label>
             <input
@@ -211,6 +229,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
+              {formData.installment1Date && (
+                <p className="mt-1 text-xs text-gray-500">Last Paid: {formatDate(formData.installment1Date)}</p>
+              )}
             </div>
             <div>
               <label htmlFor="installment2" className="block text-sm font-medium text-gray-700">2nd Installment</label>
@@ -222,6 +243,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
+              {formData.installment2Date && (
+                <p className="mt-1 text-xs text-gray-500">Last Paid: {formatDate(formData.installment2Date)}</p>
+              )}
             </div>
             <div className="col-span-1">
               <label htmlFor="installment3" className="block text-sm font-medium text-gray-700">3rd Installment</label>
@@ -233,6 +257,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
+              {formData.installment3Date && (
+                <p className="mt-1 text-xs text-gray-500">Last Paid: {formatDate(formData.installment3Date)}</p>
+              )}
             </div>
           </div>
 
