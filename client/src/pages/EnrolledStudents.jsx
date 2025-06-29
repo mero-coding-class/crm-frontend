@@ -397,7 +397,7 @@ const EnrolledStudents = () => {
 
     fetchLeadsData();
   }, [authToken]);
-
+  
   const enrolledStudents = useMemo(() => {
     const filtered = allLeads.filter(
       // Enrolled students are those with 'Qualified' or 'Closed' status
@@ -478,8 +478,8 @@ const EnrolledStudents = () => {
             editingLead
           )}{" "}
           {/* CORRECTED LOG */}
-          <EnrolledStudentEditModal // <--- USING THE DEDICATED MODAL
-            student={editingLead} // Pass as 'student' prop as expected by EnrolledStudentEditModal
+          <EnrolledStudentEditModal
+            student={editingLead}
             onClose={handleCloseModal}
             onSave={handleSaveEdit}
           />
