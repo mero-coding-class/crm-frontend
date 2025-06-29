@@ -1,7 +1,7 @@
 // src/data/leadConstants.js
 
 export const statusOptions = [
-  "All", // Only used for filtering in Leads.jsx, not for individual lead status
+  "All", 
   "New",
   "Open",
   "Average",
@@ -17,13 +17,13 @@ export const statusOptions = [
 ];
 
 export const deviceOptions = [
-  "All", // Only used for filtering in Leads.jsx, not for individual lead device
+  "All", 
   "Laptop",
   "PC",
   "Tablet",
   "Mobile",
   "Other",
-  "N/A", // Represents no device specified or not applicable
+  "N/A", 
 ];
 
 export const classTypeOptions = ["All", "Online", "Physical"];
