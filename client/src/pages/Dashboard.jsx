@@ -1,12 +1,14 @@
 // src/pages/Dashboard.jsx
 
-import React, { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useMemo } from "react";
 import { AuthContext } from "../App";
 import Loader from "../components/common/Loader";
 
+// Import your mock leads data
+import initialMockLeads from "../data/mockLeads"; // <--- NEW IMPORT
+
 // Import new dashboard components
 import StatCard from "../components/dashboard/StatCard";
-// We no longer need DashboardChartPlaceholder directly, as we'll use Recharts components
 import LatestLeadsTable from "../components/dashboard/LatestLeadsTable";
 import TopCoursesTable from "../components/dashboard/TopCoursesTable";
 
@@ -25,7 +27,7 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
-} from 'recharts';
+} from "recharts";
 
 // Import icons for stat cards and other elements
 import {
@@ -36,7 +38,7 @@ import {
   CalendarDaysIcon,
   ChartPieIcon,
   ChartBarIcon,
-  GlobeAltIcon
+  GlobeAltIcon,
 } from "@heroicons/react/24/outline";
 
 // Define a custom reusable ChartContainer component for consistent styling and responsiveness
@@ -44,107 +46,237 @@ const ChartContainer = ({ title, description, children }) => (
   <div className="bg-white p-6 rounded-lg shadow-md flex flex-col h-full">
     <h3 className="text-lg font-semibold text-gray-800 mb-2">{title}</h3>
     <p className="text-gray-500 text-sm mb-4">{description}</p>
-    <div className="flex-grow min-h-[250px]"> {/* min-h for charts */}
+    <div className="flex-grow min-h-[250px]">
+      {" "}
+      {/* min-h for charts */}
       {children}
     </div>
   </div>
 );
 
-
 const Dashboard = () => {
   const { authToken } = useContext(AuthContext);
-  const [dashboardData, setDashboardData] = useState(null);
+  const [allLeads, setAllLeads] = useState([]); // State to hold all leads from mock data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Define colors for the pie chart segments
-  const PIE_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+  const PIE_COLORS = [
+    "#8884d8",
+    "#82ca9d",
+    "#ffc658",
+    "#ff7300",
+    "#0088FE",
+    "#00C49F",
+    "#FFBB28",
+    "#FF8042",
+  ];
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchLeadsData = async () => {
       setLoading(true);
       setError(null);
-      // Removed artificial API delay for faster development feedback
+      try {
+        // In a real application, you'd fetch data from an API here:
+        // const response = await fetch('/api/all-leads', {
+        //   headers: { Authorization: `Bearer ${authToken}` }
+        // });
+        // if (!response.ok) throw new Error('Failed to fetch leads');
+        // const data = await response.json();
+        // setAllLeads(data);
 
-      const mockDashboardData = {
-        stats: {
-          totalLeads: 2500,
-          totalEnrolledStudents: 1200,
-          newLeadsThisMonth: 150,
-          revenueThisMonth: '$55,000',
-          upcomingClassesCalls: 28,
-        },
-        charts: {
-          leadStatusDistribution: [
-            { name: 'New', value: 700 },
-            { name: 'Contacted', value: 500 },
-            { name: 'Qualified', value: 300 },
-            { name: 'Closed', value: 900 },
-            { name: 'Lost', value: 100 },
-          ],
-          enrollmentTrends: [
-            { month: 'Jan', students: 100 },
-            { month: 'Feb', students: 120 },
-            { month: 'Mar', students: 150 },
-            { month: 'Apr', students: 130 },
-            { month: 'May', students: 180 },
-            { month: 'Jun', students: 200 },
-            { month: 'Jul', students: 210 },
-            { month: 'Aug', students: 230 },
-            { month: 'Sep', students: 190 },
-            { month: 'Oct', students: 240 },
-            { month: 'Nov', students: 260 },
-            { month: 'Dec', students: 220 },
-          ],
-          leadsBySource: [
-            { source: 'Website', leads: 450 },
-            { source: 'Referral', leads: 300 },
-            { source: 'Social Media', leads: 600 },
-            { source: 'Ads', leads: 800 },
-            { source: 'Offline Event', leads: 350 },
-            { source: 'Webinar', leads: 200 },
-            { source: 'Partnership', leads: 150 },
-          ],
-        },
-        latestLeads: [
-          { _id: 'l1', studentName: 'Emma Stone', email: 'emma@example.com', course: 'Data Science', status: 'New', registeredOn: '2024-06-18' },
-          { _id: 'l2', studentName: 'Liam Green', email: 'liam@example.com', course: 'Full Stack', status: 'Contacted', registeredOn: '2024-06-17' },
-          { _id: 'l3', studentName: 'Olivia White', email: 'olivia@example.com', course: 'UI/UX Design', status: 'Qualified', registeredOn: '2024-06-16' },
-          { _id: 'l4', studentName: 'Noah Black', email: 'noah@example.com', course: 'Game Dev', status: 'New', registeredOn: '2024-06-15' },
-          { _id: 'l5', studentName: 'Sophia Blue', email: 'sophia@example.com', course: 'Cybersecurity', status: 'Contacted', registeredOn: '2024-06-14' },
-          { _id: 'l6', studentName: 'Jackson Red', email: 'jackson@example.com', course: 'Digital Marketing', status: 'Closed', registeredOn: '2024-06-13' },
-          { _id: 'l7', studentName: 'Isabella Grey', email: 'isabella@example.com', course: 'Cloud Computing', status: 'New', registeredOn: '2024-06-12' },
-          { _id: 'l8', studentName: 'Lucas Brown', email: 'lucas@example.com', course: 'Mobile App Dev', status: 'Lost', registeredOn: '2024-06-11' },
-          { _id: 'l9', studentName: 'Mia Wilson', email: 'mia@example.com', course: 'Project Management', status: 'Qualified', registeredOn: '2024-06-10' },
-          { _id: 'l10', studentName: 'Ethan Taylor', email: 'ethan@example.com', course: 'Financial Modeling', status: 'New', registeredOn: '2024-06-09' },
-        ],
-        topCourses: [
-          { name: 'Full Stack Web Dev', enrollments: 350, revenue: '$1,050,000' },
-          { name: 'Data Science Masterclass', enrollments: 280, revenue: '$840,000' },
-          { name: 'UI/UX Design Bootcamp', enrollments: 200, revenue: '$600,000' },
-          { name: 'Python for AI & ML', enrollments: 180, revenue: '$540,000' },
-          { name: 'Cybersecurity Fundamentals', enrollments: 150, revenue: '$450,000' },
-          { name: 'Cloud Computing with AWS', enrollments: 120, revenue: '$360,000' },
-        ],
-      };
-
-      setDashboardData(mockDashboardData);
-      setLoading(false);
+        // For now, using mock leads data:
+        setAllLeads(initialMockLeads);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchDashboardData();
-  }, [authToken]);
+    fetchLeadsData();
+  }, [authToken]); // Dependency on authToken to refetch if auth changes
+
+  // --- Dynamic Dashboard Data Calculation ---
+  const dashboardData = useMemo(() => {
+    if (allLeads.length === 0) {
+      return null; // Return null if no leads yet
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // --- Stats Calculation ---
+    const totalLeads = allLeads.length;
+    const enrolledLeads = allLeads.filter(
+      (lead) => lead.status === "Qualified" || lead.status === "Closed"
+    );
+    const totalEnrolledStudents = enrolledLeads.length;
+
+    const newLeadsThisMonth = allLeads.filter((lead) => {
+      const addDate = new Date(lead.addDate);
+      return (
+        addDate.getMonth() === currentMonth &&
+        addDate.getFullYear() === currentYear
+      );
+    }).length;
+
+    let revenueThisMonth = 0;
+    enrolledLeads.forEach((lead) => {
+      // Sum up installment payments if their dates fall within the current month
+      if (lead.installment1Date) {
+        const date1 = new Date(lead.installment1Date);
+        if (
+          date1.getMonth() === currentMonth &&
+          date1.getFullYear() === currentYear
+        ) {
+          revenueThisMonth += lead.installment1 || 0;
+        }
+      }
+      if (lead.installment2Date) {
+        const date2 = new Date(lead.installment2Date);
+        if (
+          date2.getMonth() === currentMonth &&
+          date2.getFullYear() === currentYear
+        ) {
+          revenueThisMonth += lead.installment2 || 0;
+        }
+      }
+      if (lead.installment3Date) {
+        const date3 = new Date(lead.installment3Date);
+        if (
+          date3.getMonth() === currentMonth &&
+          date3.getFullYear() === currentYear
+        ) {
+          revenueThisMonth += lead.installment3 || 0;
+        }
+      }
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start of today
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(today.getDate() + 7);
+    sevenDaysFromNow.setHours(23, 59, 59, 999); // End of 7th day
+
+    const upcomingClassesCalls = allLeads.filter((lead) => {
+      if (!lead.nextCall || lead.nextCall === "N/A") return false;
+      const nextCallDate = new Date(lead.nextCall);
+      return nextCallDate >= today && nextCallDate <= sevenDaysFromNow;
+    }).length;
+
+    // --- Charts Data Calculation ---
+    const leadStatusDistributionMap = new Map();
+    allLeads.forEach((lead) => {
+      const status = lead.status || "Unknown";
+      leadStatusDistributionMap.set(
+        status,
+        (leadStatusDistributionMap.get(status) || 0) + 1
+      );
+    });
+    const leadStatusDistribution = Array.from(
+      leadStatusDistributionMap.entries()
+    ).map(([name, value]) => ({ name, value }));
+
+    const enrollmentTrendsMap = new Map(); // Key: YYYY-MM, Value: count
+    enrolledLeads.forEach((lead) => {
+      const addDate = new Date(lead.addDate);
+      const monthYear = `${addDate.getFullYear()}-${String(
+        addDate.getMonth() + 1
+      ).padStart(2, "0")}`;
+      enrollmentTrendsMap.set(
+        monthYear,
+        (enrollmentTrendsMap.get(monthYear) || 0) + 1
+      );
+    });
+    // Sort months chronologically and format for chart
+    const enrollmentTrends = Array.from(enrollmentTrendsMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthYear, students]) => ({
+        month: monthYear.substring(5),
+        students,
+      })); // Use MM for month
+
+    const leadsBySourceMap = new Map();
+    allLeads.forEach((lead) => {
+      const source = lead.source || "Unknown";
+      leadsBySourceMap.set(source, (leadsBySourceMap.get(source) || 0) + 1);
+    });
+    const leadsBySource = Array.from(leadsBySourceMap.entries()).map(
+      ([source, leads]) => ({ source, leads })
+    );
+
+    // --- Tables Data Calculation ---
+    const latestLeads = [...allLeads] // Create a copy to sort
+      .sort((a, b) => new Date(b.addDate) - new Date(a.addDate))
+      .slice(0, 10) // Get top 10 latest leads
+      .map((lead) => ({
+        _id: lead._id,
+        studentName: lead.studentName,
+        email: lead.email,
+        course: lead.course,
+        status: lead.status,
+        registeredOn: lead.addDate, // Using addDate as registeredOn
+      }));
+
+    const topCoursesMap = new Map(); // Key: courseName, Value: { enrollments: count, revenue: sum }
+    enrolledLeads.forEach((lead) => {
+      const courseName = lead.course || "Unknown Course";
+      const currentData = topCoursesMap.get(courseName) || {
+        enrollments: 0,
+        revenue: 0,
+      };
+      topCoursesMap.set(courseName, {
+        enrollments: currentData.enrollments + 1,
+        revenue: currentData.revenue + (lead.totalPayment || 0),
+      });
+    });
+    const topCourses = Array.from(topCoursesMap.entries())
+      .map(([name, data]) => ({
+        name,
+        enrollments: data.enrollments,
+        revenue: `${data.revenue.toLocaleString()}`, // Format revenue
+      }))
+      .sort((a, b) => b.enrollments - a.enrollments) // Sort by enrollments descending
+      .slice(0, 7); // Get top 7 courses
+
+    return {
+      stats: {
+        totalLeads,
+        totalEnrolledStudents,
+        newLeadsThisMonth,
+        revenueThisMonth: `$${revenueThisMonth.toLocaleString()}`, // Format revenue
+        upcomingClassesCalls,
+      },
+      charts: {
+        leadStatusDistribution,
+        enrollmentTrends,
+        leadsBySource,
+      },
+      latestLeads,
+      topCourses,
+    };
+  }, [allLeads]); // Recalculate whenever allLeads changes
 
   if (loading) {
     return <Loader />;
   }
 
   if (error) {
-    return <div className="text-red-500 p-4 bg-red-100 rounded-md">Error: {error}</div>;
+    return (
+      <div className="text-red-500 p-4 bg-red-100 rounded-md">
+        Error: {error}
+      </div>
+    );
   }
 
   if (!dashboardData) {
-    return <div className="text-gray-500 p-4 text-center">Dashboard data not available.</div>;
+    return (
+      <div className="text-gray-500 p-4 text-center">
+        No dashboard data available. Please add some leads.
+      </div>
+    );
   }
 
   return (
@@ -157,28 +289,28 @@ const Dashboard = () => {
           title="Total Leads"
           value={dashboardData.stats.totalLeads}
           icon={UsersIcon}
-          description="+10% last 30 days"
+          description="Overall count of all leads"
           colorClass="text-blue-600 bg-blue-100"
         />
         <StatCard
           title="Enrolled Students"
           value={dashboardData.stats.totalEnrolledStudents}
           icon={AcademicCapIcon}
-          description="+5% last month"
+          description="Qualified or Closed leads"
           colorClass="text-purple-600 bg-purple-100"
         />
         <StatCard
           title="New Leads This Month"
           value={dashboardData.stats.newLeadsThisMonth}
           icon={PlusIcon}
-          description="Avg. 25/week"
+          description="Leads added in current month"
           colorClass="text-green-600 bg-green-100"
         />
         <StatCard
           title="Revenue This Month"
           value={dashboardData.stats.revenueThisMonth}
           icon={CurrencyDollarIcon}
-          description="+$1500 last week"
+          description="Payments received in current month"
           colorClass="text-teal-600 bg-teal-100"
         />
         <StatCard
@@ -207,11 +339,16 @@ const Dashboard = () => {
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
-                nameKey="name" // Use 'name' for the legend and tooltip
+                nameKey="name"
               >
-                {dashboardData.charts.leadStatusDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                ))}
+                {dashboardData.charts.leadStatusDistribution.map(
+                  (entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={PIE_COLORS[index % PIE_COLORS.length]}
+                    />
+                  )
+                )}
               </Pie>
               <Tooltip />
               <Legend />
@@ -222,7 +359,7 @@ const Dashboard = () => {
         {/* Enrollment Trends (Line Chart) */}
         <ChartContainer
           title="Student Enrollment Trends"
-          description="Monthly trend of new student enrollments."
+          description="Monthly trend of new student enrollments (based on add date)."
         >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -234,7 +371,12 @@ const Dashboard = () => {
               <YAxis />
               <Tooltip />
               <Legend />
-              <Line type="monotone" dataKey="students" stroke="#8884d8" activeDot={{ r: 8 }} />
+              <Line
+                type="monotone"
+                dataKey="students"
+                stroke="#8884d8"
+                activeDot={{ r: 8 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </ChartContainer>
@@ -250,7 +392,12 @@ const Dashboard = () => {
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="source" angle={-15} textAnchor="end" height={50} />
+              <XAxis
+                dataKey="source"
+                angle={-15}
+                textAnchor="end"
+                height={50}
+              />
               <YAxis />
               <Tooltip />
               <Legend />
@@ -270,7 +417,6 @@ const Dashboard = () => {
       </div>
 
       {/* Optional: Map Placeholder for Geographic Distribution */}
-      {/* You would integrate a map library here (e.g., Leaflet, Google Maps React) */}
       <ChartContainer
         title="Geographical Lead Distribution"
         description="Visualizing where your leads are coming from globally."
