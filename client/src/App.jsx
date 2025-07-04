@@ -6,20 +6,21 @@ import Leads from './pages/Leads';
 import EnrolledStudents from './pages/EnrolledStudents'; // Assuming you have this
 import TrashPage from './pages/TrashPage'; 
 import Login from './pages/Login';
+import Reports from "./pages/Reports";
 
 // Create AuthContext
 export const AuthContext = createContext(null);
 
 function App() {
-  const [authToken, setAuthToken] = useState(localStorage.getItem('authToken'));
+  const [authToken, setAuthToken] = useState(localStorage.getItem("authToken"));
 
   const login = (token) => {
-    localStorage.setItem('authToken', token);
+    localStorage.setItem("authToken", token);
     setAuthToken(token);
   };
 
   const logout = () => {
-    localStorage.removeItem('authToken');
+    localStorage.removeItem("authToken");
     setAuthToken(null);
   };
 
@@ -29,12 +30,15 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           {/* Protected routes */}
-          <Route element={authToken ? <MainLayout /> : <Navigate to="/login" />}>
+          <Route
+            element={authToken ? <MainLayout /> : <Navigate to="/login" />}
+          >
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/enrolled-students" element={<EnrolledStudents />} />
-            <Route path="/trash" element={<TrashPage />} /> {/* NEW TRASH ROUTE */}
-            <Route path="*" element={<Navigate to="/dashboard" />} /> {/* Default redirect */}
+            <Route path="/trash" element={<TrashPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" />} />
+            <Route path="report" element={<Reports />} />
           </Route>
         </Routes>
       </Router>
