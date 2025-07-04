@@ -1,19 +1,22 @@
-// src/pages/EnrolledStudents.jsx
-
-import React, { useContext, useState, useEffect, useMemo } from 'react';
-import Loader from '../components/common/Loader';
-import { AuthContext } from '../App';
+import React, { useContext, useState, useEffect, useMemo } from "react";
+import Loader from "../components/common/Loader";
+import { AuthContext } from "../App";
 import EnrolledStudentsTable from "../components/EnrolledStudentsTable";
-import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal"; // <--- CORRECTED IMPORT
+import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal";
 
 const EnrolledStudents = () => {
   const { authToken } = useContext(AuthContext);
   const [allLeads, setAllLeads] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Fixed: Initial state was just `true`
   const [error, setError] = useState(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingLead, setEditingLead] = useState(null); // This `editingLead` variable will now hold the `student` data
+  const [editingLead, setEditingLead] = useState(null);
+
+  // REMOVED: searchStudentName and searchEmail states
+  const [searchQuery, setSearchQuery] = useState(""); // NEW: Combined search state
+  const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
+  const [filterPaymentCompleted, setFilterPaymentCompleted] = useState(false);
 
   useEffect(() => {
     const fetchLeadsData = async () => {
@@ -53,7 +56,8 @@ const EnrolledStudents = () => {
           totalPayment: null,
           installment1: null,
           installment2: null,
-          installment3: null, // Not enrolled
+          installment3: null,
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "2",
@@ -87,7 +91,8 @@ const EnrolledStudents = () => {
           totalPayment: null,
           installment1: null,
           installment2: null,
-          installment3: null, // Not enrolled
+          installment3: null,
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "3",
@@ -125,8 +130,20 @@ const EnrolledStudents = () => {
             {
               name: "Invoice_CB_1.pdf",
               url: "https://example.com/invoices/invoice_cb_1.pdf",
+              date: "2024-05-01",
+            },
+            {
+              name: "Invoice_CB_2.pdf",
+              url: "https://example.com/invoices/invoice_cb_2.pdf",
+              date: "2024-06-01",
+            },
+            {
+              name: "Invoice_CB_3.pdf",
+              url: "https://example.com/invoices/invoice_cb_3.pdf",
+              date: "2024-06-15",
             },
           ],
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "4",
@@ -157,19 +174,22 @@ const EnrolledStudents = () => {
           courseType: "Long-term",
           previousCodingExp: "Intermediate C++",
           totalPayment: 4000,
-          installment1: 4000, // Full payment
+          installment1: 4000,
           installment2: null,
           installment3: null,
           invoice: [
             {
               name: "Invoice_DP_Full.pdf",
               url: "https://example.com/invoices/invoice_dp_full.pdf",
+              date: "2024-05-20",
             },
             {
               name: "Receipt_DP_01.pdf",
               url: "https://example.com/invoices/receipt_dp_01.pdf",
+              date: "2024-05-20",
             },
           ],
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "5",
@@ -203,7 +223,8 @@ const EnrolledStudents = () => {
           totalPayment: null,
           installment1: null,
           installment2: null,
-          installment3: null, // Not enrolled
+          installment3: null,
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "6",
@@ -237,7 +258,8 @@ const EnrolledStudents = () => {
           totalPayment: null,
           installment1: null,
           installment2: null,
-          installment3: null, // Not enrolled
+          installment3: null,
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "7",
@@ -275,8 +297,15 @@ const EnrolledStudents = () => {
             {
               name: "Invoice_GL_1.pdf",
               url: "https://example.com/invoices/invoice_gl_1.pdf",
+              date: "2024-04-10",
+            },
+            {
+              name: "Invoice_GL_2.pdf",
+              url: "https://example.com/invoices/invoice_gl_2.pdf",
+              date: "2024-05-15",
             },
           ],
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "8",
@@ -310,7 +339,8 @@ const EnrolledStudents = () => {
           totalPayment: null,
           installment1: null,
           installment2: null,
-          installment3: null, // Not enrolled
+          installment3: null,
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "9",
@@ -348,12 +378,20 @@ const EnrolledStudents = () => {
             {
               name: "Invoice_IC_1.pdf",
               url: "https://example.com/invoices/invoice_ic_1.pdf",
+              date: "2024-03-01",
             },
             {
               name: "Invoice_IC_2.pdf",
               url: "https://example.com/invoices/invoice_ic_2.pdf",
+              date: "2024-04-01",
+            },
+            {
+              name: "Invoice_IC_3.pdf",
+              url: "https://example.com/invoices/invoice_ic_3.pdf",
+              date: "2024-05-01",
             },
           ],
+          paymentCompletedOverride: undefined,
         },
         {
           _id: "10",
@@ -387,7 +425,8 @@ const EnrolledStudents = () => {
           totalPayment: null,
           installment1: null,
           installment2: null,
-          installment3: null, // Not enrolled
+          installment3: null,
+          paymentCompletedOverride: undefined,
         },
       ];
 
@@ -397,20 +436,76 @@ const EnrolledStudents = () => {
 
     fetchLeadsData();
   }, [authToken]);
-  
+
+  const isPaymentCompletedConceptually = (student) => {
+    const courseValue = parseFloat(student.value?.replace("$", "")) || 0;
+    const totalPaid = student.totalPayment || 0;
+
+    if (student.paymentType === "Full") {
+      return totalPaid >= courseValue;
+    } else if (student.paymentType === "Installment") {
+      const allInstallmentsRecorded =
+        student.installment1 !== null &&
+        student.installment2 !== null &&
+        student.installment3 !== null;
+      return totalPaid >= courseValue && allInstallmentsRecorded;
+    }
+    return false;
+  };
+
   const enrolledStudents = useMemo(() => {
-    const filtered = allLeads.filter(
-      // Enrolled students are those with 'Qualified' or 'Closed' status
+    let filteredStudents = allLeads.filter(
       (lead) => lead.status === "Qualified" || lead.status === "Closed"
     );
-    console.log("Enrolled Students (Memoized):", filtered);
-    return filtered;
-  }, [allLeads]);
+
+    // NEW: Combined search filter for Student Name and Email
+    if (searchQuery) {
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      filteredStudents = filteredStudents.filter(
+        (student) =>
+          student.studentName.toLowerCase().includes(lowerCaseQuery) ||
+          student.email.toLowerCase().includes(lowerCaseQuery)
+      );
+    }
+
+    if (searchLastPaymentDate) {
+      filteredStudents = filteredStudents.filter((student) => {
+        if (!student.invoice || student.invoice.length === 0) {
+          return false;
+        }
+        const latestInvoiceDate = student.invoice.reduce(
+          (latestDate, invoice) => {
+            if (invoice.date) {
+              return latestDate && new Date(latestDate) > new Date(invoice.date)
+                ? latestDate
+                : invoice.date;
+            }
+            return latestDate;
+          },
+          null
+        );
+
+        return latestInvoiceDate === searchLastPaymentDate;
+      });
+    }
+
+    // Filter by Payment Completed, respecting the manual override if set
+    if (filterPaymentCompleted) {
+      filteredStudents = filteredStudents.filter((student) => {
+        if (typeof student.paymentCompletedOverride === "boolean") {
+          return student.paymentCompletedOverride;
+        }
+        return isPaymentCompletedConceptually(student);
+      });
+    }
+
+    console.log("Enrolled Students (Memoized & Filtered):", filteredStudents);
+    return filteredStudents;
+  }, [allLeads, searchQuery, searchLastPaymentDate, filterPaymentCompleted]); // Updated dependencies
 
   const handleEdit = (studentToEdit) => {
-    // Renamed parameter to studentToEdit for clarity
     console.log("handleEdit called with:", studentToEdit);
-    setEditingLead(studentToEdit); // Still using editingLead state for consistency with modal prop
+    setEditingLead(studentToEdit);
     setIsModalOpen(true);
     console.log("isModalOpen set to true, editingLead set:", studentToEdit);
   };
@@ -422,7 +517,6 @@ const EnrolledStudents = () => {
   };
 
   const handleSaveEdit = (updatedStudent) => {
-    // Renamed parameter to updatedStudent for clarity
     console.log("handleSaveEdit called with:", updatedStudent);
     setAllLeads((prevLeads) =>
       prevLeads.map((lead) =>
@@ -433,10 +527,24 @@ const EnrolledStudents = () => {
   };
 
   const handleDelete = (studentId) => {
-    // Renamed parameter to studentId for clarity
     console.log("Delete enrolled student:", studentId);
     setAllLeads((prevLeads) =>
       prevLeads.filter((lead) => lead._id !== studentId)
+    );
+  };
+
+  const handleUpdatePaymentStatus = (studentId, newStatusBoolean) => {
+    setAllLeads((prevLeads) =>
+      prevLeads.map((lead) =>
+        lead._id === studentId
+          ? { ...lead, paymentCompletedOverride: newStatusBoolean }
+          : lead
+      )
+    );
+    console.log(
+      `Student ${studentId} payment status updated to: ${
+        newStatusBoolean ? "Yes" : "No"
+      }`
     );
   };
 
@@ -452,7 +560,6 @@ const EnrolledStudents = () => {
     );
   }
 
-  // Debugging: Check the state just before rendering the modal
   console.log(
     `EnrolledStudents: isModalOpen=${isModalOpen}, editingLead is ${
       editingLead ? "set" : "null/undefined"
@@ -463,11 +570,68 @@ const EnrolledStudents = () => {
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
       <h1 className="text-3xl font-bold mb-6">Enrolled Students</h1>
 
+      {/* Search and Filter Section */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h2 className="text-xl font-semibold mb-4">
+          Filter Enrolled Students:
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label
+              htmlFor="searchQuery"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Student Name or Email
+            </label>
+            <input
+              type="text"
+              id="searchQuery"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or email"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="searchLastPaymentDate"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Last Payment Date
+            </label>
+            <input
+              type="date"
+              id="searchLastPaymentDate"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+              value={searchLastPaymentDate}
+              onChange={(e) => setSearchLastPaymentDate(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center mt-6">
+            <input
+              type="checkbox"
+              id="filterPaymentCompleted"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              checked={filterPaymentCompleted}
+              onChange={(e) => setFilterPaymentCompleted(e.target.checked)}
+            />
+            <label
+              htmlFor="filterPaymentCompleted"
+              className="ml-2 block text-sm font-medium text-gray-700"
+            >
+              Payment Completed
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-lg shadow-md">
         <EnrolledStudentsTable
           students={enrolledStudents}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
+          onUpdatePaymentStatus={handleUpdatePaymentStatus}
         />
       </div>
 
@@ -477,7 +641,6 @@ const EnrolledStudents = () => {
             "EnrolledStudents: Rendering EnrolledStudentEditModal with student:",
             editingLead
           )}{" "}
-          {/* CORRECTED LOG */}
           <EnrolledStudentEditModal
             student={editingLead}
             onClose={handleCloseModal}
