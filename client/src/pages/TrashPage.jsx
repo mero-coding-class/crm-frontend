@@ -60,9 +60,9 @@ const TrashPage = () => {
     "Junk",
   ];
 
-  const classTypeOptions = ["All", "Online", "Physical"];
+  const classTypeOptions = ["Class", "Online", "Physical"];
   const shiftOptions = [
-    "All",
+    "Shift",
     "7 P.M. - 9 P.M.",
     "10 A.M. - 12 P.M.",
     "2 P.M. - 4 P.M.",
@@ -75,7 +75,7 @@ const TrashPage = () => {
     "7 P.M. - 8 P.M.",
   ];
   const deviceOptions = [
-    "All",
+    "Devices",
     "Yes",
     "No",
     "N/A",
@@ -86,7 +86,7 @@ const TrashPage = () => {
     "Other",
   ];
   const previousCodingExpOptions = [
-    "All",
+    "CodingExp",
     "None",
     "Basic Python",
     "Intermediate C++",
