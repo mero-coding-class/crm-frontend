@@ -1,44 +1,45 @@
 import React from "react";
-import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  PencilIcon,
+  TrashIcon,
+  ArrowUturnLeftIcon, // New icon for restore
+} from "@heroicons/react/24/outline";
 
 // Helper function to safely format date for input type="date"
 const getFormattedDate = (dateString) => {
   try {
-    // Handle null, undefined, or 'N/A' explicitly
     if (!dateString || dateString === "N/A") return "";
 
     const date = new Date(dateString);
-    // Check if the date object is valid
     if (isNaN(date.getTime())) {
       console.warn(
-        "LeadTableDisplay: Invalid date string received for date input (will be empty):",
+        "TrashTableDisplay: Invalid date string received for date input (will be empty):",
         dateString
       );
-      return ""; // Return empty string for invalid dates
+      return "";
     }
     return date.toISOString().split("T")[0]; // Format to YYYY-MM-DD
   } catch (error) {
     console.error(
-      "Error formatting date in LeadTableDisplay:",
+      "Error formatting date in TrashTableDisplay:",
       error,
       "Original string:",
       dateString
     );
-    return ""; // Fallback for any unexpected parsing error
+    return "";
   }
 };
 
-const LeadTableDisplay = ({
-  leads,
-  handleEdit,
-  handleDelete, // This handleDelete now implies moving to trash (archiving)
-  onStatusChange,
+const TrashTableDisplay = ({
+  leads, // These will be the "trashed" leads passed from the parent (TrashPage.jsx)
+  handleEdit, // Pass through the edit function (optional in trash, but kept for consistency)
+  onStatusChange, // Allow changing status even in trash (e.g., to restore)
   onRemarkChange,
   onRecentCallChange,
   onNextCallChange,
+  onPermanentDelete, // New prop for permanent delete
+  onRestoreLead, // New prop for restoring a lead
 }) => {
-  // Define status options here, or import them if they are common.
-  // These are ALL possible statuses, as they can be selected.
   const statusOptions = [
     "Status", // Placeholder option
     "New",
@@ -48,14 +49,12 @@ const LeadTableDisplay = ({
     "Interested",
     "inProgress",
     "Active",
-    "Qualified", // Added 'Qualified' status here
     "Closed",
     "Converted",
     "Lost",
     "Junk",
   ];
 
-  // Helper function to dynamically apply Tailwind CSS classes based on status.
   const getStatusClasses = (status) => {
     switch (status) {
       case "New":
@@ -70,8 +69,6 @@ const LeadTableDisplay = ({
         return "bg-purple-100 text-purple-800 border-purple-200";
       case "Active":
         return "bg-cyan-100 text-cyan-800 border-cyan-200";
-      case "Qualified": // Added class for Qualified status
-        return "bg-green-100 text-green-800 border-green-200";
       case "Converted":
         return "bg-teal-100 text-teal-800 border-teal-200";
       case "Closed":
@@ -87,7 +84,7 @@ const LeadTableDisplay = ({
   if (!leads || leads.length === 0) {
     return (
       <p className="text-center text-gray-600 py-8">
-        No active leads found matching your criteria.
+        No trashed leads found.
       </p>
     );
   }
@@ -149,10 +146,7 @@ const LeadTableDisplay = ({
               Change Log
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Edit
-            </th>
-            <th className="relative px-3 py-3">
-              <span className="sr-only">Actions</span>
+              Actions
             </th>
           </tr>
         </thead>
@@ -192,7 +186,6 @@ const LeadTableDisplay = ({
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.previousCodingExp}
               </td>
-              {/* Last Call - Editable Date */}
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 <input
                   type="date"
@@ -201,7 +194,6 @@ const LeadTableDisplay = ({
                   className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
                 />
               </td>
-              {/* Next Call - Editable Date */}
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 <input
                   type="date"
@@ -210,17 +202,16 @@ const LeadTableDisplay = ({
                   className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
                 />
               </td>
-              {/* Device - Now a read-only text display, using lead.device */}
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.device || "N/A"}
               </td>
-              {/* Status Selection */}
               <td className="px-3 py-4 whitespace-nowrap text-sm">
                 <select
                   value={lead.status}
                   onChange={(e) => onStatusChange(lead._id, e.target.value)}
-                  className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6
-                    ${getStatusClasses(lead.status)}`}
+                  className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
+                    lead.status
+                  )}`}
                   style={{ minWidth: "100px" }}
                 >
                   {statusOptions.map((option) => (
@@ -234,7 +225,6 @@ const LeadTableDisplay = ({
                   ))}
                 </select>
               </td>
-              {/* Remarks - Editable Textarea */}
               <td className="px-3 py-4 text-sm text-gray-700">
                 <textarea
                   value={lead.remarks || ""}
@@ -244,27 +234,30 @@ const LeadTableDisplay = ({
                   style={{ minWidth: "150px" }}
                 ></textarea>
               </td>
-              {/* Change Log - Display Only */}
               <td className="px-3 py-4 text-sm text-gray-700">
                 <div
                   className="whitespace-pre-wrap max-h-20 overflow-y-auto text-xs"
                   style={{ minWidth: "200px" }}
                 >
-                  {(lead.changeLog && lead.changeLog.length > 0)
+                  {lead.changeLog && lead.changeLog.length > 0
                     ? lead.changeLog.join("\n")
                     : "No log entries."}
                 </div>
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                {/* Restore the lead */}
                 <button
-                  onClick={() => handleEdit(lead)}
-                  className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 rounded-md hover:bg-indigo-50 transition-colors"
+                  onClick={() => onRestoreLead(lead._id)}
+                  className="text-green-600 hover:text-green-900 mr-2 p-1 rounded-md hover:bg-green-50 transition-colors"
+                  title="Restore Lead"
                 >
-                  <PencilIcon className="h-5 w-5" />
+                  <ArrowUturnLeftIcon className="h-5 w-5" />
                 </button>
+                {/* Permanent delete */}
                 <button
-                  onClick={() => handleDelete(lead._id)} // Calls the handleDelete prop (which now archives)
+                  onClick={() => onPermanentDelete(lead._id)}
                   className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
+                  title="Permanently Delete"
                 >
                   <TrashIcon className="h-5 w-5" />
                 </button>
@@ -277,4 +270,4 @@ const LeadTableDisplay = ({
   );
 };
 
-export default LeadTableDisplay;
+export default TrashTableDisplay;
