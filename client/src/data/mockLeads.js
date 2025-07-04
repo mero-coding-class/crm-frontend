@@ -40,6 +40,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog for new leads
   },
   {
     _id: "2",
@@ -79,6 +80,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "3",
@@ -118,6 +120,7 @@ const mockLeads = [
     installment2Date: "2024-03-05", // Example: 2nd installment paid
     installment3: 500,
     installment3Date: "2024-05-20", // Example: 3rd installment paid
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "4",
@@ -132,7 +135,7 @@ const mockLeads = [
     addDate: "2024-05-15",
     recentCall: "2024-06-01",
     nextCall: "2024-07-01",
-    status: "Closed", // Enrolled (full payment)
+    status: "Closed", // This lead will go to Trash by default
     address: "101 Wonder Ln",
     temporaryAddress: "101 Wonder Ln",
     permanentAddress: "",
@@ -157,6 +160,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "5",
@@ -196,6 +200,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "6",
@@ -235,6 +240,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "7",
@@ -249,7 +255,7 @@ const mockLeads = [
     addDate: "2024-06-10",
     recentCall: "2024-06-19",
     nextCall: "N/A",
-    status: "Converted", // Enrolled
+    status: "Converted", // This lead will be active unless you change the filter
     address: "800 Growth Way",
     temporaryAddress: "800 Growth Way",
     permanentAddress: "",
@@ -274,6 +280,7 @@ const mockLeads = [
     installment2Date: "2024-06-25", // Example: 2nd installment paid
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "8",
@@ -313,6 +320,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "9",
@@ -327,7 +335,7 @@ const mockLeads = [
     addDate: "2024-06-07",
     recentCall: "2024-06-16",
     nextCall: "N/A",
-    status: "Closed", // Enrolled
+    status: "Closed", // This lead will go to Trash by default
     address: "10 Mobile Hts",
     temporaryAddress: "10 Mobile Hts",
     permanentAddress: "",
@@ -352,6 +360,7 @@ const mockLeads = [
     installment2Date: "2024-04-15", // Example: 2nd installment paid
     installment3: 700,
     installment3Date: "2024-06-10", // Example: 3rd installment paid
+    changeLog: [], // Initialize changeLog
   },
   {
     _id: "10",
@@ -391,6 +400,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   // Added Peter Parker: Enrolled with only 1st installment paid recently
   {
@@ -431,6 +441,7 @@ const mockLeads = [
     installment2Date: null,
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
   // Added Mary Jane: Enrolled with 1st and 2nd installments paid
   {
@@ -471,6 +482,7 @@ const mockLeads = [
     installment2Date: "2024-06-29", // 2nd installment paid today
     installment3: null,
     installment3Date: null,
+    changeLog: [], // Initialize changeLog
   },
 ];
 
