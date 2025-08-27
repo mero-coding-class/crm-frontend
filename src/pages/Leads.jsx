@@ -38,8 +38,7 @@ const leadService = {
           Authorization: `Token ${authToken}`,
           "Content-Type": "application/json",
         },
-        credentials: "include"
-
+        credentials: "include",
       }
     );
 
