@@ -7,16 +7,12 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-// import Loader from "../components/common/Loader"; // Removed Loader import
 import { AuthContext } from "../App";
-// If you uncomment api, ensure it's set up correctly
-// import api from "../services/api";
 
 // Import components
 import LeadTableDisplay from "../components/LeadTableDisplay";
 import LeadEditModal from "../components/LeadEditModal";
 import AddLeadModal from "../components/AddLeadModal";
-import mockLeads from "../data/mockLeads"; // Using mock data
 
 import {
   PlusIcon,
@@ -27,31 +23,117 @@ import {
   ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
-// Mock API service for demonstration purposes
+// Real API service for backend integration
 const leadService = {
-  getLeads: async () => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const { default: mockData } = await import("../data/mockLeads");
-    return mockData;
+  getLeads: async (authToken) => {
+    if (!authToken) {
+      throw new Error("No authentication token found. Please log in again.");
+    }
+
+    const response = await fetch(
+      "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        credentials: "include"
+
+      }
+    );
+
+    if (!response.ok) {
+      let errorMsg = "Failed to fetch leads";
+      try {
+        const errData = await response.json();
+        if (errData.detail) errorMsg = errData.detail;
+      } catch {
+        // ignore error parsing
+      }
+      throw new Error(errorMsg);
+    }
+
+    const backendLeads = await response.json();
+
+    // Transform backend data to frontend format
+    return backendLeads.map((lead) => ({
+      _id: lead.id.toString(),
+      studentName: lead.student_name || "",
+      parentsName: lead.parents_name || "",
+      email: lead.email || "",
+      phone: lead.phone_number || "",
+      contactWhatsapp: lead.whatsapp_number || "",
+      ageGrade: `${lead.age || ""}${
+        lead.grade ? ` (Grade ${lead.grade})` : ""
+      }`,
+      course: lead.course || "",
+      source: lead.source || "",
+      addDate: lead.add_date || "",
+      recentCall: lead.last_call || "",
+      nextCall: lead.next_call || "",
+      status: lead.status || "New",
+      address: lead.address_line_1 || "",
+      temporaryAddress: lead.address_line_2 || "",
+      permanentAddress: lead.address_line_1 || "",
+      city: lead.city || "",
+      county: lead.county || "",
+      postCode: lead.post_code || "",
+      classType: lead.class_type || "",
+      value: lead.value || "",
+      adsetName: lead.adset_name || "",
+      remarks: lead.remarks || "",
+      shift: lead.shift || "",
+      paymentType: lead.payment_type || "",
+      device: lead.device || "",
+      previousCodingExp: lead.previous_coding_experience || "",
+      workshopBatch: lead.workshop_batch || "",
+      changeLog: [],
+    }));
   },
-  updateLead: async (id, updates) => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    console.log(`Simulating update for lead ${id} with:`, updates);
-    return { success: true, message: "Lead updated successfully" };
+
+  updateLead: async (id, updates, authToken) => {
+    if (!authToken) {
+      throw new Error("No authentication token found. Please log in again.");
+    }
+
+    // Transform frontend field names back to backend format
+    const backendUpdates = {};
+
+    if (updates.status) backendUpdates.status = updates.status;
+    if (updates.remarks !== undefined) backendUpdates.remarks = updates.remarks;
+    if (updates.recentCall !== undefined)
+      backendUpdates.last_call = updates.recentCall;
+    if (updates.nextCall !== undefined)
+      backendUpdates.next_call = updates.nextCall;
+    if (updates.device !== undefined) backendUpdates.device = updates.device;
+
+    const response = await fetch(
+      `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(backendUpdates),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to update lead");
+    }
+
+    return response.json();
   },
-  // Note: deleteLead is not used directly here, it's for permanent deletion in TrashPage
 };
 
 const Leads = () => {
   const { authToken } = useContext(AuthContext);
 
-  // Initialize allLeads directly with mock data to avoid initial empty state and loading spinner
-  const initialLeads = useMemo(() => {
-    return mockLeads.map((lead) => ({ ...lead, changeLog: lead.changeLog || [] }));
-  }, []);
-
-  const [allLeads, setAllLeads] = useState(initialLeads); // Holds all leads, active and trashed
-  // const [loading, setLoading] = useState(true); // Removed loading state
+  // State for leads data
+  const [allLeads, setAllLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // States for managing the edit modal
@@ -69,8 +151,8 @@ const Leads = () => {
   const [filterAgeGrade, setFilterAgeGrade] = useState("");
   const [filterLastCall, setFilterLastCall] = useState("");
   const [filterClassType, setFilterClassType] = useState("Class"); // Changed default
-  const [filterShift, setFilterShift] = useState("Shift");       // Changed default
-  const [filterDevice, setFilterDevice] = useState("Device");     // Changed default
+  const [filterShift, setFilterShift] = useState("Shift"); // Changed default
+  const [filterDevice, setFilterDevice] = useState("Device"); // Changed default
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("CodingExp"); // Changed default
 
   // State to control visibility of the filter section
@@ -93,7 +175,7 @@ const Leads = () => {
     "Junk",
   ];
 
-  // Define new filter options arrays with updated "All" placeholders
+  // Define filter options arrays with updated "All" placeholders
   const classTypeOptions = ["Class", "Online", "Physical"]; // Changed "All" to "Class"
   const shiftOptions = [
     "Shift", // Changed "All" to "Shift"
@@ -130,6 +212,29 @@ const Leads = () => {
     "Basic Java",
   ];
 
+  // Fetch leads on component mount and when authToken changes
+  useEffect(() => {
+    if (!authToken) {
+      setError("You are not logged in. Please log in to view leads.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    leadService
+      .getLeads(authToken)
+      .then((data) => {
+        setAllLeads(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to fetch leads");
+        setLoading(false);
+      });
+  }, [authToken]);
+
   // Functions for modals (Add Lead)
   const handleOpenAddModal = useCallback(() => {
     setIsAddModalOpen(true);
@@ -141,20 +246,85 @@ const Leads = () => {
 
   const handleAddNewLead = useCallback(
     async (newLeadData) => {
-      // In a real app, you'd send this to your backend
       console.log("Adding new lead:", newLeadData);
-      // Simulate API call for adding lead (no actual backend call here)
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      try {
+        // Transform frontend data to backend format
+        const backendData = {
+          student_name: newLeadData.studentName,
+          parents_name: newLeadData.parentsName,
+          email: newLeadData.email,
+          phone_number: newLeadData.phone,
+          whatsapp_number: newLeadData.contactWhatsapp,
+          age: newLeadData.ageGrade,
+          source: newLeadData.source,
+          class_type: newLeadData.classType,
+          shift: newLeadData.shift,
+          previous_coding_experience: newLeadData.previousCodingExp,
+          device: newLeadData.device,
+          status: newLeadData.status || "New",
+          remarks: newLeadData.remarks || "",
+        };
 
-      const newLeadWithId = {
-        ...newLeadData,
-        _id: Date.now().toString(), // Simple unique ID for mock data
-        changeLog: [`Lead created at ${new Date().toLocaleString()}`], // Initial log
-      };
-      setAllLeads((prevLeads) => [...prevLeads, newLeadWithId]);
-      handleCloseAddModal();
+        const response = await fetch(
+          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Token ${authToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(backendData),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to create lead");
+        }
+
+        const newLead = await response.json();
+
+        // Transform backend response to frontend format
+        const frontendLead = {
+          _id: newLead.id.toString(),
+          studentName: newLead.student_name || "",
+          parentsName: newLead.parents_name || "",
+          email: newLead.email || "",
+          phone: newLead.phone_number || "",
+          contactWhatsapp: newLead.whatsapp_number || "",
+          ageGrade: `${newLead.age || ""}${
+            newLead.grade ? ` (Grade ${newLead.grade})` : ""
+          }`,
+          course: newLead.course || "",
+          source: newLead.source || "",
+          addDate: newLead.add_date || "",
+          recentCall: newLead.last_call || "",
+          nextCall: newLead.next_call || "",
+          status: newLead.status || "New",
+          address: newLead.address_line_1 || "",
+          temporaryAddress: newLead.address_line_2 || "",
+          permanentAddress: newLead.address_line_1 || "",
+          city: newLead.city || "",
+          county: newLead.county || "",
+          postCode: newLead.post_code || "",
+          classType: newLead.class_type || "",
+          value: newLead.value || "",
+          adsetName: newLead.adset_name || "",
+          remarks: newLead.remarks || "",
+          shift: newLead.shift || "",
+          paymentType: newLead.payment_type || "",
+          device: newLead.device || "",
+          previousCodingExp: newLead.previous_coding_experience || "",
+          workshopBatch: newLead.workshop_batch || "",
+          changeLog: [],
+        };
+
+        setAllLeads((prevLeads) => [...prevLeads, frontendLead]);
+        handleCloseAddModal();
+      } catch (err) {
+        setError(err.message || "Failed to create lead");
+      }
     },
-    [handleCloseAddModal]
+    [authToken, handleCloseAddModal]
   );
 
   // Functions for modals (Edit Lead)
@@ -171,82 +341,95 @@ const Leads = () => {
   const handleSaveEdit = useCallback(
     async (updatedLead) => {
       console.log("Saving edited lead from modal:", updatedLead);
-      // Simulate API call for saving edit
-      await leadService.updateLead(updatedLead._id, updatedLead);
-
-      setAllLeads((prevLeads) =>
-        prevLeads.map((lead) =>
-          lead._id === updatedLead._id ? updatedLead : lead
-        )
-      );
-      handleCloseEditModal();
+      try {
+        await leadService.updateLead(updatedLead._id, updatedLead, authToken);
+        setAllLeads((prevLeads) =>
+          prevLeads.map((lead) =>
+            lead._id === updatedLead._id ? updatedLead : lead
+          )
+        );
+        handleCloseEditModal();
+      } catch (err) {
+        setError(err.message || "Failed to update lead");
+      }
     },
-    [handleCloseEditModal]
+    [authToken, handleCloseEditModal]
   );
 
   // --- Functions to handle direct inline changes from LeadTableDisplay ---
-  const updateLeadField = useCallback(async (leadId, fieldName, newValue) => {
-    setAllLeads((prevLeads) =>
-      prevLeads.map((lead) => {
-        if (lead._id === leadId) {
-          const updatedLead = { ...lead, [fieldName]: newValue };
-          let logEntry = "";
-          const currentDateTime = new Date().toLocaleString("en-US", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          });
+  const updateLeadField = useCallback(
+    async (leadId, fieldName, newValue) => {
+      try {
+        // Update backend first
+        const updates = { [fieldName]: newValue };
+        await leadService.updateLead(leadId, updates, authToken);
 
-          // Add to change log if status, remarks, or call dates change
-          if (fieldName === "status" && lead.status !== newValue) {
-            logEntry = `Status changed from '${lead.status}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (fieldName === "remarks" && lead.remarks !== newValue) {
-            logEntry = `Remarks updated.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (
-            fieldName === "recentCall" &&
-            lead.recentCall !== newValue
-          ) {
-            logEntry = `Last Call date changed from '${lead.recentCall}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (fieldName === "nextCall" && lead.nextCall !== newValue) {
-            logEntry = `Next Call date changed from '${lead.nextCall}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (fieldName === "device" && lead.device !== newValue) { // Corrected from 'laptop' to 'device'
-            logEntry = `Device changed from '${lead.device}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          }
+        // Then update frontend state
+        setAllLeads((prevLeads) =>
+          prevLeads.map((lead) => {
+            if (lead._id === leadId) {
+              const updatedLead = { ...lead, [fieldName]: newValue };
+              let logEntry = "";
+              const currentDateTime = new Date().toLocaleString("en-US", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              });
 
-          // Send update to backend (simulated)
-          leadService.updateLead(leadId, { [fieldName]: newValue, changeLog: updatedLead.changeLog })
-            .catch(err => console.error(`Error updating ${fieldName} for lead ${leadId}:`, err));
+              // Add to change log if status, remarks, or call dates change
+              if (fieldName === "status" && lead.status !== newValue) {
+                logEntry = `Status changed from '${lead.status}' to '${newValue}'.`;
+                updatedLead.changeLog = [
+                  ...(updatedLead.changeLog || []),
+                  `${logEntry} (at ${currentDateTime})`,
+                ];
+              } else if (fieldName === "remarks" && lead.remarks !== newValue) {
+                logEntry = `Remarks updated.`;
+                updatedLead.changeLog = [
+                  ...(updatedLead.changeLog || []),
+                  `${logEntry} (at ${currentDateTime})`,
+                ];
+              } else if (
+                fieldName === "recentCall" &&
+                lead.recentCall !== newValue
+              ) {
+                logEntry = `Last Call date changed from '${lead.recentCall}' to '${newValue}'.`;
+                updatedLead.changeLog = [
+                  ...(updatedLead.changeLog || []),
+                  `${logEntry} (at ${currentDateTime})`,
+                ];
+              } else if (
+                fieldName === "nextCall" &&
+                lead.nextCall !== newValue
+              ) {
+                logEntry = `Next Call date changed from '${lead.nextCall}' to '${newValue}'.`;
+                updatedLead.changeLog = [
+                  ...(updatedLead.changeLog || []),
+                  `${logEntry} (at ${currentDateTime})`,
+                ];
+              } else if (fieldName === "device" && lead.device !== newValue) {
+                logEntry = `Device changed from '${lead.device}' to '${newValue}'.`;
+                updatedLead.changeLog = [
+                  ...(updatedLead.changeLog || []),
+                  `${logEntry} (at ${currentDateTime})`,
+                ];
+              }
 
-          return updatedLead;
-        }
-        return lead;
-      })
-    );
-    console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
-  }, []);
+              return updatedLead;
+            }
+            return lead;
+          })
+        );
+        console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
+      } catch (err) {
+        setError(err.message || `Failed to update ${fieldName}`);
+      }
+    },
+    [authToken]
+  );
 
   const handleStatusChange = useCallback(
     (leadId, newStatus) => {
@@ -277,56 +460,76 @@ const Leads = () => {
   );
   // --- End of new functions ---
 
-  // Placeholder functions for buttons, updated to use console.log
-  const handleImport = useCallback(() => {
-    console.log("Import CSV functionality not yet implemented.");
+  // CSV Import/Export and Refresh functions
+  const handleImport = useCallback(async () => {
+    console.log(
+      "Import CSV functionality - to be implemented with file upload."
+    );
+    // This will be implemented when CSV import UI is added
   }, []);
 
-  const handleExport = useCallback(() => {
-    console.log("Export CSV functionality not yet implemented.");
-  }, []);
+  const handleExport = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/export-csv/",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Token ${authToken}`,
+          },
+        }
+      );
 
-  const handleRefresh = useCallback(() => {
+      if (!response.ok) {
+        throw new Error("Failed to export CSV");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "leads.csv";
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Failed to export CSV");
+    }
+  }, [authToken]);
+
+  const handleRefresh = useCallback(async () => {
+    if (!authToken) return;
+
+    setLoading(true);
     setError(null);
-    leadService.getLeads()
-      .then(data => setAllLeads(data.map(lead => ({ ...lead, changeLog: lead.changeLog || [] }))))
-      .catch(err => {
-        setError("Failed to refresh leads.");
-        console.error("Error refreshing leads:", err);
-      });
-  }, []);
+
+    try {
+      const data = await leadService.getLeads(authToken);
+      setAllLeads(data);
+    } catch (err) {
+      setError(err.message || "Failed to refresh leads");
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken]);
 
   // This handleDelete now explicitly moves the lead to "Junk" status (archives it)
-  const handleDelete = useCallback(async (leadId) => {
-    if (window.confirm("Are you sure you want to move this lead to trash?")) {
-      try {
-        const originalLead = allLeads.find((lead) => lead._id === leadId);
-        const updatedLog = originalLead.changeLog
-          ? [...originalLead.changeLog]
-          : [];
-        const timestamp = new Date().toLocaleString("en-US", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-        updatedLog.push(`Moved to Trash by User at ${timestamp}`);
-
-        await leadService.updateLead(leadId, { status: "Junk", changeLog: updatedLog }); // Set status to Junk
-        setAllLeads((prevLeads) =>
-          prevLeads.map((lead) =>
-            lead._id === leadId ? { ...lead, status: "Junk", changeLog: updatedLog } : lead
-          )
-        );
-      } catch (err) {
-        setError("Failed to move lead to trash.");
-        console.error("Error moving lead to trash:", err);
+  const handleDelete = useCallback(
+    async (leadId) => {
+      if (window.confirm("Are you sure you want to move this lead to trash?")) {
+        try {
+          await leadService.updateLead(leadId, { status: "Junk" }, authToken);
+          setAllLeads((prevLeads) =>
+            prevLeads.map((lead) =>
+              lead._id === leadId ? { ...lead, status: "Junk" } : lead
+            )
+          );
+        } catch (err) {
+          setError(err.message || "Failed to move lead to trash");
+        }
       }
-    }
-  }, [allLeads]); // Depend on allLeads to get the original lead for logging
-
+    },
+    [authToken]
+  );
 
   // Filtering and Searching Logic for Leads page
   const displayedLeads = useMemo(() => {
@@ -409,22 +612,25 @@ const Leads = () => {
     filterPrevCodingExp,
   ]);
 
-  // The useEffect for initial data fetching is modified to directly use mockLeads
-  // and only handle potential errors from the mock service if it were to reject.
-  // The primary data loading is now synchronous via useState initialization.
-  useEffect(() => {
-    // This useEffect is now primarily for potential async operations if you switch
-    // to a real API, or for effects that depend on authToken changing.
-    // For now, it's just a placeholder to show the dependency.
-    if (authToken) {
-      console.log("Auth token changed, re-evaluating leads (mock data).");
-    }
-  }, [authToken]);
-
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="text-lg">Loading leads...</div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
-      <div className="text-red-500 text-center p-4">Error: {error}</div>
+      <div className="text-red-500 text-center p-4">
+        <p>Error: {error}</p>
+        <button
+          onClick={handleRefresh}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Retry
+        </button>
+      </div>
     );
   }
 
