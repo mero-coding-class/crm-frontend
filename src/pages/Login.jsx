@@ -1,15 +1,16 @@
-import React, { useState, useEffect, createContext, useContext } from "react"; // Added createContext for the mock
+import React, { useState, useEffect, createContext } from "react"; // Added createContext
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios"; // Import axios
+// import { AuthContext } from "../App"; // Original problematic import
 
 // --- TEMPORARY MOCK AuthContext for compilation ---
-// IMPORTANT: You MUST replace this with your actual AuthContext from "../App"
-// once your project structure is correctly set up and App.js is available.
+// You should replace this with your actual AuthContext from "../App"
 const AuthContext = createContext(null);
+// Mock login function for the temporary context
 const useMockAuth = () => {
   const login = (token) => {
     console.log("Mock Auth: User logged in with token:", token);
-    // In a real scenario, this would update a global auth state (e.g., via useState or a reducer)
+    // In a real scenario, this would update a global auth state
   };
   return { login };
 };
@@ -68,14 +69,14 @@ const Login = () => {
       const token = data.key || data.token;
 
       if (!token) throw new Error("No token received from server.");
-
-      // Call the login function from AuthContext (mocked for now)
-      login(token);
+      localStorage.setItem("authToken", token);
+      login(token); // Use the login function (mocked for now)
       navigate("/dashboard", { replace: true }); // Navigate to dashboard on successful login
     } catch (err) {
+      // Axios error handling: err.response contains response data if available
       setError(
-        err.response?.data?.detail ||
-          err.message ||
+        err.response?.data?.detail || // Specific error from backend
+          err.message || // General network or other error
           "Login failed. Please check your credentials."
       );
     } finally {
@@ -97,6 +98,8 @@ const Login = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {" "}
+          {/* Added space-y for consistent vertical spacing */}
           <div>
             <label
               htmlFor="username"
@@ -146,8 +149,8 @@ const Login = () => {
               </label>
             </div>
             <button
-              type="button"
-              onClick={() => console.log("Navigate to Forgot Password page")}
+              type="button" // Use type="button" to prevent form submission
+              onClick={() => console.log("Navigate to Forgot Password page")} // Placeholder
               className="text-blue-600 hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md px-1 py-0.5"
             >
               Forgot password?
