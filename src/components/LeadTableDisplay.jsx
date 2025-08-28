@@ -1,22 +1,23 @@
 import React from "react";
 import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 
-// Helper function to safely format date for input type="date"
+// Helper function to safely format a date string into YYYY-MM-DD format,
+// which is required for input type="date".
 const getFormattedDate = (dateString) => {
   try {
-    // Handle null, undefined, or 'N/A' explicitly
+    // Handle cases where the date string is null, undefined, or 'N/A'.
     if (!dateString || dateString === "N/A") return "";
 
     const date = new Date(dateString);
-    // Check if the date object is valid
+    // Validate if the parsed date object is a valid date.
     if (isNaN(date.getTime())) {
       console.warn(
         "LeadTableDisplay: Invalid date string received for date input (will be empty):",
         dateString
       );
-      return ""; // Return empty string for invalid dates
+      return ""; // Return an empty string for invalid dates.
     }
-    return date.toISOString().split("T")[0]; // Format to YYYY-MM-DD
+    return date.toISOString().split("T")[0]; // Format to YYYY-MM-DD.
   } catch (error) {
     console.error(
       "Error formatting date in LeadTableDisplay:",
@@ -24,7 +25,7 @@ const getFormattedDate = (dateString) => {
       "Original string:",
       dateString
     );
-    return ""; // Fallback for any unexpected parsing error
+    return ""; // Fallback for any unexpected parsing errors.
   }
 };
 
@@ -112,8 +113,12 @@ const LeadTableDisplay = ({
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               WhatsApp Number
             </th>
+            {/* Split the Age/grade header into two columns */}
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Age/grade
+              Age
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Grade
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Source
@@ -174,8 +179,13 @@ const LeadTableDisplay = ({
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.contactWhatsapp}
               </td>
+              {/* Display age in its own column */}
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.ageGrade}
+                {lead.age || "N/A"}
+              </td>
+              {/* Display grade in its own column */}
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                {lead.grade || "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.source}
@@ -250,7 +260,7 @@ const LeadTableDisplay = ({
                   className="whitespace-pre-wrap max-h-20 overflow-y-auto text-xs"
                   style={{ minWidth: "200px" }}
                 >
-                  {(lead.changeLog && lead.changeLog.length > 0)
+                  {lead.changeLog && lead.changeLog.length > 0
                     ? lead.changeLog.join("\n")
                     : "No log entries."}
                 </div>

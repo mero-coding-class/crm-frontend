@@ -1,152 +1,399 @@
-// src/components/LeadEditModal.jsx
+import React, { useState } from "react";
+import { XCircleIcon } from "@heroicons/react/24/outline";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
-
-// Helper function to get current date in YYYY-MM-DD format
-const getTodayDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Helper function to safely format date for input type="date"
+// Helper function to safely format a date string into YYYY-MM-DD format,
+// which is required for input type="date".
 const getFormattedDate = (dateString) => {
   try {
+    // Handle cases where the date string is null, undefined, or 'N/A'.
     if (!dateString || dateString === "N/A") return "";
+
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "";
-    return date.toISOString().split("T")[0];
-  } catch {
-    return "";
+    // Validate if the parsed date object is a valid date.
+    if (isNaN(date.getTime())) {
+      console.warn(
+        "LeadEditForm: Invalid date string received for date input (will be empty):",
+        dateString
+      );
+      return ""; // Return an empty string for invalid dates.
+    }
+    return date.toISOString().split("T")[0]; // Format to YYYY-MM-DD.
+  } catch (error) {
+    console.error(
+      "Error formatting date in LeadEditForm:",
+      error,
+      "Original string:",
+      dateString
+    );
+    return ""; // Fallback for any unexpected parsing errors.
   }
 };
 
-const LeadEditModal = ({ lead, onClose, onSave }) => {
-  // Initialize formData with the lead prop's data
-  const [formData, setFormData] = useState(() => ({
-    ...lead,
-    // Add Date remains as the original creation date, formatted
-    addDate: getFormattedDate(lead.addDate),
-    // New: lastUpdatedDate is managed automatically. Initialize with existing or current date.
-    lastUpdatedDate: getFormattedDate(lead.lastUpdatedDate || getTodayDate()),
-    recentCall: getFormattedDate(lead.recentCall),
-    nextCall: getFormattedDate(lead.nextCall),
-    status: lead.status?.trim() || "New",
-    device: lead.device || "No", // Consistent with mockLeads "Yes"/"No"
-    invoice: lead.invoice ? [...lead.invoice] : [],
-    changeLog: lead.changeLog ? [...lead.changeLog] : [],
-  }));
+// ==============================================================================
+// LeadEditForm Component
+// This component handles the editing of a single lead.
+// ==============================================================================
+const LeadEditForm = ({ lead, onSave, onCancel }) => {
+  const [formData, setFormData] = useState(lead);
 
-  // Ensure form data updates if lead prop changes (e.g., if another lead is selected for editing)
-  useEffect(() => {
-    setFormData({
-      ...lead,
-      addDate: getFormattedDate(lead.addDate), // Add Date remains static on prop change
-      lastUpdatedDate: getFormattedDate(lead.lastUpdatedDate || getTodayDate()), // Initialize or update lastUpdatedDate
-      recentCall: getFormattedDate(lead.recentCall),
-      nextCall: getFormattedDate(lead.nextCall),
-      status: lead.status?.trim() || "New",
-      device: lead.device || "No",
-      invoice: lead.invoice ? [...lead.invoice] : [],
-      changeLog: lead.changeLog ? [...lead.changeLog] : [],
-    });
-  }, [lead]);
+  const statusOptions = [
+    "Status",
+    "New",
+    "Open",
+    "Average",
+    "Followup",
+    "Interested",
+    "inProgress",
+    "Active",
+    "Qualified",
+    "Closed",
+    "Converted",
+    "Lost",
+    "Junk",
+  ];
 
-  const handleChange = useCallback((e) => {
+  const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
       [name]: value,
     }));
-  }, []);
+  };
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    // Create a copy to update specific fields before saving
-    const updatedLeadData = {
-      ...formData,
-      lastUpdatedDate: getTodayDate(), // AUTOMATICALLY UPDATE lastUpdatedDate on save
-    };
-    onSave(updatedLeadData); // Pass the updated lead data up to the parent component
-  }, [formData, onSave]);
-
-  if (!lead) return null;
-
-  const statusOptions = [
-    "New", "Open", "Average", "Followup", "Interested", "inProgress",
-    "Active", "Closed", "Converted", "Lost", "Junk",
-  ];
-  const courseOptions = [
-    "Select", "Full Stack Web Dev", "Data Science", "UI/UX Design", "Game Development",
-    "Cybersecurity", "Cloud Computing", "Digital Marketing", "AI & Machine Learning",
-    "Mobile App Dev", "Robotics", "Scratch Beginner", "Scratch Advanced",
-    "Python Beginner", "Python Advanced", "Web Development", "HTML & CSS",
-    "Artificial Intelligence(AI)", "AI With Python", "Other"
-  ];
-  const sourceOptions = [
-    "Select", "WhatsApp/Viber", "Facebook", "Website", "Email", "Office Visit", "Direct call",
-  ];
-  const classTypeOptions = ["Select", "Physical", "Online"];
-  const shiftOptions = [
-    "Select", "7 A.M. - 9 A.M.", "8 A.M. - 10 A.M.", "10 A.M. - 12 P.M.",
-    "11 A.M. - 1 P.M.", "12 P.M. - 2 P.M.", "2 P.M. - 4 P.M.",
-    "2:30 P.M. - 4:30 P.M.", "4 P.M. - 6 P.M.", "4:30 P.M. - 6:30 P.M.",
-    "5 P.M - 7 P.M.", "6 P.M. - 7 P.M.", "6 P.M - 8 P.M.", "7 P.M. - 8 P.M.",
-  ];
-  const courseTypeOptions = [
-    "Select", "Winter coding Camp", "Coding Kickstart", "Regular", "Summer coding Camp",
-  ];
-  const paymentTypeOptions = ["Select", "Cash", "Online", "Bank Transfer", "Cheque"];
-  const previousCodingExpOptions = [
-    'Select', 'None', 'Basic Python', 'Intermediate C++', 'Arduino', 'Some Linux',
-    "Advanced Python", "Basic Java", "Other"
-  ];
-  const deviceOptions = ["Yes", "No"]; // Consistent with mockLeads.js
-
+    onSave(formData);
+  };
 
   return (
-    <div
-      className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 p-4 animate-fade-in"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all animate-scale-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-semibold text-gray-800">
-            Edit Lead: {lead.studentName}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 sm:p-6 md:p-8">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl transform transition-all p-6 relative">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-900">
+            Edit Lead: {formData.student_name}
           </h2>
           <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
-            aria-label="Close"
+            onClick={onCancel}
+            className="text-gray-500 hover:text-gray-700 transition-colors"
           >
-            <XMarkIcon className="h-6 w-6" />
+            <XCircleIcon className="h-6 w-6" />
           </button>
         </div>
-
         <form
           onSubmit={handleSubmit}
-          className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4"
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
         >
-          {/* Status */}
-          <div>
-            <label
-              htmlFor="status"
-              className="block text-sm font-medium text-gray-700"
-            >
+          {/* Read-only ID and Add Date */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Lead ID
+            </label>
+            <input
+              type="text"
+              name="id"
+              value={formData.id}
+              className="p-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 cursor-not-allowed"
+              readOnly
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Add Date
+            </label>
+            <input
+              type="date"
+              name="add_date"
+              value={getFormattedDate(formData.add_date)}
+              className="p-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 cursor-not-allowed"
+              readOnly
+            />
+          </div>
+          {/* Input fields for editable lead properties */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Student Name
+            </label>
+            <input
+              type="text"
+              name="student_name"
+              value={formData.student_name}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Parents' Name
+            </label>
+            <input
+              type="text"
+              name="parents_name"
+              value={formData.parents_name}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              name="phone_number"
+              value={formData.phone_number}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              WhatsApp Number
+            </label>
+            <input
+              type="tel"
+              name="whatsapp_number"
+              value={formData.whatsapp_number}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Age
+            </label>
+            <input
+              type="number"
+              name="age"
+              value={formData.age}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Grade
+            </label>
+            <input
+              type="text"
+              name="grade"
+              value={formData.grade}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Source
+            </label>
+            <input
+              type="text"
+              name="source"
+              value={formData.source}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Class Type
+            </label>
+            <input
+              type="text"
+              name="class_type"
+              value={formData.class_type}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Shift
+            </label>
+            <input
+              type="text"
+              name="shift"
+              value={formData.shift}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Previous Coding Exp
+            </label>
+            <input
+              type="text"
+              name="previous_coding_experience"
+              value={formData.previous_coding_experience}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Last Call
+            </label>
+            <input
+              type="date"
+              name="last_call"
+              value={getFormattedDate(formData.last_call)}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Next Call
+            </label>
+            <input
+              type="date"
+              name="next_call"
+              value={getFormattedDate(formData.next_call)}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Value
+            </label>
+            <input
+              type="text"
+              name="value"
+              value={formData.value}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Adset Name
+            </label>
+            <input
+              type="text"
+              name="adset_name"
+              value={formData.adset_name}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Payment Type
+            </label>
+            <input
+              type="text"
+              name="payment_type"
+              value={formData.payment_type}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Device
+            </label>
+            <input
+              type="text"
+              name="device"
+              value={formData.device}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Workshop Batch
+            </label>
+            <input
+              type="text"
+              name="workshop_batch"
+              value={formData.workshop_batch}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Address Line 1
+            </label>
+            <input
+              type="text"
+              name="address_line_1"
+              value={formData.address_line_1}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Address Line 2
+            </label>
+            <input
+              type="text"
+              name="address_line_2"
+              value={formData.address_line_2}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              City
+            </label>
+            <input
+              type="text"
+              name="city"
+              value={formData.city}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              County
+            </label>
+            <input
+              type="text"
+              name="county"
+              value={formData.county}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Post Code
+            </label>
+            <input
+              type="text"
+              name="post_code"
+              value={formData.post_code}
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
               Status
             </label>
             <select
-              id="status"
               name="status"
               value={formData.status}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              onChange={handleInputChange}
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
             >
               {statusOptions.map((option) => (
                 <option key={option} value={option}>
@@ -155,547 +402,29 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
               ))}
             </select>
           </div>
-
-          {/* Add Date - This is the original creation date */}
-          <div>
-            <label
-              htmlFor="addDate"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Add Date
-            </label>
-            <input
-              type="date"
-              id="addDate"
-              name="addDate"
-              value={formData.addDate}
-              onChange={handleChange} // Still allow manual change if needed, but won't auto-update on save for original purpose
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Last Updated Date - NEW FIELD */}
-          <div>
-            <label
-              htmlFor="lastUpdatedDate"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Last Updated
-            </label>
-            <input
-              type="date"
-              id="lastUpdatedDate"
-              name="lastUpdatedDate"
-              value={formData.lastUpdatedDate}
-              readOnly // This field is automatically updated, not manually edited
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-600 cursor-not-allowed sm:text-sm"
-            />
-          </div>
-
-          {/* Parents Name */}
-          <div className="md:col-span-2">
-            <label
-              htmlFor="parentsName"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Parents' Name
-            </label>
-            <input
-              type="text"
-              id="parentsName"
-              name="parentsName"
-              value={formData.parentsName || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="e.g., John & Jane Doe"
-            />
-          </div>
-
-          {/* Student Name */}
-          <div>
-            <label
-              htmlFor="studentName"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Student Name
-            </label>
-            <input
-              type="text"
-              id="studentName"
-              name="studentName"
-              value={formData.studentName || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
-            />
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label
-              htmlFor="phone"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Phone
-            </label>
-            <input
-              type="tel"
-              id="phone"
-              name="phone"
-              value={formData.phone || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* WhatsApp */}
-          <div>
-            <label
-              htmlFor="contactWhatsapp"
-              className="block text-sm font-medium text-gray-700"
-            >
-              WhatsApp
-            </label>
-            <input
-              type="tel"
-              id="contactWhatsapp"
-              name="contactWhatsapp"
-              value={formData.contactWhatsapp || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Age/Grade */}
-          <div>
-            <label
-              htmlFor="ageGrade"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Age/Grade
-            </label>
-            <input
-              type="text"
-              id="ageGrade"
-              name="ageGrade"
-              value={formData.ageGrade || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Source */}
-          <div>
-            <label
-              htmlFor="source"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Source
-            </label>
-            <select
-              id="source"
-              name="source"
-              value={formData.source || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {sourceOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Course */}
-          <div>
-            <label
-              htmlFor="course"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Course
-            </label>
-            <select
-              id="course"
-              name="course"
-              value={formData.course || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {courseOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Class Type */}
-          <div>
-            <label
-              htmlFor="classType"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Class Type
-            </label>
-            <select
-              id="classType"
-              name="classType"
-              value={formData.classType || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {classTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Shift */}
-          <div>
-            <label
-              htmlFor="shift"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Shift
-            </label>
-            <select
-              id="shift"
-              name="shift"
-              value={formData.shift || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {shiftOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Previous Coding Exp */}
-          <div>
-            <label
-              htmlFor="previousCodingExp"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Previous Coding Exp
-            </label>
-            <select
-              id="previousCodingExp"
-              name="previousCodingExp"
-              value={formData.previousCodingExp || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {previousCodingExpOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Recent Call */}
-          <div>
-            <label
-              htmlFor="recentCall"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Recent Call
-            </label>
-            <input
-              type="date"
-              id="recentCall"
-              name="recentCall"
-              value={getFormattedDate(formData.recentCall)}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Next Call */}
-          <div>
-            <label
-              htmlFor="nextCall"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Next Call
-            </label>
-            <input
-              type="date"
-              id="nextCall"
-              name="nextCall"
-              value={getFormattedDate(formData.nextCall)}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Value */}
-          <div>
-            <label
-              htmlFor="value"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Value
-            </label>
-            <input
-              type="text"
-              id="value"
-              name="value"
-              value={formData.value || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Course Type */}
-          <div>
-            <label
-              htmlFor="courseType"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Course Type
-            </label>
-            <select
-              id="courseType"
-              name="courseType"
-              value={formData.courseType || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {courseTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Payment Type */}
-          <div>
-            <label
-              htmlFor="paymentType"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Payment Type
-            </label>
-            <select
-              id="paymentType"
-              name="paymentType"
-              value={formData.paymentType || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {paymentTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Device */}
-          <div>
-            <label
-              htmlFor="device"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Device
-            </label>
-            <select
-              id="device"
-              name="device"
-              value={formData.device || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {deviceOptions.map(
-                (
-                  option
-                ) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                )
-              )}
-            </select>
-          </div>
-
-          {/* Adset Name */}
-          <div>
-            <label
-              htmlFor="adsetName"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Adset Name
-            </label>
-            <input
-              type="text"
-              id="adsetName"
-              name="adsetName"
-              value={formData.adsetName || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Workshop Batch */}
-          <div>
-            <label
-              htmlFor="workshopBatch"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Workshop Batch
-            </label>
-            <input
-              type="text"
-              id="workshopBatch"
-              name="workshopBatch"
-              value={formData.workshopBatch || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Remarks */}
-          <div className="md:col-span-3">
-            <label
-              htmlFor="remarks"
-              className="block text-sm font-medium text-gray-700"
-            >
+          <div className="flex flex-col col-span-1 md:col-span-2">
+            <label className="text-sm font-medium text-gray-700 mb-1">
               Remarks
             </label>
             <textarea
-              id="remarks"
               name="remarks"
-              rows="3"
               value={formData.remarks || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              onChange={handleInputChange}
+              rows="3"
+              className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
             ></textarea>
           </div>
-
-          {/* Address Fields */}
-          <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
-            Main Address
-          </div>
-          <div>
-            <label
-              htmlFor="temporaryAddress"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Temporary Address
-            </label>
-            <input
-              type="text"
-              id="temporaryAddress"
-              name="temporaryAddress"
-              value={formData.temporaryAddress || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="permanentAddress"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Permanent Address
-            </label>
-            <input
-              type="text"
-              id="permanentAddress"
-              name="permanentAddress"
-              value={formData.permanentAddress || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="city"
-              className="block text-sm font-medium text-gray-700"
-            >
-              City
-            </label>
-            <input
-              type="text"
-              id="city"
-              name="city"
-              value={formData.city || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="county"
-              className="block text-sm font-medium text-gray-700"
-            >
-              County
-            </label>
-            <input
-              type="text"
-              id="county"
-              name="county"
-              value={formData.county || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="postCode"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Post Code
-            </label>
-            <input
-              type="text"
-              id="postCode"
-              name="postCode"
-              value={formData.postCode || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="md:col-span-3 flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <div className="col-span-1 md:col-span-2 flex justify-end gap-x-2 mt-4">
             <button
               type="button"
-              onClick={onClose}
-              className="py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              onClick={onCancel}
+              className="py-2 px-4 rounded-md text-sm font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-500"
+              className="py-2 px-4 rounded-md text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
             >
               Save Changes
             </button>
@@ -706,4 +435,4 @@ const LeadEditModal = ({ lead, onClose, onSave }) => {
   );
 };
 
-export default LeadEditModal;
+export default LeadEditForm;
