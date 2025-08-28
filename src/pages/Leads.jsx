@@ -1,5 +1,3 @@
-// C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Leads.jsx
-
 import React, {
   useContext,
   useState,
@@ -63,9 +61,8 @@ const leadService = {
       email: lead.email || "",
       phone: lead.phone_number || "",
       contactWhatsapp: lead.whatsapp_number || "",
-      ageGrade: `${lead.age || ""}${
-        lead.grade ? ` (Grade ${lead.grade})` : ""
-      }`,
+      age: lead.age || "",
+      grade: lead.grade || "",
       course: lead.course || "",
       source: lead.source || "",
       addDate: lead.add_date || "",
@@ -247,22 +244,51 @@ const Leads = () => {
     async (newLeadData) => {
       console.log("Adding new lead:", newLeadData);
       try {
-        // Transform frontend data to backend format
+        // --- THIS IS THE CRUCIAL LOGIC FOR SEPARATING AGE AND GRADE ---
+        let age = "";
+        let grade = "";
+        if (newLeadData.ageGrade) {
+          // Use a regex to extract age and an optional grade
+          const match = newLeadData.ageGrade.match(
+            /^(\d+)(?:\s*\(Grade\s*(\d+)\))?$/
+          );
+          if (match) {
+            age = match[1];
+            if (match[2]) {
+              grade = match[2];
+            }
+          }
+        }
+
+        // Transform frontend data to backend format, ensuring all fields are included
         const backendData = {
-          student_name: newLeadData.studentName,
-          parents_name: newLeadData.parentsName,
-          email: newLeadData.email,
-          phone_number: newLeadData.phone,
-          whatsapp_number: newLeadData.contactWhatsapp,
-          age: newLeadData.ageGrade,
-          source: newLeadData.source,
-          class_type: newLeadData.classType,
-          shift: newLeadData.shift,
-          previous_coding_experience: newLeadData.previousCodingExp,
-          device: newLeadData.device,
+          student_name: newLeadData.studentName || "",
+          parents_name: newLeadData.parentsName || "",
+          email: newLeadData.email || "",
+          phone_number: newLeadData.phone || "",
+          whatsapp_number: newLeadData.contactWhatsapp || "",
+          age: age, // The separated age is used here
+          grade: grade, // The separated grade is used here
+          source: newLeadData.source || "",
+          class_type: newLeadData.classType || "",
+          shift: newLeadData.shift || "",
+          previous_coding_experience: newLeadData.previousCodingExp || "",
+          device: newLeadData.device || "",
           status: newLeadData.status || "New",
           remarks: newLeadData.remarks || "",
+          // New fields added to match backend API
+          course: newLeadData.course || "",
+          value: newLeadData.value || "",
+          adset_name: newLeadData.adsetName || "",
+          payment_type: newLeadData.paymentType || "",
+          workshop_batch: newLeadData.workshopBatch || "",
+          address_line_1: newLeadData.permanentAddress || "",
+          address_line_2: newLeadData.temporaryAddress || "",
+          city: newLeadData.city || "",
+          county: newLeadData.county || "",
+          post_code: newLeadData.postCode || "",
         };
+        // --- END OF UPDATED DATA TRANSFORMATION ---
 
         const response = await fetch(
           "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
@@ -277,12 +303,15 @@ const Leads = () => {
         );
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Failed to create lead:", errorText);
           throw new Error("Failed to create lead");
         }
 
         const newLead = await response.json();
+        console.log("New lead successfully created:", newLead);
 
-        // Transform backend response to frontend format
+        // Transform backend response to a complete frontend format
         const frontendLead = {
           _id: newLead.id.toString(),
           studentName: newLead.student_name || "",
@@ -290,9 +319,8 @@ const Leads = () => {
           email: newLead.email || "",
           phone: newLead.phone_number || "",
           contactWhatsapp: newLead.whatsapp_number || "",
-          ageGrade: `${newLead.age || ""}${
-            newLead.grade ? ` (Grade ${newLead.grade})` : ""
-          }`,
+          age: newLead.age || "",
+          grade: newLead.grade || "",
           course: newLead.course || "",
           source: newLead.source || "",
           addDate: newLead.add_date || "",
@@ -314,8 +342,9 @@ const Leads = () => {
           device: newLead.device || "",
           previousCodingExp: newLead.previous_coding_experience || "",
           workshopBatch: newLead.workshop_batch || "",
-          changeLog: [],
+          changeLog: [], // Initialize change log for new leads
         };
+        // --- END OF UPDATED DATA TRANSFORMATION ---
 
         setAllLeads((prevLeads) => [...prevLeads, frontendLead]);
         handleCloseAddModal();
@@ -514,7 +543,8 @@ const Leads = () => {
   // This handleDelete now explicitly moves the lead to "Junk" status (archives it)
   const handleDelete = useCallback(
     async (leadId) => {
-      if (window.confirm("Are you sure you want to move this lead to trash?")) {
+      // NOTE: For a better user experience, replace `window.confirm` with a custom modal component.
+      if (confirm("Are you sure you want to move this lead to trash?")) {
         try {
           await leadService.updateLead(leadId, { status: "Junk" }, authToken);
           setAllLeads((prevLeads) =>

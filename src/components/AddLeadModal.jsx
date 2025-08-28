@@ -1,18 +1,17 @@
-// src/components/AddLeadModal.jsx
-
-import React, { useState, useRef, useEffect } from "react"; // Import useRef and useEffect
+import React, { useState, useRef, useEffect } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
 // Helper function to get current date in YYYY-MM-DD format
 const getTodayDate = () => {
   const today = new Date();
   const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
-  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+  const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
-const AddLeadModal = ({ onClose, onSave }) => {
+// AddLeadModal component now accepts a 'courses' prop
+const AddLeadModal = ({ onClose, onSave, courses }) => {
   // Initial state for a new, empty lead
   const [formData, setFormData] = useState({
     _id: `new-${Date.now()}`, // Generate a unique ID for mock data
@@ -20,40 +19,37 @@ const AddLeadModal = ({ onClose, onSave }) => {
     parentsName: "",
     email: "",
     phone: "",
-    ageGrade: "",
+    age: "",
+    grade: "",
     contactWhatsapp: "",
-    course: "Select", // Default course to 'Select'
-    source: "Select", // Default source to 'Select'
+    course: "", // Default to empty string for dynamic courses
+    source: "Select",
     recentCall: "",
     nextCall: "",
-    status: "New", // Default status
+    status: "New",
     address: "",
     addressLine1: "",
     addressLine2: "",
     city: "",
     county: "",
     postCode: "",
-    classType: "Select", // Default classType to 'Select'
+    classType: "Select",
     value: "",
     adsetName: "",
     remarks: "",
-    shift: "Select", // Default shift to 'Select'
-    paymentType: "Select", // Default paymentType to 'Select'
-    device: "Select", // Default device to 'Select'
-    invoice: [], // Assuming invoice is an array of files/strings
-    courseType: "Select", // Default courseType to 'Select'
-    previousCodingExp: "Select", // Default previousCodingExp to 'Select'
+    shift: "Select",
+    paymentType: "Select",
+    device: "Select",
+    invoice: [],
+    courseType: "Select",
+    previousCodingExp: "Select",
     workshopBatch: "",
-    addDate: getTodayDate(), // New field: Automatically set to current date
+    addDate: getTodayDate(),
   });
 
-  // Create a ref for the inner modal content div
   const modalContentRef = useRef(null);
 
-  // Handle outside click logic
   const handleOverlayClick = (event) => {
-    // If the click happened directly on the overlay div (the one with the ref),
-    // and not on the modal's content, then close the modal.
     if (
       modalContentRef.current &&
       !modalContentRef.current.contains(event.target)
@@ -72,51 +68,84 @@ const AddLeadModal = ({ onClose, onSave }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData); // Pass the new lead data up to the parent component
+    onSave(formData);
   };
 
-  // Dropdown options based on your request (keeping consistency with LeadEditModal)
+  // Dropdown options (courseOptions will now come from props)
   const statusOptions = [
-    "New", "Open", "Average", "Followup", "Interested", "inProgress",
-    "Active", "Closed", "Converted", "Lost", "Junk",
+    "New",
+    "Open",
+    "Average",
+    "Followup",
+    "Interested",
+    "inProgress",
+    "Active",
+    "Closed",
+    "Converted",
+    "Lost",
+    "Junk",
   ];
-  const courseOptions = [
-    "Select", "Full Stack Web Dev", "Data Science", "UI/UX Design", "Game Development",
-    "Cybersecurity", "Cloud Computing", "Digital Marketing", "AI & Machine Learning",
-    "Mobile App Dev", "Robotics", "Scratch Beginner", "Scratch Advanced",
-    "Python Beginner", "Python Advanced", "Web Development", "HTML & CSS",
-    "Artificial Intelligence(AI)", "AI With Python", "Other"
-  ];
+  // Original hardcoded courseOptions are now replaced by the 'courses' prop
   const sourceOptions = [
-    "Select", "WhatsApp/Viber", "Facebook", "Website", "Email", "Office Visit", "Direct call",
+    "Select",
+    "WhatsApp/Viber",
+    "Facebook",
+    "Website",
+    "Email",
+    "Office Visit",
+    "Direct call",
   ];
   const classTypeOptions = ["Select", "Physical", "Online"];
   const shiftOptions = [
-    "Select", "7 A.M. - 9 A.M.", "8 A.M. - 10 A.M.", "10 A.M. - 12 P.M.",
-    "11 A.M. - 1 P.M.", "12 P.M. - 2 P.M.", "2 P.M. - 4 P.M.",
-    "2:30 P.M. - 4:30 P.M.", "4 P.M. - 6 P.M.", "4:30 P.M. - 6:30 P.M.",
-    "5 P.M - 7 P.M.", "6 P.M. - 7 P.M.", "6 P.M - 8 P.M.", "7 P.M. - 8 P.M.",
+    "Select",
+    "7 A.M. - 9 A.M.",
+    "8 A.M. - 10 A.M.",
+    "10 A.M. - 12 P.M.",
+    "11 A.M. - 1 P.M.",
+    "12 P.M. - 2 P.M.",
+    "2 P.M. - 4 P.M.",
+    "2:30 P.M. - 4:30 P.M.",
+    "4 P.M. - 6 P.M.",
+    "4:30 P.M. - 6:30 P.M.",
+    "5 P.M - 7 P.M.",
+    "6 P.M. - 7 P.M.",
+    "6 P.M - 8 P.M.",
+    "7 P.M. - 8 P.M.",
   ];
   const courseTypeOptions = [
-    "Select", "Winter coding Camp", "Coding Kickstart", "Regular",
+    "Select",
+    "Winter coding Camp",
+    "Coding Kickstart",
+    "Regular",
   ];
-  const paymentTypeOptions = ["Select", "Cash", "Online", "Bank Transfer", "Cheque"]; // Added more for consistency
+  const paymentTypeOptions = [
+    "Select",
+    "Cash",
+    "Online",
+    "Bank Transfer",
+    "Cheque",
+  ];
   const previousCodingExpOptions = [
-    "Select", "None", "Basic Python", "Intermediate C++", "Arduino", "Some Linux",
-    "Advanced Python", "Basic Java", "Other"
+    "Select",
+    "None",
+    "Basic Python",
+    "Intermediate C++",
+    "Arduino",
+    "Some Linux",
+    "Advanced Python",
+    "Basic Java",
+    "Other",
   ];
-  const deviceOptions = ["Select", "Yes", "No"]; // Updated to match "Yes"/"No" from mock leads
+  const deviceOptions = ["Select", "Yes", "No"];
 
   return (
-    // Attach the onClick handler to the outermost overlay div
     <div
       className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 p-4 animate-fade-in"
-      onClick={handleOverlayClick} // This will now close the modal if clicked outside modalContentRef
+      onClick={handleOverlayClick}
     >
       <div
-        ref={modalContentRef} // Attach ref to the actual modal content div
+        ref={modalContentRef}
         className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto transform transition-all sm:w-full sm:max-w-4xl animate-scale-up"
-        // No need for stopPropagation here; the logic in handleOverlayClick handles it.
       >
         <div className="flex justify-between items-center p-6 border-b border-gray-200">
           <h2 className="text-2xl font-semibold text-gray-800">Add New Lead</h2>
@@ -173,7 +202,7 @@ const AddLeadModal = ({ onClose, onSave }) => {
             />
           </div>
 
-          {/* Parents Name (combining First/Last for simplicity, or add separately if needed) */}
+          {/* Parents Name */}
           <div className="md:col-span-2">
             <label
               htmlFor="parentsName"
@@ -266,25 +295,43 @@ const AddLeadModal = ({ onClose, onSave }) => {
             />
           </div>
 
-          {/* Age/Grade */}
+          {/* Age */}
           <div>
             <label
-              htmlFor="ageGrade"
+              htmlFor="age"
               className="block text-sm font-medium text-gray-700"
             >
-              Age/Grade
+              Age
             </label>
             <input
               type="text"
-              id="ageGrade"
-              name="ageGrade"
-              value={formData.ageGrade}
+              id="age"
+              name="age"
+              value={formData.age}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
-          {/* Course */}
+          {/* Grade */}
+          <div>
+            <label
+              htmlFor="grade"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Grade
+            </label>
+            <input
+              type="text"
+              id="grade"
+              name="grade"
+              value={formData.grade}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+          </div>
+
+          {/* Course - Now dynamically loaded from courses prop */}
           <div>
             <label
               htmlFor="course"
@@ -299,9 +346,11 @@ const AddLeadModal = ({ onClose, onSave }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              {courseOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+              <option value="">Select a course</option>{" "}
+              {/* Added a default placeholder */}
+              {courses.map((course) => (
+                <option key={course.id} value={course.course_name}>
+                  {course.course_name}
                 </option>
               ))}
             </select>
@@ -504,19 +553,15 @@ const AddLeadModal = ({ onClose, onSave }) => {
             <select
               id="device"
               name="device"
-              value={formData.device} // Now bound to formData.device
+              value={formData.device}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              {deviceOptions.map(
-                (
-                  option // Using new deviceOptions
-                ) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                )
-              )}
+              {deviceOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </div>
 
