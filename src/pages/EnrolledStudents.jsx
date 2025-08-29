@@ -1,11 +1,13 @@
 import React, { useContext, useState, useEffect, useMemo } from "react";
-import Loader from "../components/common/Loader";
-import { AuthContext } from "../App";
-import EnrolledStudentsTable from "../components/EnrolledStudentsTable";
-import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal";
+
+import Loader from "../components/common/Loader"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
+import { useAuth } from "../context/AuthContext.jsx"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
+import EnrolledStudentsTable from "../components/EnrolledStudentsTable"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
+import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
 
 const EnrolledStudents = () => {
-  const { authToken } = useContext(AuthContext);
+  // Use the useAuth hook to get the authToken
+  const { authToken } = useAuth(); // <<<-- Using useAuth hook
   const [allStudents, setAllStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -31,7 +33,7 @@ const EnrolledStudents = () => {
               Authorization: `Token ${authToken}`,
               "Content-Type": "application/json",
             },
-            credentials: "include", // This line has been added
+            credentials: "include",
           }
         );
 
@@ -116,7 +118,7 @@ const EnrolledStudents = () => {
           Authorization: `Token ${authToken}`,
         },
         body: JSON.stringify(payload),
-        credentials: "include", // This line has also been added
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -147,7 +149,7 @@ const EnrolledStudents = () => {
         headers: {
           Authorization: `Token ${authToken}`,
         },
-        credentials: "include", // This line has also been added
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -180,7 +182,7 @@ const EnrolledStudents = () => {
           Authorization: `Token ${authToken}`,
         },
         body: JSON.stringify(payload),
-        credentials: "include", // This line has also been added
+        credentials: "include",
       });
 
       if (!response.ok) {

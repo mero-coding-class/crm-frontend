@@ -1,20 +1,26 @@
-import React, { useState, useEffect, createContext } from "react"; // Added createContext
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import axios from "axios"; // Import axios
-// import { AuthContext } from "../App"; // Original problematic import
+import axios from "axios"; // Import axios for consistent API calls
 
-// --- TEMPORARY MOCK AuthContext for compilation ---
-// You should replace this with your actual AuthContext from "../App"
-const AuthContext = createContext(null);
-// Mock login function for the temporary context
-const useMockAuth = () => {
-  const login = (token) => {
-    console.log("Mock Auth: User logged in with token:", token);
-    // In a real scenario, this would update a global auth state
-  };
-  return { login };
-};
-// --- END TEMPORARY MOCK AuthContext ---
+// IMPORTANT: The "Could not resolve" error for this path indicates that
+// the specified location of 'AuthContext.jsx' is incorrect RELATIVE TO THIS 'Login.jsx' file.
+//
+// Based on the error path: C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Login.jsx
+// And the presumed location of AuthContext: C:/Users/aryal/Desktop/EDU_CRM/client/src/context/AuthContext.jsx
+//
+// The path "../context/AuthContext.jsx" is the standard and logically correct relative path:
+// 1. ".." goes up one directory from 'pages/' to 'src/'.
+// 2. "context/" then navigates into the 'context' folder.
+// 3. "AuthContext.jsx" specifies the file.
+//
+// IF THIS ERROR PERSISTS, YOU MUST:
+// 1. DOUBLE-CHECK THE EXACT SPELLING AND CASE (e.g., 'context' vs 'Context')
+//    OF YOUR FOLDERS AND 'AuthContext.jsx' FILE ON YOUR SYSTEM.
+// 2. CONFIRM THAT 'Login.jsx' IS INDEED IN 'src/pages/' and 'AuthContext.jsx' is in 'src/context/'.
+// 3. If your 'client' directory is not the root, your build tool might have a different base.
+//    However, for typical React setups, this relative path is correct.
+
+import { useAuth } from "../context/AuthContext.jsx"; // Verify this path on your system!
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -26,14 +32,18 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  // Using the mock auth context for compilation purposes
-  const { login } = useMockAuth();
+
+  // Use the useAuth hook to get the login function
+  const { login } = useAuth();
 
   // Pre-fill username if coming from successful registration
   useEffect(() => {
     if (location.state?.registrationSuccess && location.state?.username) {
       setFormData((prev) => ({ ...prev, username: location.state.username }));
-      setError("Registration successful! Please log in."); // Inform user
+      // Inform user about successful registration, clear after some time
+      setError("Registration successful! Please log in.");
+      const timer = setTimeout(() => setError(null), 5000); // Clear message after 5 seconds
+      return () => clearTimeout(timer);
     }
   }, [location.state]);
 
@@ -51,8 +61,8 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Use axios for the POST request
       const response = await axios.post(
+        // Using axios for API call
         "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/auth/login/",
         {
           username: formData.username,
@@ -66,19 +76,22 @@ const Login = () => {
       );
 
       const data = response.data; // Axios automatically parses JSON
-      const token = data.key || data.token;
+      const token = data.key || data.token; // Backend might send 'key' or 'token'
 
-      if (!token) throw new Error("No token received from server.");
-      localStorage.setItem("authToken", token);
-      login(token); // Use the login function (mocked for now)
+      if (!token) {
+        throw new Error("No token received from server.");
+      }
+
+      login(token); // Use the login function from AuthContext to store token and update state
       navigate("/dashboard", { replace: true }); // Navigate to dashboard on successful login
     } catch (err) {
-      // Axios error handling: err.response contains response data if available
+      // Improved error handling for axios responses
       setError(
-        err.response?.data?.detail || // Specific error from backend
-          err.message || // General network or other error
+        err.response?.data?.detail ||
+          err.message ||
           "Login failed. Please check your credentials."
       );
+      console.error("Login error:", err.response?.data || err.message); // Log detailed error
     } finally {
       setLoading(false);
     }
@@ -98,8 +111,6 @@ const Login = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {" "}
-          {/* Added space-y for consistent vertical spacing */}
           <div>
             <label
               htmlFor="username"

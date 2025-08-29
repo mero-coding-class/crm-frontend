@@ -2,14 +2,13 @@ import React from "react";
 import {
   PencilIcon,
   TrashIcon,
-  ArrowUturnLeftIcon, // New icon for restore
+  ArrowUturnLeftIcon,
 } from "@heroicons/react/24/outline";
 
 // Helper function to safely format date for input type="date"
 const getFormattedDate = (dateString) => {
   try {
     if (!dateString || dateString === "N/A") return "";
-
     const date = new Date(dateString);
     if (isNaN(date.getTime())) {
       console.warn(
@@ -31,17 +30,17 @@ const getFormattedDate = (dateString) => {
 };
 
 const TrashTableDisplay = ({
-  leads, // These will be the "trashed" leads passed from the parent (TrashPage.jsx)
-  handleEdit, // Pass through the edit function (optional in trash, but kept for consistency)
-  onStatusChange, // Allow changing status even in trash (e.g., to restore)
+  leads,
+  handleEdit,
+  onStatusChange,
   onRemarkChange,
   onRecentCallChange,
   onNextCallChange,
-  onPermanentDelete, // New prop for permanent delete
-  onRestoreLead, // New prop for restoring a lead
+  onPermanentDelete,
+  onRestoreLead,
 }) => {
   const statusOptions = [
-    "Status", // Placeholder option
+    "Status",
     "New",
     "Open",
     "Average",
@@ -83,9 +82,7 @@ const TrashTableDisplay = ({
 
   if (!leads || leads.length === 0) {
     return (
-      <p className="text-center text-gray-600 py-8">
-        No trashed leads found.
-      </p>
+      <p className="text-center text-gray-600 py-8">No trashed leads found.</p>
     );
   }
 
@@ -110,7 +107,10 @@ const TrashTableDisplay = ({
               WhatsApp Number
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Age/grade
+              Age
+            </th>
+            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Grade
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Source
@@ -119,7 +119,7 @@ const TrashTableDisplay = ({
               Course
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              ClassType
+              Class Type
             </th>
             <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Shift
@@ -152,53 +152,56 @@ const TrashTableDisplay = ({
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {leads.map((lead) => (
-            <tr key={lead._id} className="hover:bg-gray-50">
+            <tr key={lead.id} className="hover:bg-gray-50">
               <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {lead.studentName}
+                {lead.student_name}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.parentsName || "N/A"}
+                {lead.parents_name || "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.email}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.phone}
+                {lead.phone_number}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.contactWhatsapp}
+                {lead.whatsapp_number}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.ageGrade}
+                {lead.age || "N/A"}
+              </td>
+              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                {lead.grade || "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.source}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.course}
+                {lead.course_name}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.classType}
+                {lead.class_type}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {lead.shift}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.previousCodingExp}
+                {lead.previous_coding_experience}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 <input
                   type="date"
-                  value={getFormattedDate(lead.recentCall)}
-                  onChange={(e) => onRecentCallChange(lead._id, e.target.value)}
+                  value={getFormattedDate(lead.last_call)}
+                  onChange={(e) => onRecentCallChange(lead.id, e.target.value)}
                   className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
                 />
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 <input
                   type="date"
-                  value={getFormattedDate(lead.nextCall)}
-                  onChange={(e) => onNextCallChange(lead._id, e.target.value)}
+                  value={getFormattedDate(lead.next_call)}
+                  onChange={(e) => onNextCallChange(lead.id, e.target.value)}
                   className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
                 />
               </td>
@@ -208,7 +211,7 @@ const TrashTableDisplay = ({
               <td className="px-3 py-4 whitespace-nowrap text-sm">
                 <select
                   value={lead.status}
-                  onChange={(e) => onStatusChange(lead._id, e.target.value)}
+                  onChange={(e) => onStatusChange(lead.id, e.target.value)}
                   className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
                     lead.status
                   )}`}
@@ -228,7 +231,7 @@ const TrashTableDisplay = ({
               <td className="px-3 py-4 text-sm text-gray-700">
                 <textarea
                   value={lead.remarks || ""}
-                  onChange={(e) => onRemarkChange(lead._id, e.target.value)}
+                  onChange={(e) => onRemarkChange(lead.id, e.target.value)}
                   rows="2"
                   className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
                   style={{ minWidth: "150px" }}
@@ -245,17 +248,15 @@ const TrashTableDisplay = ({
                 </div>
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
-                {/* Restore the lead */}
                 <button
-                  onClick={() => onRestoreLead(lead._id)}
+                  onClick={() => onRestoreLead(lead.id)}
                   className="text-green-600 hover:text-green-900 mr-2 p-1 rounded-md hover:bg-green-50 transition-colors"
                   title="Restore Lead"
                 >
                   <ArrowUturnLeftIcon className="h-5 w-5" />
                 </button>
-                {/* Permanent delete */}
                 <button
-                  onClick={() => onPermanentDelete(lead._id)}
+                  onClick={() => onPermanentDelete(lead.id)}
                   className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
                   title="Permanently Delete"
                 >

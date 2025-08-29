@@ -1,24 +1,49 @@
 // C:/Users/aryal/Desktop/EDU_CRM/client/src/layouts/MainLayout.jsx
 
-import React, { useContext, useState } from 'react';
-import { NavLink, useNavigate, Outlet } from 'react-router-dom'; // Import Outlet for nested routes
-import { AuthContext } from '../App';
+import React, { useContext, useState } from "react";
+import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import {
   HomeIcon,
-  UsersIcon, // For Leads/Students
-  ArrowLeftOnRectangleIcon, // For Logout
-  Bars3Icon, // For mobile menu toggle
-  XMarkIcon, // For mobile menu close
-} from '@heroicons/react/24/outline'; // Assuming you have heroicons installed
+  UsersIcon,
+  ArrowLeftOnRectangleIcon,
+  Bars3Icon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
-const MainLayout = () => { // Removed 'children' prop as Outlet handles it
+// IMPORTANT: This path is set based on your previous clarification:
+// - MainLayout.jsx is in 'C:/Users/aryal/Desktop/EDU_CRM/client/src/layouts/'
+// - AuthContext.jsx is in 'C:/Users/aryal/Desktop/EDU_CRM/client/src/context/'
+//
+// To go from 'layouts/' to 'context/':
+// 1. You go up one directory using '..' (this takes you from 'layouts/' to 'src/').
+// 2. Then, you go down into the 'context/' directory.
+// 3. Finally, you specify the filename 'AuthContext.jsx'.
+//
+// Therefore, the path '../context/AuthContext.jsx' is the **logically correct relative path**
+// given the file structure you've indicated.
+//
+// IF THIS ERROR PERSISTS, YOU MUST CAREFULLY CHECK THE FOLLOWING ON YOUR LOCAL SYSTEM:
+// 1.  **Exact Folder Names:** Ensure 'context' and 'layouts' folders are spelled
+//     and cased exactly as in the path (e.g., 'context' all lowercase).
+// 2.  **Exact File Name:** Ensure 'AuthContext.jsx' is spelled and cased exactly as in the path.
+// 3.  **File Location:** Confirm that 'MainLayout.jsx' is truly in 'src/layouts/' and
+//     'AuthContext.jsx' is truly in 'src/context/', both relative to 'client/src/'.
+// 4.  **Restart Development Server:** Sometimes, build tools can cache paths.
+//     Try stopping and restarting your React development server.
+// 5.  **Clear Node Modules/Cache:** As a last resort, delete `node_modules` and `package-lock.json`
+//     (or `yarn.lock`), run `npm install` (or `yarn install`), and then restart the server.
+
+import { AuthContext } from "../context/AuthContext.jsx";
+
+const MainLayout = () => {
+  // Use the useContext hook to access the logout function from AuthContext
   const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false); // State for mobile sidebar
 
   const handleLogout = () => {
-    logout();
-    navigate('/login');
+    logout(); // Call the logout function from AuthContext
+    navigate("/login");
   };
 
   return (
@@ -51,11 +76,11 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/dashboard"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${
-                 isActive
-                   ? "bg-blue-600 text-white shadow-md"
-                   : "hover:bg-gray-700 text-gray-300"
-               }`
+                ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "hover:bg-gray-700 text-gray-300"
+                }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
@@ -67,11 +92,11 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/leads"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${
-                 isActive
-                   ? "bg-blue-600 text-white shadow-md"
-                   : "hover:bg-gray-700 text-gray-300"
-               }`
+                ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "hover:bg-gray-700 text-gray-300"
+                }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
@@ -82,11 +107,11 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/enrolled-students"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${
-                 isActive
-                   ? "bg-blue-600 text-white shadow-md"
-                   : "hover:bg-gray-700 text-gray-300"
-               }`
+                ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "hover:bg-gray-700 text-gray-300"
+                }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
@@ -97,11 +122,11 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/trash"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${
-                 isActive
-                   ? "bg-blue-600 text-white shadow-md"
-                   : "hover:bg-gray-700 text-gray-300"
-               }`
+                ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "hover:bg-gray-700 text-gray-300"
+                }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
@@ -112,11 +137,11 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
             to="/report"
             className={({ isActive }) =>
               `flex items-center p-3 rounded-lg transition-colors duration-200
-               ${
-                 isActive
-                   ? "bg-blue-600 text-white shadow-md"
-                   : "hover:bg-gray-700 text-gray-300"
-               }`
+                ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "hover:bg-gray-700 text-gray-300"
+                }`
             }
             onClick={() => setSidebarOpen(false)} // Close sidebar on nav for mobile
           >
@@ -145,9 +170,6 @@ const MainLayout = () => { // Removed 'children' prop as Outlet handles it
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
-        {/*
-          THE CHANGE: Use <Outlet /> to render nested routes
-        */}
         <Outlet />
       </main>
     </div>

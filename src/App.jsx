@@ -1,53 +1,76 @@
-import React, { useState, createContext } from "react";
+import React, { useContext } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-import MainLayout from "./layouts/MainLayout";
-import Dashboard from "./pages/Dashboard";
-import Leads from "./pages/Leads";
-import EnrolledStudents from "./pages/EnrolledStudents"; // Assuming you have this
-import TrashPage from "./pages/TrashPage";
-import Login from "./pages/Login";
-import Reports from "./pages/Reports";
 
-// Create AuthContext
-export const AuthContext = createContext(null);
+// IMPORTANT: YOU MUST VERIFY THESE IMPORT PATHS BASED ON YOUR ACTUAL PROJECT STRUCTURE.
+//
+// The repeated "Could not resolve" errors indicate that the paths provided in previous attempts
+// do not accurately reflect the location of these files relative to where your App.js file resides.
+//
+// Based on the continuous "Could not resolve" errors for paths like "../context/AuthContext.jsx",
+// it is highly probable that your App.js file is *NOT* in a subdirectory,
+// but rather directly in the 'src/' directory, similar to how 'context', 'layouts', and 'pages' are.
+//
+// Therefore, the paths below have been adjusted back to start with "./" (current directory).
+//
+// If your App.js is *still* in a subdirectory, or if 'context', 'layouts', 'pages' are in a different,
+// deeper structure, you will need to adjust these paths accordingly.
+//
+// Please confirm your file structure and modify these paths if necessary.
 
-function App() {
-  const [authToken, setAuthToken] = useState(localStorage.getItem("authToken"));
+import { AuthContext, AuthProvider } from "./context/AuthContext.jsx"; // Adjusted path to assume App.js is in src/
+import MainLayout from "./layouts/MainLayout"; // Adjusted path to assume App.js is in src/
+import Dashboard from "./pages/Dashboard"; // Adjusted path to assume App.js is in src/
+import Leads from "./pages/Leads"; // Adjusted path to assume App.js is in src/
+import EnrolledStudents from "./pages/EnrolledStudents"; // Adjusted path to assume App.js is in src/
+import TrashPage from "./pages/TrashPage"; // Adjusted path to assume App.js is in src/
+import Login from "./pages/Login"; // Adjusted path to assume App.js is in src/
+import Reports from "./pages/Reports"; // Adjusted path to assume App.js is in src/
 
-  const login = (token) => {
-    localStorage.setItem("authToken", token);
-    setAuthToken(token);
-  };
-
-  const logout = () => {
-    localStorage.removeItem("authToken");
-    setAuthToken(null);
-  };
+function AppContent() {
+  const { authToken } = useContext(AuthContext);
 
   return (
-    <AuthContext.Provider value={{ authToken, login, logout }}>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          {/* Protected routes */}
-          <Route
-            element={authToken ? <MainLayout /> : <Navigate to="/login" />}
-          >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/leads" element={<Leads />} />
-            <Route path="/enrolled-students" element={<EnrolledStudents />} />
-            <Route path="/trash" element={<TrashPage />} />
-            <Route path="*" element={<Navigate to="/dashboard" />} />
-            <Route path="report" element={<Reports />} />
-          </Route>
-        </Routes>
-      </Router>
-    </AuthContext.Provider>
+    <Router>
+      <Routes>
+        {/* Public route for login */}
+        <Route path="/login" element={<Login />} />
+
+        {/* Protected routes */}
+        {/* If authToken exists, render MainLayout and its children; otherwise, redirect to login */}
+        <Route
+          element={
+            authToken ? <MainLayout /> : <Navigate to="/login" replace />
+          }
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/leads" element={<Leads />} />
+          <Route path="/enrolled-students" element={<EnrolledStudents />} />
+          <Route path="/trash" element={<TrashPage />} />
+          <Route path="/report" element={<Reports />} />
+          {/* Catch-all route within the protected area, redirects to dashboard */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Route>
+
+        {/* Fallback for unauthenticated users trying to access any route directly that isn't /login */}
+        {/* This ensures that if no other route matches and there's no token, they go to login */}
+        {!authToken && (
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        )}
+      </Routes>
+    </Router>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
