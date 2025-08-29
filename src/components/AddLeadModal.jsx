@@ -23,26 +23,26 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     grade: "",
     contactWhatsapp: "",
     course: "", // Default to empty string for dynamic courses
-    source: "Select",
+    source: "", // Changed default from "Select" to ""
     recentCall: "",
     nextCall: "",
     status: "New",
-    address: "",
-    addressLine1: "",
-    addressLine2: "",
+    // Removed 'address' field - using permanentAddress and temporaryAddress
+    permanentAddress: "", // Renamed from addressLine1
+    temporaryAddress: "", // Renamed from addressLine2
     city: "",
     county: "",
     postCode: "",
-    classType: "Select",
+    classType: "", // Changed default from "Select" to ""
     value: "",
     adsetName: "",
     remarks: "",
-    shift: "Select",
-    paymentType: "Select",
-    device: "Select",
-    invoice: [],
-    courseType: "Select",
-    previousCodingExp: "Select",
+    shift: "", // Changed default from "Select" to ""
+    paymentType: "", // Changed default from "Select" to ""
+    device: "", // Changed default from "Select" to ""
+    invoice: [], // Not used in parent API call, but kept for consistency
+    // Removed courseType from formData initial state
+    previousCodingExp: "", // Changed default from "Select" to ""
     workshopBatch: "",
     addDate: getTodayDate(),
   });
@@ -80,14 +80,13 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Interested",
     "inProgress",
     "Active",
-    "Closed",
     "Converted",
     "Lost",
     "Junk",
   ];
-  // Original hardcoded courseOptions are now replaced by the 'courses' prop
+  // Removed hardcoded courseOptions array here, now using the 'courses' prop directly.
   const sourceOptions = [
-    "Select",
+    "Select", // Keep "Select" as an option, but default `formData.source` to ""
     "WhatsApp/Viber",
     "Facebook",
     "Website",
@@ -95,9 +94,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Office Visit",
     "Direct call",
   ];
-  const classTypeOptions = ["Select", "Physical", "Online"];
+  const classTypeOptions = ["Select", "Physical", "Online"]; // Keep "Select" as an option
   const shiftOptions = [
-    "Select",
+    "Select", // Changed "Shift" to "Select" as placeholder
     "7 A.M. - 9 A.M.",
     "8 A.M. - 10 A.M.",
     "10 A.M. - 12 P.M.",
@@ -107,17 +106,12 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "2:30 P.M. - 4:30 P.M.",
     "4 P.M. - 6 P.M.",
     "4:30 P.M. - 6:30 P.M.",
-    "5 P.M - 7 P.M.",
+    "5 P.M. - 7 P.M.",
     "6 P.M. - 7 P.M.",
-    "6 P.M - 8 P.M.",
+    "6 P.M. - 8 P.M.",
     "7 P.M. - 8 P.M.",
   ];
-  const courseTypeOptions = [
-    "Select",
-    "Winter coding Camp",
-    "Coding Kickstart",
-    "Regular",
-  ];
+  // Removed courseTypeOptions array
   const paymentTypeOptions = [
     "Select",
     "Cash",
@@ -126,7 +120,7 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Cheque",
   ];
   const previousCodingExpOptions = [
-    "Select",
+    "Select", // Changed "CodingExp" to "Select" as placeholder
     "None",
     "Basic Python",
     "Intermediate C++",
@@ -136,7 +130,7 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Basic Java",
     "Other",
   ];
-  const deviceOptions = ["Select", "Yes", "No"];
+  const deviceOptions = ["Select", "Yes", "No"]; // Changed "Device" to "Select" as placeholder
 
   return (
     <div
@@ -372,7 +366,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {sourceOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {" "}
+                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -431,7 +427,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {classTypeOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {" "}
+                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -490,35 +488,16 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {shiftOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {" "}
+                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Course Type */}
-          <div>
-            <label
-              htmlFor="courseType"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Course Type
-            </label>
-            <select
-              id="courseType"
-              name="courseType"
-              value={formData.courseType}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {courseTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Removed Course Type section */}
 
           {/* Payment Type */}
           <div>
@@ -536,7 +515,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {paymentTypeOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {" "}
+                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -558,7 +539,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {deviceOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {" "}
+                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -581,7 +564,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               {previousCodingExpOptions.map((option) => (
-                <option key={option} value={option}>
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {" "}
+                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -630,32 +615,32 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
           </div>
           <div>
             <label
-              htmlFor="addressLine1"
+              htmlFor="permanentAddress"
               className="block text-sm font-medium text-gray-700"
             >
-              Address Line 1
+              Address Line 1 (Permanent)
             </label>
             <input
               type="text"
-              id="addressLine1"
-              name="addressLine1"
-              value={formData.addressLine1}
+              id="permanentAddress"
+              name="permanentAddress" // Renamed
+              value={formData.permanentAddress} // Renamed
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
           <div>
             <label
-              htmlFor="addressLine2"
+              htmlFor="temporaryAddress"
               className="block text-sm font-medium text-gray-700"
             >
-              Address Line 2
+              Address Line 2 (Temporary)
             </label>
             <input
               type="text"
-              id="addressLine2"
-              name="addressLine2"
-              value={formData.addressLine2}
+              id="temporaryAddress"
+              name="temporaryAddress" // Renamed
+              value={formData.temporaryAddress} // Renamed
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />

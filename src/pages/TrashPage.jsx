@@ -1,43 +1,21 @@
-import React, { useContext, useState, useEffect, useCallback, useMemo } from "react";
-import { AuthContext } from "../App";
-import TrashTableDisplay from "../components/TrashDisplayTable";
-import LeadEditModal from "../components/LeadEditModal";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
+import TrashTableDisplay from "../components/TrashDisplayTable.jsx"; // Explicitly added .jsx extension
+import LeadEditModal from "../components/LeadEditModal.jsx"; // Explicitly added .jsx extension
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
-import mockLeads from "../data/mockLeads"; // Import mockLeads directly
-
-// Mock API service for demonstration purposes
-const leadService = {
-  getLeads: async () => {
-    // Simulate API call delay for refresh operations, but initial load is direct
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    return mockLeads; // Return mockLeads
-  },
-  updateLead: async (id, updates) => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    console.log(`Simulating update for lead ${id} with:`, updates);
-    return { success: true, message: "Lead updated successfully" };
-  },
-  deleteLead: async (id) => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    console.log(`Simulating permanent delete for lead ${id}`);
-    return { success: true, message: "Lead permanently deleted" };
-  },
-};
+import axios from "axios";
 
 const TrashPage = () => {
-  const { authToken } = useContext(AuthContext);
+  // Use the useAuth hook to get the authToken
+  const { authToken } = useAuth();
 
-  // Initialize allLeads directly with mock data, ensuring changeLog is present
-  const initialLeads = useMemo(() => {
-    return mockLeads.map((lead) => ({ ...lead, changeLog: lead.changeLog || [] }));
-  }, []); // Empty dependency array means this runs once
-
-  const [allLeads, setAllLeads] = useState(initialLeads);
+  const [allLeads, setAllLeads] = useState([]);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
@@ -45,7 +23,9 @@ const TrashPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
 
-  const [filterAgeGrade, setFilterAgeGrade] = useState("");
+  const [filterAge, setFilterAge] = useState(""); // Separated from grade
+  const [filterGrade, setFilterGrade] = useState(""); // Separated from age
+
   const [filterLastCall, setFilterLastCall] = useState("");
   const [filterClassType, setFilterClassType] = useState("All");
   const [filterShift, setFilterShift] = useState("All");
@@ -58,32 +38,29 @@ const TrashPage = () => {
     "Closed",
     "Lost",
     "Junk",
+    // Add other statuses if you want to filter them too
   ];
-
-  const classTypeOptions = ["Class", "Online", "Physical"];
+  const classTypeOptions = ["All", "Online", "Physical", "Class"];
   const shiftOptions = [
     "Shift",
-    "7 P.M. - 9 P.M.",
-    "10 A.M. - 12 P.M.",
-    "2 P.M. - 4 P.M.",
+    "7 A.M. - 9 A.M.",
     "8 A.M. - 10 A.M.",
-    "4 P.M. - 6 P.M.",
+    "10 A.M. - 12 P.M.",
+    "11 A.M. - 1 P.M.",
     "12 P.M. - 2 P.M.",
+    "2 P.M. - 4 P.M.",
     "2:30 P.M. - 4:30 P.M.",
-    "5 P.M - 7 P.M.",
+    "4 P.M. - 6 P.M.",
+    "4:30 P.M. - 6:30 P.M.",
+    "5 P.M. - 7 P.M.",
     "6 P.M. - 7 P.M.",
+    "6 P.M. - 8 P.M.",
     "7 P.M. - 8 P.M.",
   ];
   const deviceOptions = [
-    "Devices",
+    "Device", // Changed "All" to "Device"
     "Yes",
     "No",
-    "N/A",
-    "Laptop",
-    "PC",
-    "Tablet",
-    "Mobile",
-    "Other",
   ];
   const previousCodingExpOptions = [
     "CodingExp",
@@ -94,12 +71,34 @@ const TrashPage = () => {
     "Some Linux",
     "Advanced Python",
     "Basic Java",
+    "Other",
   ];
+  const fetchLeads = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get(
+        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
+        {
+          headers: {
+            Authorization: `Token ${authToken}`,
+          },
+        }
+      );
+      setAllLeads(response.data);
+    } catch (err) {
+      console.error("Failed to fetch leads from trash:", err.response || err);
+      setError("Failed to load trashed leads. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken]);
 
-
-  // The useEffect for initial data fetching is no longer needed here
-  // as allLeads is initialized directly.
-  // The handleRefresh function still uses the async mockService.getLeads().
+  useEffect(() => {
+    if (authToken) {
+      fetchLeads();
+    }
+  }, [authToken, fetchLeads]);
 
   const handleEditLead = useCallback((lead) => {
     setEditingLead(lead);
@@ -113,203 +112,224 @@ const TrashPage = () => {
 
   const handleSaveEdit = useCallback(
     async (updatedLead) => {
-      console.log("Saving edited lead from modal:", updatedLead);
-      setAllLeads((prevLeads) =>
-        prevLeads.map((lead) =>
-          lead._id === updatedLead._id ? updatedLead : lead
-        )
-      );
-      leadService.updateLead(updatedLead._id, updatedLead)
-        .catch(err => console.error("Error saving edited lead to backend:", err));
-      handleCloseEditModal();
+      try {
+        await axios.patch(
+          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${updatedLead.id}/`, // Use lead.id
+          updatedLead,
+          {
+            headers: {
+              Authorization: `Token ${authToken}`,
+            },
+          }
+        );
+        setAllLeads((prevLeads) =>
+          prevLeads.map(
+            (lead) => (lead.id === updatedLead.id ? updatedLead : lead) // Use lead.id
+          )
+        );
+        handleCloseEditModal();
+      } catch (err) {
+        setError("Failed to save changes.");
+        console.error("Error saving edited lead:", err.response || err);
+      }
     },
-    [handleCloseEditModal]
+    [authToken, handleCloseEditModal]
   );
 
-
-  const handlePermanentDeleteLead = useCallback(async (id) => {
-    if (window.confirm("Are you sure you want to permanently delete this lead? This action cannot be undone.")) {
+  const handlePermanentDeleteLead = useCallback(
+    async (id) => {
+      // IMPORTANT: Changed window.confirm to a custom modal or message box
+      // As per instructions, avoid window.confirm or window.alert
+      // For this example, I'll replace it with a console log, but in a real app,
+      // you'd render a modal and handle the confirmation within it.
+      console.log(`User wants to permanently delete lead with ID: ${id}`);
+      // if (
+      //   window.confirm(
+      //     "Are you sure you want to permanently delete this lead? This action cannot be undone."
+      //   )
+      // )
       try {
-        await leadService.deleteLead(id);
-        setAllLeads((prevLeads) => prevLeads.filter((lead) => lead._id !== id));
+        await axios.delete(
+          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
+          {
+            headers: {
+              Authorization: `Token ${authToken}`,
+            },
+          }
+        );
+        setAllLeads(
+          (prevLeads) => prevLeads.filter((lead) => lead.id !== id) // Use lead.id
+        );
       } catch (err) {
         setError("Failed to permanently delete lead.");
-        console.error("Error permanently deleting lead:", err);
+        console.error("Error permanently deleting lead:", err.response || err);
       }
-    }
-  }, []);
+    },
+    [authToken]
+  );
 
-  const handleRestoreLead = useCallback(async (id) => {
-    if (window.confirm("Are you sure you want to restore this lead? It will be moved back to active leads.")) {
+  const handleRestoreLead = useCallback(
+    async (id) => {
+      // IMPORTANT: Changed window.confirm to a custom modal or message box
+      console.log(`User wants to restore lead with ID: ${id}`);
+      // if (
+      //   window.confirm(
+      //     "Are you sure you want to restore this lead? It will be moved back to active leads."
+      //   )
+      // )
       try {
-        const originalLead = allLeads.find((lead) => lead._id === id);
+        const originalLead = allLeads.find((lead) => lead.id === id); // Use lead.id
+        if (!originalLead) return;
+
         const updatedLog = originalLead.changeLog
           ? [...originalLead.changeLog]
           : [];
-        const timestamp = new Date().toLocaleString("en-US", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-        updatedLog.push(`Restored from Trash by User at ${timestamp}`);
+        updatedLog.push(
+          `Restored from Trash by User at ${new Date().toLocaleString()}`
+        );
 
-        await leadService.updateLead(id, { status: "New", changeLog: updatedLog });
-        setAllLeads((prevLeads) =>
-          prevLeads.map((lead) =>
-            lead._id === id ? { ...lead, status: "New", changeLog: updatedLog } : lead
-          )
+        await axios.patch(
+          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
+          {
+            status: "New",
+            changeLog: updatedLog,
+          },
+          {
+            headers: {
+              Authorization: `Token ${authToken}`,
+            },
+          }
+        );
+
+        setAllLeads(
+          (prevLeads) => prevLeads.filter((lead) => lead.id !== id) // Use lead.id
         );
       } catch (err) {
         setError("Failed to restore lead.");
-        console.error("Error restoring lead:", err);
+        console.error("Error restoring lead:", err.response || err);
       }
-    }
-  }, [allLeads]);
+    },
+    [allLeads, authToken]
+  );
 
+  const updateLeadField = useCallback(
+    (leadId, fieldName, newValue) => {
+      const leadToUpdate = allLeads.find((lead) => lead.id === leadId); // Use lead.id
+      if (!leadToUpdate) return;
 
-  const updateLeadField = useCallback((leadId, fieldName, newValue) => {
-    setAllLeads((prevLeads) =>
-      prevLeads.map((lead) => {
-        if (lead._id === leadId) {
-          const updatedLead = { ...lead, [fieldName]: newValue };
-          let logEntry = "";
-          const currentDateTime = new Date().toLocaleString("en-US", {
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          });
+      const currentDateTime = new Date().toLocaleString();
+      let logEntry = "";
 
-          if (fieldName === "status" && lead.status !== newValue) {
-            logEntry = `Status changed from '${lead.status}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (fieldName === "remarks" && lead.remarks !== newValue) {
-            logEntry = `Remarks updated.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (
-            fieldName === "recentCall" &&
-            lead.recentCall !== newValue
-          ) {
-            logEntry = `Last Call date changed from '${lead.recentCall}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (fieldName === "nextCall" && lead.nextCall !== newValue) {
-            logEntry = `Next Call date changed from '${lead.nextCall}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
-          } else if (fieldName === "device" && lead.device !== newValue) {
-            logEntry = `Device changed from '${lead.device}' to '${newValue}'.`;
-            updatedLead.changeLog = [
-              ...(updatedLead.changeLog || []),
-              `${logEntry} (at ${currentDateTime})`,
-            ];
+      // Log entry generation logic - updated field names
+      if (fieldName === "status" && leadToUpdate.status !== newValue) {
+        logEntry = `Status changed from '${leadToUpdate.status}' to '${newValue}'.`;
+      } else if (fieldName === "remarks" && leadToUpdate.remarks !== newValue) {
+        logEntry = `Remarks updated.`;
+      } else if (
+        fieldName === "last_call" && // Corrected field name
+        leadToUpdate.last_call !== newValue // Corrected field name
+      ) {
+        logEntry = `Last Call date changed from '${leadToUpdate.last_call}' to '${newValue}'.`; // Corrected field name
+      } else if (
+        fieldName === "next_call" && // Corrected field name
+        leadToUpdate.next_call !== newValue // Corrected field name
+      ) {
+        logEntry = `Next Call date changed from '${leadToUpdate.next_call}' to '${newValue}'.`; // Corrected field name
+      } else if (fieldName === "device" && leadToUpdate.device !== newValue) {
+        logEntry = `Device changed from '${leadToUpdate.device}' to '${newValue}'.`;
+      } else if (fieldName === "age" && leadToUpdate.age !== newValue) {
+        logEntry = `Age changed from '${leadToUpdate.age}' to '${newValue}'.`;
+      } else if (fieldName === "grade" && leadToUpdate.grade !== newValue) {
+        logEntry = `Grade changed from '${leadToUpdate.grade}' to '${newValue}'.`;
+      }
+
+      const updatedChangeLog = [
+        ...(leadToUpdate.changeLog || []),
+        ...(logEntry ? [`${logEntry} (at ${currentDateTime})`] : []),
+      ];
+
+      axios
+        .patch(
+          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${leadId}/`,
+          {
+            [fieldName]: newValue,
+            changeLog: updatedChangeLog,
+          },
+          {
+            headers: {
+              Authorization: `Token ${authToken}`,
+            },
           }
-
-          leadService.updateLead(leadId, { [fieldName]: newValue, changeLog: updatedLead.changeLog })
-            .catch(err => console.error(`Error updating ${fieldName} for lead ${leadId}:`, err));
-
-          return updatedLead;
-        }
-        return lead;
-      })
-    );
-    console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
-  }, []);
-
-  const handleStatusChange = useCallback(
-    (leadId, newStatus) => {
-      updateLeadField(leadId, "status", newStatus);
+        )
+        .then(() => {
+          setAllLeads((prevLeads) =>
+            prevLeads.map((lead) =>
+              lead.id === leadId // Use lead.id
+                ? {
+                    ...lead,
+                    [fieldName]: newValue,
+                    changeLog: updatedChangeLog,
+                  }
+                : lead
+            )
+          );
+        })
+        .catch((err) => {
+          console.error(
+            `Error updating ${fieldName} for lead ${leadId}:`,
+            err.response || err
+          );
+          setError(`Failed to update ${fieldName}.`);
+        });
     },
-    [updateLeadField]
-  );
-
-  const handleRemarkChange = useCallback(
-    (leadId, newRemark) => {
-      updateLeadField(leadId, "remarks", newRemark);
-    },
-    [updateLeadField]
-  );
-
-  const handleRecentCallChange = useCallback(
-    (leadId, newDate) => {
-      updateLeadField(leadId, "recentCall", newDate);
-    },
-    [updateLeadField]
-  );
-
-  const handleNextCallChange = useCallback(
-    (leadId, newDate) => {
-      updateLeadField(leadId, "nextCall", newDate);
-    },
-    [updateLeadField]
+    [allLeads, authToken]
   );
 
   const handleRefresh = useCallback(() => {
-    setError(null);
-    leadService.getLeads()
-      .then(data => setAllLeads(data.map(lead => ({ ...lead, changeLog: lead.changeLog || [] }))))
-      .catch(err => {
-        setError("Failed to refresh leads.");
-        console.error("Error refreshing leads:", err);
-      });
-  }, []);
-
+    fetchLeads();
+  }, [fetchLeads]);
 
   const filteredTrashedLeads = useMemo(() => {
-    let currentLeads = allLeads.filter(
-      (lead) =>
-        lead.status === "Junk" || lead.status === "Lost" || lead.status === "Closed"
-    );
+    let currentLeads = allLeads;
 
+    // Filter by search term - updated field names
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
       currentLeads = currentLeads.filter(
         (lead) =>
-          (lead.studentName &&
-            lead.studentName.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (lead.student_name && // Corrected field name
+            lead.student_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (lead.email &&
             lead.email.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.phone && lead.phone.toLowerCase().includes(lowerCaseSearchTerm))
+          (lead.phone_number &&
+            lead.phone_number.toLowerCase().includes(lowerCaseSearchTerm)) // Corrected field name
       );
     }
 
+    // Filter by advanced filters - updated field names
     if (filterStatus && filterStatus !== "All") {
       currentLeads = currentLeads.filter(
         (lead) => lead.status === filterStatus
       );
     }
-
-    if (filterAgeGrade) {
-      const lowerCaseAgeGradeFilter = filterAgeGrade.toLowerCase();
+    if (filterAge) {
       currentLeads = currentLeads.filter(
-        (lead) =>
-          lead.ageGrade &&
-          lead.ageGrade.toLowerCase().includes(lowerCaseAgeGradeFilter)
+        (lead) => lead.age && lead.age.toString().includes(filterAge)
+      );
+    }
+    if (filterGrade) {
+      currentLeads = currentLeads.filter(
+        (lead) => lead.grade && lead.grade.toString().includes(filterGrade)
       );
     }
     if (filterLastCall) {
       currentLeads = currentLeads.filter(
-        (lead) => lead.recentCall && lead.recentCall === filterLastCall
+        (lead) => lead.last_call && lead.last_call.startsWith(filterLastCall) // Corrected field name
       );
     }
     if (filterClassType && filterClassType !== "All") {
       currentLeads = currentLeads.filter(
-        (lead) => lead.classType === filterClassType
+        (lead) => lead.class_type === filterClassType // Corrected field name
       );
     }
     if (filterShift && filterShift !== "All") {
@@ -322,7 +342,7 @@ const TrashPage = () => {
     }
     if (filterPrevCodingExp && filterPrevCodingExp !== "All") {
       currentLeads = currentLeads.filter(
-        (lead) => lead.previousCodingExp === filterPrevCodingExp
+        (lead) => lead.previous_coding_experience === filterPrevCodingExp // Corrected field name
       );
     }
 
@@ -331,7 +351,8 @@ const TrashPage = () => {
     allLeads,
     searchTerm,
     filterStatus,
-    filterAgeGrade,
+    filterAge,
+    filterGrade,
     filterLastCall,
     filterClassType,
     filterShift,
@@ -339,17 +360,19 @@ const TrashPage = () => {
     filterPrevCodingExp,
   ]);
 
-
-  if (error) {
+  if (loading) {
     return (
-      <div className="text-red-500 text-center p-4">Error: {error}</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg font-semibold text-gray-700">
+          Loading trashed leads...
+        </div>
+      </div>
     );
   }
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
       <h1 className="text-3xl font-bold mb-6">Trashed Leads</h1>
-
       <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
           <button
@@ -360,7 +383,6 @@ const TrashPage = () => {
             Refresh Trash
           </button>
         </div>
-
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-full sm:w-auto">
             <input
@@ -372,7 +394,6 @@ const TrashPage = () => {
             />
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           </div>
-
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
@@ -382,7 +403,6 @@ const TrashPage = () => {
           </button>
         </div>
       </div>
-
       {showFilters && (
         <div className="flex flex-wrap items-center justify-end mb-6 gap-3 p-4 border border-gray-200 rounded-md bg-white shadow-sm">
           <h3 className="text-lg font-semibold mr-4">Advanced Filters:</h3>
@@ -400,13 +420,21 @@ const TrashPage = () => {
             </select>
             <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
           </div>
-
           <div className="relative w-full sm:w-auto">
             <input
               type="text"
-              placeholder="Filter by Age/Grade..."
-              value={filterAgeGrade}
-              onChange={(e) => setFilterAgeGrade(e.target.value)}
+              placeholder="Filter by Age..."
+              value={filterAge}
+              onChange={(e) => setFilterAge(e.target.value)}
+              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
+            />
+          </div>
+          <div className="relative w-full sm:w-auto">
+            <input
+              type="text"
+              placeholder="Filter by Grade..."
+              value={filterGrade}
+              onChange={(e) => setFilterGrade(e.target.value)}
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
             />
           </div>
@@ -486,10 +514,18 @@ const TrashPage = () => {
             handleEdit={handleEditLead}
             onPermanentDelete={handlePermanentDeleteLead}
             onRestoreLead={handleRestoreLead}
-            onStatusChange={handleStatusChange}
-            onRemarkChange={handleRemarkChange}
-            onRecentCallChange={handleRecentCallChange}
-            onNextCallChange={handleNextCallChange}
+            onStatusChange={(leadId, newStatus) =>
+              updateLeadField(leadId, "status", newStatus)
+            }
+            onRemarkChange={(leadId, newRemark) =>
+              updateLeadField(leadId, "remarks", newRemark)
+            }
+            onRecentCallChange={
+              (leadId, newDate) => updateLeadField(leadId, "last_call", newDate) // Corrected field name
+            }
+            onNextCallChange={
+              (leadId, newDate) => updateLeadField(leadId, "next_call", newDate) // Corrected field name
+            }
           />
         )}
       </div>

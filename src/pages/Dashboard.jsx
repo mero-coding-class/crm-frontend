@@ -1,11 +1,13 @@
-// src/pages/Dashboard.jsx
+// C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Dashboard.jsx
 
-import React, { useContext, useState, useEffect, useMemo } from "react";
-import { AuthContext } from "../App";
+import React, { useState, useEffect, useMemo } from "react";
+// Corrected import path for AuthContext and using useAuth hook
+import { useAuth } from "../context/AuthContext.jsx"; // <<<-- Corrected import
+
 import Loader from "../components/common/Loader";
 
 // Import your mock leads data
-import initialMockLeads from "../data/mockLeads"; // <--- NEW IMPORT
+import initialMockLeads from "../data/mockLeads";
 
 // Import new dashboard components
 import StatCard from "../components/dashboard/StatCard";
@@ -36,8 +38,6 @@ import {
   PlusIcon,
   CurrencyDollarIcon,
   CalendarDaysIcon,
-  ChartPieIcon,
-  ChartBarIcon,
   GlobeAltIcon,
 } from "@heroicons/react/24/outline";
 
@@ -55,7 +55,8 @@ const ChartContainer = ({ title, description, children }) => (
 );
 
 const Dashboard = () => {
-  const { authToken } = useContext(AuthContext);
+  // Use the useAuth hook to get the authToken
+  const { authToken } = useAuth(); // <<<-- Using useAuth hook
   const [allLeads, setAllLeads] = useState([]); // State to hold all leads from mock data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -236,7 +237,7 @@ const Dashboard = () => {
       .map(([name, data]) => ({
         name,
         enrollments: data.enrollments,
-        revenue: `${data.revenue.toLocaleString()}`, // Format revenue
+        revenue: `$${data.revenue.toLocaleString()}`, // Format revenue
       }))
       .sort((a, b) => b.enrollments - a.enrollments) // Sort by enrollments descending
       .slice(0, 7); // Get top 7 courses
