@@ -1,0 +1,1 @@
+export const BASE_URL = "https://crmmerocodingbackend.ktm.yetiappcloud.com/api";

@@ -1,8 +1,10 @@
-import React from "react";
+// src/components/TrashTableDisplay.jsx
+
+import React, { useState } from "react";
 import {
-  PencilIcon,
   TrashIcon,
   ArrowUturnLeftIcon,
+  ClockIcon,
 } from "@heroicons/react/24/outline";
 
 // Helper function to safely format date for input type="date"
@@ -29,9 +31,31 @@ const getFormattedDate = (dateString) => {
   }
 };
 
+const formatLogTimestamp = (isoString) => {
+  if (!isoString) return "N/A";
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleString(); // Formats to a human-readable local date/time
+  } catch {
+    return isoString; // Fallback to original string if invalid
+  }
+};
+
+const getRoleBadgeClasses = (role) => {
+  switch (role) {
+    case "Admin":
+      return "bg-purple-200 text-purple-800";
+    case "Superadmin":
+      return "bg-pink-200 text-pink-800";
+    case "Sales_rep":
+      return "bg-green-200 text-green-800";
+    default:
+      return "bg-gray-200 text-gray-800";
+  }
+};
+
 const TrashTableDisplay = ({
   leads,
-  handleEdit,
   onStatusChange,
   onRemarkChange,
   onRecentCallChange,
@@ -40,7 +64,7 @@ const TrashTableDisplay = ({
   onRestoreLead,
 }) => {
   const statusOptions = [
-    "Status",
+    "Status", // Default placeholder
     "New",
     "Open",
     "Average",
@@ -48,7 +72,6 @@ const TrashTableDisplay = ({
     "Interested",
     "inProgress",
     "Active",
-    "Closed",
     "Converted",
     "Lost",
     "Junk",
@@ -152,122 +175,181 @@ const TrashTableDisplay = ({
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {leads.map((lead) => (
-            <tr key={lead.id} className="hover:bg-gray-50">
-              <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {lead.student_name}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.parents_name || "N/A"}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.email}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.phone_number}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.whatsapp_number}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.age || "N/A"}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.grade || "N/A"}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.source}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.course_name}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.class_type}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.shift}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.previous_coding_experience}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                <input
-                  type="date"
-                  value={getFormattedDate(lead.last_call)}
-                  onChange={(e) => onRecentCallChange(lead.id, e.target.value)}
-                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                />
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                <input
-                  type="date"
-                  value={getFormattedDate(lead.next_call)}
-                  onChange={(e) => onNextCallChange(lead.id, e.target.value)}
-                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                />
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                {lead.device || "N/A"}
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-sm">
-                <select
-                  value={lead.status}
-                  onChange={(e) => onStatusChange(lead.id, e.target.value)}
-                  className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
-                    lead.status
-                  )}`}
-                  style={{ minWidth: "100px" }}
-                >
-                  {statusOptions.map((option) => (
-                    <option
-                      key={option}
-                      value={option}
-                      className={`${getStatusClasses(option)}`}
-                    >
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td className="px-3 py-4 text-sm text-gray-700">
-                <textarea
-                  value={lead.remarks || ""}
-                  onChange={(e) => onRemarkChange(lead.id, e.target.value)}
-                  rows="2"
-                  className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
-                  style={{ minWidth: "150px" }}
-                ></textarea>
-              </td>
-              <td className="px-3 py-4 text-sm text-gray-700">
-                <div
-                  className="whitespace-pre-wrap max-h-20 overflow-y-auto text-xs"
-                  style={{ minWidth: "200px" }}
-                >
-                  {lead.changeLog && lead.changeLog.length > 0
-                    ? lead.changeLog.join("\n")
-                    : "No log entries."}
-                </div>
-              </td>
-              <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button
-                  onClick={() => onRestoreLead(lead.id)}
-                  className="text-green-600 hover:text-green-900 mr-2 p-1 rounded-md hover:bg-green-50 transition-colors"
-                  title="Restore Lead"
-                >
-                  <ArrowUturnLeftIcon className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => onPermanentDelete(lead.id)}
-                  className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
-                  title="Permanently Delete"
-                >
-                  <TrashIcon className="h-5 w-5" />
-                </button>
-              </td>
-            </tr>
+            <LeadRow
+              key={lead.id}
+              lead={lead}
+              statusOptions={statusOptions}
+              getStatusClasses={getStatusClasses}
+              onStatusChange={onStatusChange}
+              onRemarkChange={onRemarkChange}
+              onRecentCallChange={onRecentCallChange}
+              onNextCallChange={onNextCallChange}
+              onPermanentDelete={onPermanentDelete}
+              onRestoreLead={onRestoreLead}
+            />
           ))}
         </tbody>
       </table>
     </div>
+  );
+};
+
+// New sub-component for each lead row to manage its own "show more" state
+const LeadRow = ({
+  lead,
+  statusOptions,
+  getStatusClasses,
+  onStatusChange,
+  onRemarkChange,
+  onRecentCallChange,
+  onNextCallChange,
+  onPermanentDelete,
+  onRestoreLead,
+}) => {
+  const [showAllLogs, setShowAllLogs] = useState(false);
+
+  const displayedLogs = showAllLogs
+    ? lead.changeLog
+    : (lead.changeLog || []).slice(0, 4);
+
+  return (
+    <tr key={lead.id} className="hover:bg-gray-50">
+      <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+        {lead.student_name}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.parents_name || "N/A"}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.email}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.phone_number}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.whatsapp_number}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.age || "N/A"}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.grade || "N/A"}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.source}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.course_name}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.class_type}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.shift}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.previous_coding_experience}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        <input
+          type="date"
+          value={getFormattedDate(lead.last_call)}
+          onChange={(e) => onRecentCallChange(lead.id, e.target.value)}
+          className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
+        />
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        <input
+          type="date"
+          value={getFormattedDate(lead.next_call)}
+          onChange={(e) => onNextCallChange(lead.id, e.target.value)}
+          className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
+        />
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+        {lead.device || "N/A"}
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-sm">
+        <select
+          value={lead.status}
+          onChange={(e) => onStatusChange(lead.id, e.target.value)}
+          className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
+            lead.status
+          )}`}
+          style={{ minWidth: "100px" }}
+        >
+          {statusOptions.map((option) => (
+            <option
+              key={option}
+              value={option}
+              className={`${getStatusClasses(option)}`}
+            >
+              {option}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-3 py-4 text-sm text-gray-700">
+        <textarea
+          value={lead.remarks || ""}
+          onBlur={(e) => onRemarkChange(lead.id, e.target.value)} // Updated to onBlur
+          rows="2"
+          className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
+          style={{ minWidth: "150px" }}
+        ></textarea>
+      </td>
+      <td className="px-3 py-4 text-sm text-gray-700">
+        <div
+          className="max-h-20 overflow-y-auto text-xs"
+          style={{ minWidth: "200px" }}
+        >
+          {displayedLogs.length > 0
+            ? displayedLogs.map((log, index) => (
+                <div
+                  key={index}
+                  className={`p-1 my-1 rounded-md ${getRoleBadgeClasses(
+                    log.updaterRole
+                  )}`}
+                >
+                  <div className="font-semibold text-gray-900">
+                    {log.message}
+                  </div>
+                  <div className="text-gray-700 text-xs flex items-center">
+                    <ClockIcon className="h-3 w-3 mr-1 text-gray-500" />
+                    {formatLogTimestamp(log.timestamp)} by{" "}
+                    <span className="font-medium ml-1">{log.updaterName}</span>{" "}
+                    (<span className="font-medium">{log.updaterRole}</span>)
+                  </div>
+                </div>
+              ))
+            : "No log entries."}
+          {(lead.changeLog || []).length > 4 && (
+            <button
+              onClick={() => setShowAllLogs(!showAllLogs)}
+              className="text-blue-600 hover:text-blue-800 text-xs mt-1"
+            >
+              {showAllLogs ? "Show Less" : "Show More"}
+            </button>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+        <button
+          onClick={() => onRestoreLead(lead.id)}
+          className="text-green-600 hover:text-green-900 mr-2 p-1 rounded-md hover:bg-green-50 transition-colors"
+          title="Restore Lead"
+        >
+          <ArrowUturnLeftIcon className="h-5 w-5" />
+        </button>
+        <button
+          onClick={() => onPermanentDelete(lead.id)}
+          className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
+          title="Permanently Delete"
+        >
+          <TrashIcon className="h-5 w-5" />
+        </button>
+      </td>
+    </tr>
   );
 };
 

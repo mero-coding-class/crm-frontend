@@ -77,6 +77,7 @@ const leadService = {
       device: lead.device || "",
       previousCodingExp: lead.previous_coding_experience || "",
       workshopBatch: lead.workshop_batch || "",
+      changeLog: lead.change_log || [],
     }));
   },
 
@@ -114,7 +115,7 @@ const leadService = {
       backendUpdates.phone_number = updates.phone;
     if (updates.contactWhatsapp !== undefined)
       backendUpdates.whatsapp_number = updates.contactWhatsapp;
-    if (updates.course !== undefined) backendUpdates.course = updates.course; // `course` here should be the course_name
+    if (updates.course !== undefined) backendUpdates.course = updates.course;
     if (updates.source !== undefined) backendUpdates.source = updates.source;
     if (updates.classType !== undefined)
       backendUpdates.class_type = updates.classType;
@@ -128,6 +129,8 @@ const leadService = {
       backendUpdates.previous_coding_experience = updates.previousCodingExp;
     if (updates.workshopBatch !== undefined)
       backendUpdates.workshop_batch = updates.workshopBatch;
+    if (updates.changeLog !== undefined)
+      backendUpdates.change_log = updates.changeLog;
 
     const response = await fetch(
       `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
@@ -156,7 +159,7 @@ const leadService = {
   },
 };
 
-// New service for fetching change logs of individual leads
+// Services are simplified or removed as the backend will handle these actions
 const changeLogService = {
   getLeadLogs: async (leadId, authToken) => {
     if (!authToken) {
@@ -185,51 +188,7 @@ const changeLogService = {
       throw new Error(errorMsg);
     }
     const logs = await response.json();
-    // Sort logs by timestamp in descending order (most recent first)
     return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  },
-};
-
-// New service for enrollments
-const enrollmentService = {
-  createEnrollment: async (enrollmentData, authToken) => {
-    if (!authToken) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-    const response = await fetch(
-      "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(enrollmentData),
-        credentials: "include",
-      }
-    );
-
-    if (!response.ok) {
-      let errorMsg = "Failed to create enrollment";
-      try {
-        const errData = await response.json();
-        // Attempt to extract specific error messages from the backend
-        if (errData.detail) {
-          errorMsg = errData.detail;
-        } else if (
-          typeof errData === "object" &&
-          Object.keys(errData).length > 0
-        ) {
-          // If a general object with errors, stringify it
-          errorMsg = JSON.stringify(errData);
-        }
-      } catch (e) {
-        // If JSON parsing fails, use the raw response text if available
-        errorMsg = await response.text();
-      }
-      throw new Error(errorMsg);
-    }
-    return await response.json();
   },
 };
 
@@ -299,7 +258,7 @@ const Leads = () => {
     "Interested",
     "inProgress",
     "Active",
-    "Converted", // Important: Keep Converted here for selection
+    "Converted",
     "Lost",
     "Junk",
   ];
@@ -344,24 +303,18 @@ const Leads = () => {
     setLoading(true);
     setError(null);
 
-    leadService
-      .getLeads(authToken)
-      .then((data) => {
-        setAllLeads(data);
+    Promise.all([
+      leadService.getLeads(authToken),
+      courseService.getCourses(authToken),
+    ])
+      .then(([leadsData, coursesData]) => {
+        setAllLeads(leadsData);
+        setCourses(coursesData);
         setLoading(false);
       })
       .catch((err) => {
-        setError(err.message || "Failed to fetch leads");
+        setError(err.message || "Failed to fetch data");
         setLoading(false);
-      });
-
-    courseService
-      .getCourses(authToken)
-      .then((data) => {
-        setCourses(data);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch courses:", err.message);
       });
   }, [authToken]);
 
@@ -377,7 +330,6 @@ const Leads = () => {
     async (newLeadData) => {
       console.log("Adding new lead:", newLeadData);
       try {
-        // Find the course ID from the courses array using the course_name
         const selectedCourse = courses.find(
           (c) => c.course_name === newLeadData.course
         );
@@ -398,7 +350,7 @@ const Leads = () => {
           device: newLeadData.device || "",
           status: newLeadData.status || "New",
           remarks: newLeadData.remarks || "",
-          course: courseId, // <--- CHANGED HERE: Send courseId to backend
+          course: courseId,
           value: newLeadData.value || "",
           adset_name: newLeadData.adsetName || "",
           payment_type: newLeadData.paymentType || "",
@@ -408,6 +360,7 @@ const Leads = () => {
           city: newLeadData.city || "",
           county: newLeadData.county || "",
           post_code: newLeadData.postCode || "",
+          change_log: [],
         };
 
         const response = await fetch(
@@ -440,7 +393,7 @@ const Leads = () => {
           contactWhatsapp: newLead.whatsapp_number || "",
           age: newLead.age || "",
           grade: newLead.grade || "",
-          course: newLead.course_name || "", // Use course_name from backend for new leads
+          course: newLead.course_name || "",
           source: newLead.source || "",
           addDate: newLead.add_date || "",
           recentCall: newLead.last_call || "",
@@ -468,7 +421,7 @@ const Leads = () => {
         setError(err.message || "Failed to create lead");
       }
     },
-    [authToken, handleCloseAddModal, courses] // Added courses to dependencies
+    [authToken, handleCloseAddModal, courses]
   );
 
   const handleEdit = useCallback((lead) => {
@@ -483,9 +436,7 @@ const Leads = () => {
 
   const handleSaveEdit = useCallback(
     async (updatedLead) => {
-      console.log("Saving edited lead from modal:", updatedLead);
       try {
-        // Prepare updates for the backend (mapping frontend to backend field names)
         const backendUpdates = {
           student_name: updatedLead.studentName,
           parents_name: updatedLead.parentsName,
@@ -494,7 +445,6 @@ const Leads = () => {
           whatsapp_number: updatedLead.contactWhatsapp,
           age: updatedLead.age,
           grade: updatedLead.grade,
-          // Find course ID for update operations as well if backend expects ID
           course:
             courses.find((c) => c.course_name === updatedLead.course)?.id ||
             null,
@@ -516,6 +466,7 @@ const Leads = () => {
           device: updatedLead.device,
           previous_coding_experience: updatedLead.previousCodingExp,
           workshop_batch: updatedLead.workshopBatch,
+          change_log: updatedLead.changeLog,
         };
 
         await leadService.updateLead(
@@ -533,71 +484,34 @@ const Leads = () => {
         setError(err.message || "Failed to update lead");
       }
     },
-    [authToken, handleCloseEditModal, courses] // Added courses to dependencies
+    [authToken, handleCloseEditModal, courses]
   );
 
   const updateLeadField = useCallback(
     async (leadId, fieldName, newValue) => {
       try {
-        const originalLead = allLeads.find((lead) => lead._id === leadId);
-        if (!originalLead) return;
-
-        // If status is changed to "Converted", create enrollment first
-        if (fieldName === "status" && newValue === "Converted") {
-          // Ensure we send course_name for enrollment if that's what backend expects
-          const enrollmentPayload = {
-            lead: parseInt(leadId, 10), // Link back to the lead ID
-            student_name: originalLead.studentName || "",
-            parents_name: originalLead.parentsName || "",
-            email: originalLead.email || "",
-            phone_number: originalLead.phone || "",
-            course_name: originalLead.course || "", // Use course name from lead for enrollment
-
-            // Initialize payment fields to default values
-            total_payment: 0.0,
-            first_installment: 0.0,
-            second_installment: 0.0,
-            third_installment: 0.0,
-            last_pay_date: null, // Default to null, can be updated later
-            payment_completed: false,
-
-            // Include other relevant fields from the lead for a comprehensive enrollment record
-            address_line_1: originalLead.permanentAddress || "",
-            address_line_2: originalLead.temporaryAddress || "",
-            city: originalLead.city || "",
-            county: originalLead.county || "",
-            post_code: originalLead.postCode || "",
-            class_type: originalLead.classType || "",
-            shift: originalLead.shift || "",
-            device: originalLead.device || "",
-            previous_coding_experience: originalLead.previousCodingExp || "",
-            workshop_batch: originalLead.workshopBatch || "",
-          };
-
-          try {
-            await enrollmentService.createEnrollment(
-              enrollmentPayload,
-              authToken
-            );
-            console.log(`Lead ${leadId} successfully enrolled.`);
-            // After successful enrollment, update the lead's status
-            await leadService.updateLead(
-              leadId,
-              { [fieldName]: newValue },
-              authToken
-            );
-            // Remove the lead from the local state
-            setAllLeads((prevLeads) =>
-              prevLeads.filter((lead) => lead._id !== leadId)
-            );
-            return; // Exit after processing conversion
-          } catch (enrollmentError) {
-            setError(`Failed to enroll student: ${enrollmentError.message}`);
-            return; // Prevent further execution if enrollment fails
-          }
+        // If the status is being changed to 'Converted', 'Lost', or 'Junk',
+        // we'll send a single PATCH request to the lead endpoint.
+        // The backend will handle the subsequent enrollment/trashing.
+        if (
+          fieldName === "status" &&
+          (newValue === "Converted" ||
+            newValue === "Lost" ||
+            newValue === "Junk")
+        ) {
+          await leadService.updateLead(
+            leadId,
+            { [fieldName]: newValue },
+            authToken
+          );
+          // If the update is successful, remove the lead from the local state
+          setAllLeads((prevLeads) =>
+            prevLeads.filter((lead) => lead._id !== leadId)
+          );
+          return; // Exit after processing the status change
         }
 
-        // For other status changes or field updates (also need to map course_name to course_id if course is being updated)
+        // For all other field updates (that are not status changes)
         const updatesToSend = { [fieldName]: newValue };
         if (fieldName === "course") {
           const selectedCourse = courses.find(
@@ -608,6 +522,7 @@ const Leads = () => {
 
         await leadService.updateLead(leadId, updatesToSend, authToken);
 
+        // Update the local state with the new value
         setAllLeads((prevLeads) =>
           prevLeads.map((lead) => {
             if (lead._id === leadId) {
@@ -622,7 +537,7 @@ const Leads = () => {
         setError(err.message || `Failed to update ${fieldName}`);
       }
     },
-    [authToken, allLeads, courses] // Added courses to dependencies
+    [authToken, allLeads, courses]
   );
 
   const handleStatusChange = useCallback(
@@ -722,11 +637,12 @@ const Leads = () => {
     async (leadId) => {
       if (window.confirm("Are you sure you want to move this lead to trash?")) {
         try {
+          // Send a PATCH request to change the status to "Junk"
+          // The backend will handle the actual move to trash.
           await leadService.updateLead(leadId, { status: "Junk" }, authToken);
+          // Remove from local state after successful API call
           setAllLeads((prevLeads) =>
-            prevLeads.map((lead) =>
-              lead._id === leadId ? { ...lead, status: "Junk" } : lead
-            )
+            prevLeads.filter((lead) => lead._id !== leadId)
           );
         } catch (err) {
           setError(err.message || "Failed to move lead to trash");
@@ -933,7 +849,7 @@ const Leads = () => {
               type="date"
               value={filterLastCall}
               onChange={(e) => setFilterLastCall(e.target.value)}
-              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
+              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
           <div className="relative w-full sm:w-auto">
@@ -995,30 +911,20 @@ const Leads = () => {
         </div>
       )}
 
-      <div className="bg-white p-6 rounded-lg shadow-md">
+      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         {error ? (
-          <div className="text-red-500 text-center p-4">
-            <p>Error: {error}</p>
-            <button
-              onClick={handleRefresh}
-              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Retry
-            </button>
-          </div>
+          <div className="text-red-500 text-center">{error}</div>
         ) : (
           <LeadTableDisplay
             leads={displayedLeads}
             handleEdit={handleEdit}
-            handleDelete={handleDelete}
             onStatusChange={handleStatusChange}
             onRemarkChange={handleRemarkChange}
             onRecentCallChange={handleRecentCallChange}
             onNextCallChange={handleNextCallChange}
+            onDelete={handleDelete}
             onAgeChange={handleAgeChange}
             onGradeChange={handleGradeChange}
-            authToken={authToken}
-            changeLogService={changeLogService}
           />
         )}
       </div>
@@ -1031,7 +937,6 @@ const Leads = () => {
           courses={courses}
         />
       )}
-
       {isAddModalOpen && (
         <AddLeadModal
           onClose={handleCloseAddModal}

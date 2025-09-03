@@ -1,20 +1,20 @@
-import React, { useState, useRef, useEffect } from "react";
+// src/components/AddLeadModal.jsx
+
+import React, { useState, useRef } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
 // Helper function to get current date in YYYY-MM-DD format
 const getTodayDate = () => {
   const today = new Date();
   const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+  const month = String(today.getMonth() + 1).padStart(2, "0");
   const day = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
-// AddLeadModal component now accepts a 'courses' prop
-const AddLeadModal = ({ onClose, onSave, courses }) => {
-  // Initial state for a new, empty lead
+const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
   const [formData, setFormData] = useState({
-    _id: `new-${Date.now()}`, // Generate a unique ID for mock data
+    _id: `new-${Date.now()}`,
     studentName: "",
     parentsName: "",
     email: "",
@@ -22,27 +22,25 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     age: "",
     grade: "",
     contactWhatsapp: "",
-    course: "", // Default to empty string for dynamic courses
-    source: "", // Changed default from "Select" to ""
+    course: "",
+    source: "",
     recentCall: "",
     nextCall: "",
     status: "New",
-    // Removed 'address' field - using permanentAddress and temporaryAddress
-    permanentAddress: "", // Renamed from addressLine1
-    temporaryAddress: "", // Renamed from addressLine2
+    permanentAddress: "",
+    temporaryAddress: "",
     city: "",
     county: "",
     postCode: "",
-    classType: "", // Changed default from "Select" to ""
+    classType: "",
     value: "",
     adsetName: "",
     remarks: "",
-    shift: "", // Changed default from "Select" to ""
-    paymentType: "", // Changed default from "Select" to ""
-    device: "", // Changed default from "Select" to ""
-    invoice: [], // Not used in parent API call, but kept for consistency
-    // Removed courseType from formData initial state
-    previousCodingExp: "", // Changed default from "Select" to ""
+    shift: "",
+    paymentType: "",
+    device: "",
+    invoice: [],
+    previousCodingExp: "",
     workshopBatch: "",
     addDate: getTodayDate(),
   });
@@ -71,7 +69,7 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     onSave(formData);
   };
 
-  // Dropdown options (courseOptions will now come from props)
+  // Dropdown options
   const statusOptions = [
     "New",
     "Open",
@@ -84,9 +82,8 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Lost",
     "Junk",
   ];
-  // Removed hardcoded courseOptions array here, now using the 'courses' prop directly.
   const sourceOptions = [
-    "Select", // Keep "Select" as an option, but default `formData.source` to ""
+    "Select",
     "WhatsApp/Viber",
     "Facebook",
     "Website",
@@ -94,9 +91,9 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Office Visit",
     "Direct call",
   ];
-  const classTypeOptions = ["Select", "Physical", "Online"]; // Keep "Select" as an option
+  const classTypeOptions = ["Select", "Physical", "Online"];
   const shiftOptions = [
-    "Select", // Changed "Shift" to "Select" as placeholder
+    "Select",
     "7 A.M. - 9 A.M.",
     "8 A.M. - 10 A.M.",
     "10 A.M. - 12 P.M.",
@@ -111,7 +108,6 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "6 P.M. - 8 P.M.",
     "7 P.M. - 8 P.M.",
   ];
-  // Removed courseTypeOptions array
   const paymentTypeOptions = [
     "Select",
     "Cash",
@@ -120,7 +116,7 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Cheque",
   ];
   const previousCodingExpOptions = [
-    "Select", // Changed "CodingExp" to "Select" as placeholder
+    "Select",
     "None",
     "Basic Python",
     "Intermediate C++",
@@ -130,7 +126,7 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
     "Basic Java",
     "Other",
   ];
-  const deviceOptions = ["Select", "Yes", "No"]; // Changed "Device" to "Select" as placeholder
+  const deviceOptions = ["Select", "Yes", "No"];
 
   return (
     <div
@@ -340,8 +336,7 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              <option value="">Select a course</option>{" "}
-              {/* Added a default placeholder */}
+              <option value="">Select a course</option>
               {courses.map((course) => (
                 <option key={course.id} value={course.course_name}>
                   {course.course_name}
@@ -367,8 +362,6 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             >
               {sourceOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
-                  {" "}
-                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -428,8 +421,6 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             >
               {classTypeOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
-                  {" "}
-                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -489,15 +480,11 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             >
               {shiftOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
-                  {" "}
-                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
             </select>
           </div>
-
-          {/* Removed Course Type section */}
 
           {/* Payment Type */}
           <div>
@@ -516,8 +503,6 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             >
               {paymentTypeOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
-                  {" "}
-                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -540,8 +525,6 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             >
               {deviceOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
-                  {" "}
-                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -565,8 +548,6 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             >
               {previousCodingExpOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
-                  {" "}
-                  {/* Handle "Select" as empty string */}
                   {option}
                 </option>
               ))}
@@ -623,8 +604,8 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             <input
               type="text"
               id="permanentAddress"
-              name="permanentAddress" // Renamed
-              value={formData.permanentAddress} // Renamed
+              name="permanentAddress"
+              value={formData.permanentAddress}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -639,8 +620,8 @@ const AddLeadModal = ({ onClose, onSave, courses }) => {
             <input
               type="text"
               id="temporaryAddress"
-              name="temporaryAddress" // Renamed
-              value={formData.temporaryAddress} // Renamed
+              name="temporaryAddress"
+              value={formData.temporaryAddress}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
