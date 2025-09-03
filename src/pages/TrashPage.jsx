@@ -1,18 +1,18 @@
+// src/pages/TrashPage.jsx
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import TrashTableDisplay from "../components/TrashDisplayTable.jsx"; // Explicitly added .jsx extension
-import LeadEditModal from "../components/LeadEditModal.jsx"; // Explicitly added .jsx extension
+import TrashTableDisplay from "../components/TrashDisplayTable.jsx";
+import LeadEditModal from "../components/LeadEditModal.jsx";
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
-import axios from "axios";
+import { trashService, leadService } from "../services/api.js";
 
 const TrashPage = () => {
-  // Use the useAuth hook to get the authToken
-  const { authToken } = useAuth();
-
+  const { authToken, currentUser } = useAuth();
   const [allLeads, setAllLeads] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,10 +22,8 @@ const TrashPage = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
-
-  const [filterAge, setFilterAge] = useState(""); // Separated from grade
-  const [filterGrade, setFilterGrade] = useState(""); // Separated from age
-
+  const [filterAge, setFilterAge] = useState("");
+  const [filterGrade, setFilterGrade] = useState("");
   const [filterLastCall, setFilterLastCall] = useState("");
   const [filterClassType, setFilterClassType] = useState("All");
   const [filterShift, setFilterShift] = useState("All");
@@ -33,16 +31,10 @@ const TrashPage = () => {
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("All");
   const [showFilters, setShowFilters] = useState(false);
 
-  const statusOptions = [
-    "All",
-    "Closed",
-    "Lost",
-    "Junk",
-    // Add other statuses if you want to filter them too
-  ];
+  const statusOptions = ["All", "Lost", "Junk"];
   const classTypeOptions = ["All", "Online", "Physical", "Class"];
   const shiftOptions = [
-    "Shift",
+    "All",
     "7 A.M. - 9 A.M.",
     "8 A.M. - 10 A.M.",
     "10 A.M. - 12 P.M.",
@@ -57,13 +49,9 @@ const TrashPage = () => {
     "6 P.M. - 8 P.M.",
     "7 P.M. - 8 P.M.",
   ];
-  const deviceOptions = [
-    "Device", // Changed "All" to "Device"
-    "Yes",
-    "No",
-  ];
+  const deviceOptions = ["All", "Yes", "No"];
   const previousCodingExpOptions = [
-    "CodingExp",
+    "All",
     "None",
     "Basic Python",
     "Intermediate C++",
@@ -73,22 +61,18 @@ const TrashPage = () => {
     "Basic Java",
     "Other",
   ];
+
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(
-        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
-        {
-          headers: {
-            Authorization: `Token ${authToken}`,
-          },
-        }
-      );
-      setAllLeads(response.data);
+      const data = await trashService.getTrashedLeads(authToken);
+      setAllLeads(data);
     } catch (err) {
-      console.error("Failed to fetch leads from trash:", err.response || err);
-      setError("Failed to load trashed leads. Please try again.");
+      console.error("Failed to fetch leads from trash:", err);
+      setError(
+        err.message || "Failed to load trashed leads. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -112,25 +96,48 @@ const TrashPage = () => {
 
   const handleSaveEdit = useCallback(
     async (updatedLead) => {
+      const backendUpdates = {
+        student_name: updatedLead.studentName,
+        parents_name: updatedLead.parentsName,
+        email: updatedLead.email,
+        phone_number: updatedLead.phone,
+        whatsapp_number: updatedLead.contactWhatsapp,
+        age: updatedLead.age,
+        grade: updatedLead.grade,
+        course: updatedLead.course,
+        source: updatedLead.source,
+        last_call: updatedLead.recentCall,
+        next_call: updatedLead.nextCall,
+        status: updatedLead.status,
+        address_line_1: updatedLead.permanentAddress,
+        address_line_2: updatedLead.temporaryAddress,
+        city: updatedLead.city,
+        county: updatedLead.county,
+        post_code: updatedLead.postCode,
+        class_type: updatedLead.classType,
+        value: updatedLead.value,
+        adset_name: updatedLead.adsetName,
+        remarks: updatedLead.remarks,
+        shift: updatedLead.shift,
+        payment_type: updatedLead.paymentType,
+        device: updatedLead.device,
+        previous_coding_experience: updatedLead.previousCodingExp,
+        workshop_batch: updatedLead.workshopBatch,
+        add_date: updatedLead.addDate,
+        change_log: updatedLead.changeLog,
+      };
+
       try {
-        await axios.patch(
-          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${updatedLead.id}/`, // Use lead.id
-          updatedLead,
-          {
-            headers: {
-              Authorization: `Token ${authToken}`,
-            },
-          }
-        );
+        await leadService.updateLead(updatedLead.id, backendUpdates, authToken);
         setAllLeads((prevLeads) =>
-          prevLeads.map(
-            (lead) => (lead.id === updatedLead.id ? updatedLead : lead) // Use lead.id
+          prevLeads.map((lead) =>
+            lead.id === updatedLead.id ? { ...updatedLead, id: lead.id } : lead
           )
         );
         handleCloseEditModal();
       } catch (err) {
-        setError("Failed to save changes.");
-        console.error("Error saving edited lead:", err.response || err);
+        setError("Failed to save changes to lead.");
+        console.error("Error saving edited lead:", err);
       }
     },
     [authToken, handleCloseEditModal]
@@ -138,31 +145,21 @@ const TrashPage = () => {
 
   const handlePermanentDeleteLead = useCallback(
     async (id) => {
-      // IMPORTANT: Changed window.confirm to a custom modal or message box
-      // As per instructions, avoid window.confirm or window.alert
-      // For this example, I'll replace it with a console log, but in a real app,
-      // you'd render a modal and handle the confirmation within it.
       console.log(`User wants to permanently delete lead with ID: ${id}`);
-      // if (
-      //   window.confirm(
-      //     "Are you sure you want to permanently delete this lead? This action cannot be undone."
-      //   )
-      // )
-      try {
-        await axios.delete(
-          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
-          {
-            headers: {
-              Authorization: `Token ${authToken}`,
-            },
-          }
-        );
-        setAllLeads(
-          (prevLeads) => prevLeads.filter((lead) => lead.id !== id) // Use lead.id
-        );
-      } catch (err) {
-        setError("Failed to permanently delete lead.");
-        console.error("Error permanently deleting lead:", err.response || err);
+      if (
+        window.confirm(
+          "Are you sure you want to permanently delete this lead? This action cannot be undone."
+        )
+      ) {
+        try {
+          await trashService.deleteTrashedLead(id, authToken);
+          setAllLeads((prevLeads) =>
+            prevLeads.filter((lead) => lead.id !== id)
+          );
+        } catch (err) {
+          setError("Failed to permanently delete lead.");
+          console.error("Error permanently deleting lead:", err);
+        }
       }
     },
     [authToken]
@@ -170,119 +167,142 @@ const TrashPage = () => {
 
   const handleRestoreLead = useCallback(
     async (id) => {
-      // IMPORTANT: Changed window.confirm to a custom modal or message box
       console.log(`User wants to restore lead with ID: ${id}`);
-      // if (
-      //   window.confirm(
-      //     "Are you sure you want to restore this lead? It will be moved back to active leads."
-      //   )
-      // )
-      try {
-        const originalLead = allLeads.find((lead) => lead.id === id); // Use lead.id
-        if (!originalLead) return;
+      if (
+        window.confirm(
+          "Are you sure you want to restore this lead? It will be moved back to active leads."
+        )
+      ) {
+        try {
+          const originalLead = allLeads.find((lead) => lead.id === id);
+          if (!originalLead) return;
 
-        const updatedLog = originalLead.changeLog
-          ? [...originalLead.changeLog]
-          : [];
-        updatedLog.push(
-          `Restored from Trash by User at ${new Date().toLocaleString()}`
-        );
+          const newLogEntry = {
+            timestamp: new Date().toISOString(),
+            updaterName: currentUser?.username || "Unknown User",
+            updaterRole: currentUser?.role || "Guest",
+            message: `Restored from Trash.`,
+          };
 
-        await axios.patch(
-          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
-          {
-            status: "New",
-            changeLog: updatedLog,
-          },
-          {
-            headers: {
-              Authorization: `Token ${authToken}`,
-            },
-          }
-        );
+          const updatedChangeLog = originalLead.changeLog
+            ? [...originalLead.changeLog, newLogEntry]
+            : [newLogEntry];
 
-        setAllLeads(
-          (prevLeads) => prevLeads.filter((lead) => lead.id !== id) // Use lead.id
-        );
-      } catch (err) {
-        setError("Failed to restore lead.");
-        console.error("Error restoring lead:", err.response || err);
+          await leadService.updateLead(
+            id,
+            { status: "New", changeLog: updatedChangeLog },
+            authToken
+          );
+
+          setAllLeads((prevLeads) =>
+            prevLeads.filter((lead) => lead.id !== id)
+          );
+        } catch (err) {
+          setError("Failed to restore lead.");
+          console.error("Error restoring lead:", err);
+        }
       }
     },
-    [allLeads, authToken]
+    [allLeads, authToken, currentUser]
   );
 
   const updateLeadField = useCallback(
-    (leadId, fieldName, newValue) => {
-      const leadToUpdate = allLeads.find((lead) => lead.id === leadId); // Use lead.id
+    async (leadId, fieldName, newValue) => {
+      const leadToUpdate = allLeads.find((lead) => lead.id === leadId);
       if (!leadToUpdate) return;
 
-      const currentDateTime = new Date().toLocaleString();
-      let logEntry = "";
+      const currentTimestamp = new Date().toISOString();
+      let message = "";
+      let fieldKey = fieldName;
 
-      // Log entry generation logic - updated field names
-      if (fieldName === "status" && leadToUpdate.status !== newValue) {
-        logEntry = `Status changed from '${leadToUpdate.status}' to '${newValue}'.`;
-      } else if (fieldName === "remarks" && leadToUpdate.remarks !== newValue) {
-        logEntry = `Remarks updated.`;
-      } else if (
-        fieldName === "last_call" && // Corrected field name
-        leadToUpdate.last_call !== newValue // Corrected field name
-      ) {
-        logEntry = `Last Call date changed from '${leadToUpdate.last_call}' to '${newValue}'.`; // Corrected field name
-      } else if (
-        fieldName === "next_call" && // Corrected field name
-        leadToUpdate.next_call !== newValue // Corrected field name
-      ) {
-        logEntry = `Next Call date changed from '${leadToUpdate.next_call}' to '${newValue}'.`; // Corrected field name
-      } else if (fieldName === "device" && leadToUpdate.device !== newValue) {
-        logEntry = `Device changed from '${leadToUpdate.device}' to '${newValue}'.`;
-      } else if (fieldName === "age" && leadToUpdate.age !== newValue) {
-        logEntry = `Age changed from '${leadToUpdate.age}' to '${newValue}'.`;
-      } else if (fieldName === "grade" && leadToUpdate.grade !== newValue) {
-        logEntry = `Grade changed from '${leadToUpdate.grade}' to '${newValue}'.`;
+      switch (fieldName) {
+        case "status":
+          if (leadToUpdate.status !== newValue) {
+            message = `Status changed from '${leadToUpdate.status}' to '${newValue}'.`;
+          }
+          break;
+        case "remarks":
+          if (leadToUpdate.remarks !== newValue) {
+            message = `Remarks updated.`;
+          }
+          break;
+        case "recentCall":
+          fieldKey = "last_call";
+          if (leadToUpdate.last_call !== newValue) {
+            message = `Last Call date changed from '${
+              leadToUpdate.last_call || "N/A"
+            }' to '${newValue || "N/A"}'.`;
+          }
+          break;
+        case "nextCall":
+          fieldKey = "next_call";
+          if (leadToUpdate.next_call !== newValue) {
+            message = `Next Call date changed from '${
+              leadToUpdate.next_call || "N/A"
+            }' to '${newValue || "N/A"}'.`;
+          }
+          break;
+        case "device":
+          if (leadToUpdate.device !== newValue) {
+            message = `Device changed from '${
+              leadToUpdate.device || "N/A"
+            }' to '${newValue || "N/A"}'.`;
+          }
+          break;
+        case "age":
+          if (leadToUpdate.age !== newValue) {
+            message = `Age changed from '${leadToUpdate.age || "N/A"}' to '${
+              newValue || "N/A"
+            }'.`;
+          }
+          break;
+        case "grade":
+          if (leadToUpdate.grade !== newValue) {
+            message = `Grade changed from '${
+              leadToUpdate.grade || "N/A"
+            }' to '${newValue || "N/A"}'.`;
+          }
+          break;
+        default:
+          if (leadToUpdate[fieldName] !== newValue) {
+            message = `${fieldName} updated.`;
+          }
+          break;
       }
 
-      const updatedChangeLog = [
-        ...(leadToUpdate.changeLog || []),
-        ...(logEntry ? [`${logEntry} (at ${currentDateTime})`] : []),
-      ];
-
-      axios
-        .patch(
-          `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${leadId}/`,
-          {
-            [fieldName]: newValue,
-            changeLog: updatedChangeLog,
-          },
-          {
-            headers: {
-              Authorization: `Token ${authToken}`,
-            },
+      const newLogEntry = message
+        ? {
+            timestamp: currentTimestamp,
+            updaterName: currentUser?.username || "Unknown User",
+            updaterRole: currentUser?.role || "Guest",
+            message: message,
           }
-        )
-        .then(() => {
-          setAllLeads((prevLeads) =>
-            prevLeads.map((lead) =>
-              lead.id === leadId // Use lead.id
-                ? {
-                    ...lead,
-                    [fieldName]: newValue,
-                    changeLog: updatedChangeLog,
-                  }
-                : lead
-            )
-          );
-        })
-        .catch((err) => {
-          console.error(
-            `Error updating ${fieldName} for lead ${leadId}:`,
-            err.response || err
-          );
-          setError(`Failed to update ${fieldName}.`);
-        });
+        : null;
+
+      const updatedChangeLog = newLogEntry
+        ? [...(leadToUpdate.changeLog || []), newLogEntry]
+        : leadToUpdate.changeLog;
+
+      const updatesPayload = { [fieldKey]: newValue };
+      if (newLogEntry) {
+        updatesPayload.changeLog = updatedChangeLog;
+      }
+
+      try {
+        await leadService.updateLead(leadId, updatesPayload, authToken);
+        setAllLeads((prevLeads) =>
+          prevLeads.map((lead) =>
+            lead.id === leadId
+              ? { ...lead, [fieldName]: newValue, changeLog: updatedChangeLog }
+              : lead
+          )
+        );
+      } catch (err) {
+        console.error(`Error updating ${fieldName} for lead ${leadId}:`, err);
+        setError(`Failed to update ${fieldName}.`);
+      }
     },
-    [allLeads, authToken]
+    [allLeads, authToken, currentUser]
   );
 
   const handleRefresh = useCallback(() => {
@@ -292,21 +312,19 @@ const TrashPage = () => {
   const filteredTrashedLeads = useMemo(() => {
     let currentLeads = allLeads;
 
-    // Filter by search term - updated field names
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
       currentLeads = currentLeads.filter(
         (lead) =>
-          (lead.student_name && // Corrected field name
+          (lead.student_name &&
             lead.student_name.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (lead.email &&
             lead.email.toLowerCase().includes(lowerCaseSearchTerm)) ||
           (lead.phone_number &&
-            lead.phone_number.toLowerCase().includes(lowerCaseSearchTerm)) // Corrected field name
+            lead.phone_number.toLowerCase().includes(lowerCaseSearchTerm))
       );
     }
 
-    // Filter by advanced filters - updated field names
     if (filterStatus && filterStatus !== "All") {
       currentLeads = currentLeads.filter(
         (lead) => lead.status === filterStatus
@@ -324,12 +342,12 @@ const TrashPage = () => {
     }
     if (filterLastCall) {
       currentLeads = currentLeads.filter(
-        (lead) => lead.last_call && lead.last_call.startsWith(filterLastCall) // Corrected field name
+        (lead) => lead.last_call && lead.last_call.startsWith(filterLastCall)
       );
     }
     if (filterClassType && filterClassType !== "All") {
       currentLeads = currentLeads.filter(
-        (lead) => lead.class_type === filterClassType // Corrected field name
+        (lead) => lead.class_type === filterClassType
       );
     }
     if (filterShift && filterShift !== "All") {
@@ -342,7 +360,7 @@ const TrashPage = () => {
     }
     if (filterPrevCodingExp && filterPrevCodingExp !== "All") {
       currentLeads = currentLeads.filter(
-        (lead) => lead.previous_coding_experience === filterPrevCodingExp // Corrected field name
+        (lead) => lead.previous_coding_experience === filterPrevCodingExp
       );
     }
 
@@ -520,11 +538,11 @@ const TrashPage = () => {
             onRemarkChange={(leadId, newRemark) =>
               updateLeadField(leadId, "remarks", newRemark)
             }
-            onRecentCallChange={
-              (leadId, newDate) => updateLeadField(leadId, "last_call", newDate) // Corrected field name
+            onRecentCallChange={(leadId, newDate) =>
+              updateLeadField(leadId, "recentCall", newDate)
             }
-            onNextCallChange={
-              (leadId, newDate) => updateLeadField(leadId, "next_call", newDate) // Corrected field name
+            onNextCallChange={(leadId, newDate) =>
+              updateLeadField(leadId, "nextCall", newDate)
             }
           />
         )}

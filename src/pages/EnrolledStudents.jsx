@@ -1,13 +1,14 @@
-import React, { useContext, useState, useEffect, useMemo } from "react";
+// src/pages/EnrolledStudents.jsx
 
-import Loader from "../components/common/Loader"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
-import { useAuth } from "../context/AuthContext.jsx"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
-import EnrolledStudentsTable from "../components/EnrolledStudentsTable"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
-import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal"; // <<<-- VERIFY THIS PATH ON YOUR SYSTEM
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Loader from "../components/common/Loader";
+import { useAuth } from "../context/AuthContext.jsx";
+import EnrolledStudentsTable from "../components/EnrolledStudentsTable";
+import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal";
+import { BASE_URL } from "../config"; // Import the BASE_URL
 
 const EnrolledStudents = () => {
-  // Use the useAuth hook to get the authToken
-  const { authToken } = useAuth(); // <<<-- Using useAuth hook
+  const { authToken } = useAuth();
   const [allStudents, setAllStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,42 +20,40 @@ const EnrolledStudents = () => {
   const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
   const [filterPaymentCompleted, setFilterPaymentCompleted] = useState(false);
 
-  useEffect(() => {
-    const fetchEnrolledStudents = async () => {
-      setLoading(true);
-      setError(null);
+  // Refactored fetch function to use useCallback
+  const fetchEnrolledStudents = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const response = await fetch(
-          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Token ${authToken}`,
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
-          }
-        );
+    try {
+      const response = await fetch(`${BASE_URL}/enrollments/`, {
+        method: "GET",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setAllStudents(data);
-      } catch (err) {
-        console.error("Failed to fetch enrolled students:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
 
+      const data = await response.json();
+      setAllStudents(data);
+    } catch (err) {
+      console.error("Failed to fetch enrolled students:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken]);
+
+  useEffect(() => {
     if (authToken) {
       fetchEnrolledStudents();
     }
-  }, [authToken]);
+  }, [authToken, fetchEnrolledStudents]);
 
   const enrolledStudents = useMemo(() => {
     let filteredStudents = allStudents;
@@ -64,7 +63,8 @@ const EnrolledStudents = () => {
       filteredStudents = filteredStudents.filter(
         (student) =>
           student.student_name.toLowerCase().includes(lowerCaseQuery) ||
-          student.email.toLowerCase().includes(lowerCaseQuery)
+          (student.email &&
+            student.email.toLowerCase().includes(lowerCaseQuery))
       );
     }
 
@@ -83,132 +83,173 @@ const EnrolledStudents = () => {
     return filteredStudents;
   }, [allStudents, searchQuery, searchLastPaymentDate, filterPaymentCompleted]);
 
-  const handleEdit = (studentToEdit) => {
+  const handleEdit = useCallback((studentToEdit) => {
     setEditingStudent(studentToEdit);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
     setEditingStudent(null);
-  };
+  }, []);
 
-  const handleSaveEdit = async (updatedStudent) => {
-    setLoading(true);
-    try {
-      const url = `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/${updatedStudent.id}/`;
-      const payload = {
-        student_name: updatedStudent.student_name,
-        parents_name: updatedStudent.parents_name,
-        email: updatedStudent.email,
-        phone_number: updatedStudent.phone_number,
-        course_name: updatedStudent.course_name,
-        total_payment: updatedStudent.total_payment,
-        first_installment: updatedStudent.first_installment,
-        second_installment: updatedStudent.second_installment,
-        third_installment: updatedStudent.third_installment,
-        last_pay_date: updatedStudent.last_pay_date,
-        payment_completed: updatedStudent.payment_completed,
-      };
+  const handleSaveEdit = useCallback(
+    async (updatedStudent) => {
+      setLoading(true);
+      try {
+        const url = `${BASE_URL}/enrollments/${updatedStudent.id}/`;
 
-      const response = await fetch(url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${authToken}`,
-        },
-        body: JSON.stringify(payload),
-        credentials: "include",
-      });
+        const oldStudent = allStudents.find((s) => s.id === updatedStudent.id);
 
-      if (!response.ok) {
-        throw new Error(`Failed to update student: ${response.statusText}`);
-      }
+        const hasNewPayment =
+          (updatedStudent.first_installment &&
+            updatedStudent.first_installment !==
+              oldStudent.first_installment) ||
+          (updatedStudent.second_installment &&
+            updatedStudent.second_installment !==
+              oldStudent.second_installment) ||
+          (updatedStudent.third_installment &&
+            updatedStudent.third_installment !== oldStudent.third_installment);
 
-      const updatedData = await response.json();
-      setAllStudents((prevStudents) =>
-        prevStudents.map((student) =>
-          student.id === updatedData.id ? updatedData : student
-        )
-      );
-      handleCloseModal();
-    } catch (err) {
-      console.error("Error saving updated student:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        let lastPayDate = updatedStudent.last_pay_date;
+        if (hasNewPayment) {
+          const today = new Date();
+          lastPayDate =
+            today.getFullYear() +
+            "-" +
+            String(today.getMonth() + 1).padStart(2, "0") +
+            "-" +
+            String(today.getDate()).padStart(2, "0");
+        }
 
-  const handleDelete = async (studentId) => {
-    setLoading(true);
-    try {
-      const url = `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/${studentId}/`;
-      const response = await fetch(url, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Token ${authToken}`,
-        },
-        credentials: "include",
-      });
+        const payload = {
+          student_name: updatedStudent.student_name,
+          parents_name: updatedStudent.parents_name,
+          email: updatedStudent.email,
+          phone_number: updatedStudent.phone_number,
+          course_name: updatedStudent.course_name,
+          total_payment: updatedStudent.total_payment,
+          first_installment: updatedStudent.first_installment,
+          second_installment: updatedStudent.second_installment,
+          third_installment: updatedStudent.third_installment,
+          last_pay_date: lastPayDate,
+          payment_completed: updatedStudent.payment_completed,
+        };
 
-      if (!response.ok) {
-        throw new Error(`Failed to delete student: ${response.statusText}`);
-      }
+        const response = await fetch(url, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Token ${authToken}`,
+          },
+          body: JSON.stringify(payload),
+          credentials: "include",
+        });
 
-      setAllStudents((prevStudents) =>
-        prevStudents.filter((student) => student.id !== studentId)
-      );
-    } catch (err) {
-      console.error("Error deleting student:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            `Failed to update student: ${
+              errorData.detail || response.statusText
+            }`
+          );
+        }
 
-  const handleUpdatePaymentStatus = async (studentId, newStatusBoolean) => {
-    setLoading(true);
-    try {
-      const url = `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/${studentId}/`;
-      const payload = {
-        payment_completed: newStatusBoolean,
-      };
-
-      const response = await fetch(url, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${authToken}`,
-        },
-        body: JSON.stringify(payload),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to update payment status: ${response.statusText}`
+        const updatedData = await response.json();
+        setAllStudents((prevStudents) =>
+          prevStudents.map((student) =>
+            student.id === updatedData.id ? updatedData : student
+          )
         );
+        handleCloseModal();
+      } catch (err) {
+        console.error("Error saving updated student:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
+    },
+    [allStudents, authToken, handleCloseModal]
+  );
 
-      const updatedData = await response.json();
-      setAllStudents((prevStudents) =>
-        prevStudents.map((student) =>
-          student.id === updatedData.id ? updatedData : student
-        )
-      );
-      console.log(
-        `Student ${studentId} payment status updated to: ${
-          newStatusBoolean ? "Yes" : "No"
-        }`
-      );
-    } catch (err) {
-      console.error("Error updating payment status:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleDelete = useCallback(
+    async (studentId) => {
+      setLoading(true);
+      try {
+        const url = `${BASE_URL}/enrollments/${studentId}/`;
+        const response = await fetch(url, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Token ${authToken}`,
+          },
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to delete student: ${response.statusText}`);
+        }
+
+        setAllStudents((prevStudents) =>
+          prevStudents.filter((student) => student.id !== studentId)
+        );
+      } catch (err) {
+        console.error("Error deleting student:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken]
+  );
+
+  const handleUpdatePaymentStatus = useCallback(
+    async (studentId, newStatusBoolean) => {
+      setLoading(true);
+      try {
+        const url = `${BASE_URL}/enrollments/${studentId}/`;
+        const payload = {
+          payment_completed: newStatusBoolean,
+        };
+
+        const response = await fetch(url, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Token ${authToken}`,
+          },
+          body: JSON.stringify(payload),
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            `Failed to update payment status: ${
+              errorData.detail || response.statusText
+            }`
+          );
+        }
+
+        const updatedData = await response.json();
+        setAllStudents((prevStudents) =>
+          prevStudents.map((student) =>
+            student.id === updatedData.id ? updatedData : student
+          )
+        );
+        console.log(
+          `Student ${studentId} payment status updated to: ${
+            newStatusBoolean ? "Yes" : "No"
+          }`
+        );
+      } catch (err) {
+        console.error("Error updating payment status:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken]
+  );
 
   if (loading) {
     return <Loader />;

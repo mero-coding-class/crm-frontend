@@ -19,7 +19,6 @@ const EnrolledStudentsTable = ({
     );
   }
 
-  // Helper function to format dates for display or return "N/A"
   const formatDisplayDate = (dateString) => {
     if (!dateString) {
       return "N/A";

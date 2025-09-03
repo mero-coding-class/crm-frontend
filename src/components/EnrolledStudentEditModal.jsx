@@ -4,104 +4,86 @@ import {
   DocumentArrowDownIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-// Assuming courseOptions is correctly imported and available
-import { courseOptions } from "../constants/leadOptions";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
-  // Initialize formData with ALL properties from the student prop.
-  // This is CRUCIAL for preserving data that is not directly edited in the modal.
-  // Use optional chaining (`student?.propertyName`) for safety.
+  const { authToken } = useAuth();
+  const [courseOptions, setCourseOptions] = useState([]);
   const [formData, setFormData] = useState({
-    // Fields that are explicitly editable or commonly displayed in the modal
-    studentName: student?.studentName || "",
-    parentsName: student?.parentsName || "",
+    ...student,
+    student_name: student?.student_name || "",
+    parents_name: student?.parents_name || "",
     email: student?.email || "",
-    phone: student?.phone || "",
-    course: student?.course || "",
-    totalPayment: student?.totalPayment ?? "", // Use nullish coalescing for numbers to allow 0
-    installment1: student?.installment1 ?? "",
-    installment2: student?.installment2 ?? "",
-    installment3: student?.installment3 ?? "",
-    invoice: student?.invoice ? [...student.invoice] : [], // Deep copy the array to avoid direct mutation
+    phone_number: student?.phone_number || "",
+    course_name: student?.course_name || "",
+    total_payment: student?.total_payment ?? "",
+    first_installment: student?.first_installment ?? "",
+    second_installment: student?.second_installment ?? "",
+    third_installment: student?.third_installment ?? "",
+    last_pay_date: student?.last_pay_date || "",
+    payment_completed: student?.payment_completed,
+    invoice: student?.invoice ? [...student.invoice] : [],
     remarks: student?.remarks || "",
-
-    // IMPORTANT: Include all other properties from the original 'student' object
-    // These fields are not in the form, but must be carried over to the parent state
-    ageGrade: student?.ageGrade || "",
-    contactWhatsapp: student?.contactWhatsapp || "",
-    source: student?.source || "",
-    recentCall: student?.recentCall || "",
-    nextCall: student?.nextCall || "",
-    status: student?.status || "",
-    address: student?.address || "",
-    addressLine1: student?.addressLine1 || "",
-    addressLine2: student?.addressLine2 || "",
-    city: student?.city || "",
-    county: student?.county || "",
-    postCode: student?.postCode || "",
-    classType: student?.classType || "",
-    value: student?.value || "", // Ensure this format is consistent (e.g., "$2500")
-    adsetName: student?.adsetName || "",
-    shift: student?.shift || "",
-    paymentType: student?.paymentType || "",
-    laptop: student?.laptop || "",
-    courseType: student?.courseType || "",
-    previousCodingExp: student?.previousCodingExp || "",
-    paymentCompletedOverride: student?.paymentCompletedOverride, // Preserve the manual override status
   });
 
-  const modalRef = useRef(null); // Ref for the modal content div
+  const modalRef = useRef(null);
 
-  // Effect to re-populate formData if the 'student' prop changes (e.g., if re-opened for a different student)
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch(
+          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/courses/",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Token ${authToken}`,
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+          }
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        const courseNames = data.map((course) => course.course_name);
+        setCourseOptions(courseNames);
+      } catch (err) {
+        console.error("Failed to fetch courses:", err);
+      }
+    };
+    if (authToken) {
+      fetchCourses();
+    }
+  }, [authToken]);
+
   useEffect(() => {
     if (student) {
       setFormData({
-        studentName: student.studentName || "",
-        parentsName: student.parentsName || "",
+        ...student,
+        student_name: student.student_name || "",
+        parents_name: student.parents_name || "",
         email: student.email || "",
-        phone: student.phone || "",
-        course: student.course || "",
-        totalPayment: student.totalPayment ?? "",
-        installment1: student.installment1 ?? "",
-        installment2: student.installment2 ?? "",
-        installment3: student.installment3 ?? "",
+        phone_number: student.phone_number || "",
+        course_name: student.course_name || "",
+        total_payment: student.total_payment ?? "",
+        first_installment: student.first_installment ?? "",
+        second_installment: student.second_installment ?? "",
+        third_installment: student.third_installment ?? "",
+        last_pay_date: student.last_pay_date || "",
+        payment_completed: student.payment_completed,
         invoice: student.invoice ? [...student.invoice] : [],
         remarks: student.remarks || "",
-
-        // Ensure all non-editable fields are also updated from the new student prop
-        ageGrade: student.ageGrade || "",
-        contactWhatsapp: student.contactWhatsapp || "",
-        source: student.source || "",
-        recentCall: student.recentCall || "",
-        nextCall: student.nextCall || "",
-        status: student.status || "",
-        address: student.address || "",
-        addressLine1: student.addressLine1 || "",
-        addressLine2: student.addressLine2 || "",
-        city: student.city || "",
-        county: student.county || "",
-        postCode: student.postCode || "",
-        classType: student.classType || "",
-        value: student.value || "",
-        adsetName: student.adsetName || "",
-        shift: student.shift || "",
-        paymentType: student.paymentType || "",
-        laptop: student.laptop || "",
-        courseType: student.courseType || "",
-        previousCodingExp: student.previousCodingExp || "",
-        paymentCompletedOverride: student.paymentCompletedOverride,
       });
     }
   }, [student]);
 
-  // Handle outside click to close modal
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (modalRef.current && !modalRef.current.contains(event.target)) {
         onClose();
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
@@ -109,10 +91,10 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
   }, [onClose]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
     }));
   };
 
@@ -126,7 +108,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
   const addInvoiceField = () => {
     setFormData((prev) => ({
       ...prev,
-      invoice: [...prev.invoice, { name: "", url: "", date: "" }], // Added 'date' field for consistency
+      invoice: [...prev.invoice, { name: "", url: "", date: "" }],
     }));
   };
 
@@ -140,40 +122,37 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     const updatedStudentData = {
-      ...student, // <--- START HERE: Preserve all original data
-      ...formData, // <--- OVERLAY: Apply changes from the form
-
-      // Ensure numeric values are parsed correctly from string inputs
-      totalPayment: formData.totalPayment
-        ? parseFloat(formData.totalPayment)
+      ...formData,
+      total_payment: formData.total_payment
+        ? parseFloat(formData.total_payment)
         : null,
-      installment1: formData.installment1
-        ? parseFloat(formData.installment1)
+      first_installment: formData.first_installment
+        ? parseFloat(formData.first_installment)
         : null,
-      installment2: formData.installment2
-        ? parseFloat(formData.installment2)
+      second_installment: formData.second_installment
+        ? parseFloat(formData.second_installment)
         : null,
-      installment3: formData.installment3
-        ? parseFloat(formData.installment3)
+      third_installment: formData.third_installment
+        ? parseFloat(formData.third_installment)
         : null,
 
-      // Filter out empty invoice entries (name and URL must be present)
+      // Fix for the date format issue:
+      last_pay_date: formData.last_pay_date || null,
+
       invoice: formData.invoice.filter((inv) => inv.name && inv.url),
     };
 
-    // Pass the complete and correctly typed student object back to the parent
     onSave(updatedStudentData);
-    onClose(); // Close the modal after saving
+    onClose();
   };
 
-  if (!student) return null; // Render nothing or a loader if student data isn't ready
+  if (!student) return null;
 
   return (
     <div className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 overflow-y-auto p-4 animate-fade-in">
       <div
         ref={modalRef}
-        className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-auto my-8 transform transition-all animate-scale-up
-             max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl mx-auto my-8 transform transition-all animate-scale-up max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4 border-b pb-3">
@@ -195,16 +174,16 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           {/* Student Details */}
           <div>
             <label
-              htmlFor="studentName"
+              htmlFor="student_name"
               className="block text-sm font-medium text-gray-700"
             >
               Student Name
             </label>
             <input
               type="text"
-              name="studentName"
-              id="studentName"
-              value={formData.studentName}
+              name="student_name"
+              id="student_name"
+              value={formData.student_name}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
@@ -212,16 +191,16 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           </div>
           <div>
             <label
-              htmlFor="parentsName"
+              htmlFor="parents_name"
               className="block text-sm font-medium text-gray-700"
             >
               Parents' Name
             </label>
             <input
               type="text"
-              name="parentsName"
-              id="parentsName"
-              value={formData.parentsName}
+              name="parents_name"
+              id="parents_name"
+              value={formData.parents_name}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -246,16 +225,16 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           </div>
           <div>
             <label
-              htmlFor="phone"
+              htmlFor="phone_number"
               className="block text-sm font-medium text-gray-700"
             >
               Phone
             </label>
             <input
               type="tel"
-              name="phone"
-              id="phone"
-              value={formData.phone}
+              name="phone_number"
+              id="phone_number"
+              value={formData.phone_number}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
@@ -264,15 +243,15 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
 
           <div className="md:col-span-2">
             <label
-              htmlFor="course"
+              htmlFor="course_name"
               className="block text-sm font-medium text-gray-700"
             >
               Course
             </label>
             <select
-              name="course"
-              id="course"
-              value={formData.course}
+              name="course_name"
+              id="course_name"
+              value={formData.course_name}
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
@@ -289,64 +268,80 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 border-t pt-4 mt-4">
             <div>
               <label
-                htmlFor="totalPayment"
+                htmlFor="total_payment"
                 className="block text-sm font-medium text-gray-700"
               >
                 Total Payment
               </label>
               <input
                 type="number"
-                name="totalPayment"
-                id="totalPayment"
-                value={formData.totalPayment}
+                name="total_payment"
+                id="total_payment"
+                value={formData.total_payment}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
             </div>
             <div>
               <label
-                htmlFor="installment1"
+                htmlFor="first_installment"
                 className="block text-sm font-medium text-gray-700"
               >
                 1st Installment
               </label>
               <input
                 type="number"
-                name="installment1"
-                id="installment1"
-                value={formData.installment1}
+                name="first_installment"
+                id="first_installment"
+                value={formData.first_installment}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
             </div>
             <div>
               <label
-                htmlFor="installment2"
+                htmlFor="second_installment"
                 className="block text-sm font-medium text-gray-700"
               >
                 2nd Installment
               </label>
               <input
                 type="number"
-                name="installment2"
-                id="installment2"
-                value={formData.installment2}
+                name="second_installment"
+                id="second_installment"
+                value={formData.second_installment}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
             </div>
             <div className="col-span-1">
               <label
-                htmlFor="installment3"
+                htmlFor="third_installment"
                 className="block text-sm font-medium text-gray-700"
               >
                 3rd Installment
               </label>
               <input
                 type="number"
-                name="installment3"
-                id="installment3"
-                value={formData.installment3}
+                name="third_installment"
+                id="third_installment"
+                value={formData.third_installment}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
+            <div className="col-span-1">
+              <label
+                htmlFor="last_pay_date"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Last Pay Date
+              </label>
+              <input
+                type="date"
+                name="last_pay_date"
+                id="last_pay_date"
+                value={formData.last_pay_date}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
@@ -371,7 +366,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                   <input
                     type="text"
                     id={`invoiceName-${index}`}
-                    value={inv.name || ""} // Ensure value is not null/undefined
+                    value={inv.name || ""}
                     onChange={(e) =>
                       handleInvoiceChange(index, "name", e.target.value)
                     }
@@ -389,7 +384,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                   <input
                     type="url"
                     id={`invoiceUrl-${index}`}
-                    value={inv.url || ""} // Ensure value is not null/undefined
+                    value={inv.url || ""}
                     onChange={(e) =>
                       handleInvoiceChange(index, "url", e.target.value)
                     }
@@ -407,7 +402,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                   <input
                     type="date"
                     id={`invoiceDate-${index}`}
-                    value={inv.date || ""} // Ensure value is not null/undefined
+                    value={inv.date || ""}
                     onChange={(e) =>
                       handleInvoiceChange(index, "date", e.target.value)
                     }
