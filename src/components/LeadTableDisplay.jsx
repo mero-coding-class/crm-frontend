@@ -42,7 +42,12 @@ const formatTimestamp = (timestampString) => {
 };
 
 // New internal component to handle fetching and displaying change logs for a single lead
-const LeadLogDisplay = ({ leadId, authToken, changeLogService }) => {
+const LeadLogDisplay = ({
+  leadId,
+  authToken,
+  changeLogService,
+  refreshKey,
+}) => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -57,7 +62,11 @@ const LeadLogDisplay = ({ leadId, authToken, changeLogService }) => {
           leadId,
           authToken
         );
-        setLogs(fetchedLogs);
+        // Ensure newest-first ordering even if service doesn't sort
+        const sorted = (
+          Array.isArray(fetchedLogs) ? fetchedLogs : fetchedLogs?.results || []
+        ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setLogs(sorted);
       } catch (err) {
         setError(err.message || "Failed to fetch logs.");
         console.error("Error fetching logs for lead", leadId, ":", err);
@@ -66,10 +75,10 @@ const LeadLogDisplay = ({ leadId, authToken, changeLogService }) => {
       }
     };
 
-    if (leadId && authToken) {
+    if (leadId && authToken && changeLogService) {
       fetchLogs();
     }
-  }, [leadId, authToken, changeLogService]); // Re-fetch when leadId or authToken changes
+  }, [leadId, authToken, changeLogService, refreshKey]); // 👈 Re-fetch when refreshKey changes
 
   const toggleExpansion = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -240,6 +249,8 @@ const LeadTableDisplay = ({
   const handleRemarkBlur = useCallback(
     (leadId, value) => {
       onRemarkChange(leadId, value);
+      // parent updates the lead; when that lead prop changes,
+      // our refreshKey (below) changes and triggers a refetch
     },
     [onRemarkChange]
   );
@@ -421,14 +432,18 @@ const LeadTableDisplay = ({
                   style={{ minWidth: "150px" }}
                 ></textarea>
               </td>
+
+              {/* Change Log */}
               <td className="px-3 py-4 text-sm text-gray-700">
-                {/* Render the new LeadLogDisplay component for each lead */}
                 <LeadLogDisplay
                   leadId={lead._id}
                   authToken={authToken}
                   changeLogService={changeLogService}
+                  // 👇 when ANY of these change, the log will refetch
+                  refreshKey={`${lead.status}|${lead.remarks}|${lead.recentCall}|${lead.nextCall}|${lead.age}|${lead.grade}`}
                 />
               </td>
+
               <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button
                   onClick={() => handleEdit(lead)}
