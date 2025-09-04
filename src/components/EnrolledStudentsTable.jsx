@@ -102,22 +102,22 @@ const EnrolledStudentsTable = ({
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {student.total_payment
-                  ? `$${parseFloat(student.total_payment).toFixed(2)}`
+                  ? `Rs ${parseFloat(student.total_payment).toFixed(2)}`
                   : "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {student.first_installment
-                  ? `$${parseFloat(student.first_installment).toFixed(2)}`
+                  ? `Rs ${parseFloat(student.first_installment).toFixed(2)}`
                   : "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {student.second_installment
-                  ? `$${parseFloat(student.second_installment).toFixed(2)}`
+                  ? `Rs ${parseFloat(student.second_installment).toFixed(2)}`
                   : "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                 {student.third_installment
-                  ? `$${parseFloat(student.third_installment).toFixed(2)}`
+                  ? `Rs ${parseFloat(student.third_installment).toFixed(2)}`
                   : "N/A"}
               </td>
               <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
