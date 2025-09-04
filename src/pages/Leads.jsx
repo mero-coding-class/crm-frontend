@@ -918,13 +918,15 @@ const Leads = () => {
           <LeadTableDisplay
             leads={displayedLeads}
             handleEdit={handleEdit}
+            handleDelete={handleDelete}
             onStatusChange={handleStatusChange}
             onRemarkChange={handleRemarkChange}
             onRecentCallChange={handleRecentCallChange}
             onNextCallChange={handleNextCallChange}
-            onDelete={handleDelete}
             onAgeChange={handleAgeChange}
             onGradeChange={handleGradeChange}
+            authToken={authToken}
+            changeLogService={changeLogService}
           />
         )}
       </div>
