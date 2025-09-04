@@ -1,32 +1,10 @@
-// services/changeLogService.js
-const API_BASE_URL = "https://crmmerocodingbackend.ktm.yetiappcloud.com/api";
+// client/src/services/changeLogService.js
+import { API_BASE, apiJson } from "./api";
 
 export const changeLogService = {
   async getLeadLogs(leadId, authToken) {
-    // GET request to fetch logs
-    const response = await fetch(`${API_BASE_URL}/${leadId}/logs`, {
-      headers: {
-        "Authorization": `Bearer ${authToken}`
-      }
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch logs.");
-    }
-    return response.json();
+    const payload = await apiJson(`${API_BASE}/api/leads/${leadId}/logs/`, { authToken });
+    const logs = Array.isArray(payload) ? payload : payload?.results || [];
+    return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   },
-  async postLogEntry(leadId, authToken, logData) {
-    // POST request to create a new log entry
-    const response = await fetch(`${API_BASE_URL}/${leadId}/logs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${authToken}`
-      },
-      body: JSON.stringify(logData)
-    });
-    if (!response.ok) {
-      throw new Error("Failed to post log entry.");
-    }
-    return response.json();
-  }
 };

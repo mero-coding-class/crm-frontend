@@ -5,225 +5,17 @@ import { useAuth } from "../context/AuthContext.jsx";
 import LeadTableDisplay from "../components/LeadTableDisplay";
 import LeadEditModal from "../components/LeadEditModal";
 import AddLeadModal from "../components/AddLeadModal";
+import ImportCsvButton from "../components/ImportCsvButton";
 
 import {
   PlusIcon,
   ArrowPathIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  ArrowUpTrayIcon,
   ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
-// Real API service for backend integration
-const leadService = {
-  getLeads: async (authToken) => {
-    if (!authToken) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-
-    const response = await fetch(
-      "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      }
-    );
-
-    if (!response.ok) {
-      let errorMsg = "Failed to fetch leads";
-      try {
-        const errData = await response.json();
-        if (errData.detail) errorMsg = errData.detail;
-      } catch {
-        // ignore error parsing
-      }
-      throw new Error(errorMsg);
-    }
-
-    const backendLeads = await response.json();
-
-    // Transform backend data to frontend format
-    return backendLeads.map((lead) => ({
-      _id: lead.id.toString(),
-      studentName: lead.student_name || "",
-      parentsName: lead.parents_name || "",
-      email: lead.email || "",
-      phone: lead.phone_number || "",
-      contactWhatsapp: lead.whatsapp_number || "",
-      age: lead.age || "",
-      grade: lead.grade || "",
-      course: lead.course_name || "", // Use course_name from backend
-      source: lead.source || "",
-      addDate: lead.add_date || "",
-      recentCall: lead.last_call || "",
-      nextCall: lead.next_call || "",
-      status: lead.status || "New",
-      permanentAddress: lead.address_line_1 || "",
-      temporaryAddress: lead.address_line_2 || "",
-      city: lead.city || "",
-      county: lead.county || "",
-      postCode: lead.post_code || "",
-      classType: lead.class_type || "",
-      value: lead.value || "",
-      adsetName: lead.adset_name || "",
-      remarks: lead.remarks || "",
-      shift: lead.shift || "",
-      paymentType: lead.payment_type || "",
-      device: lead.device || "",
-      previousCodingExp: lead.previous_coding_experience || "",
-      workshopBatch: lead.workshop_batch || "",
-      changeLog: lead.change_log || [],
-    }));
-  },
-
-  updateLead: async (id, updates, authToken) => {
-    if (!authToken) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-
-    const backendUpdates = {};
-
-    // Explicitly map frontend names to backend names for the API
-    if (updates.status) backendUpdates.status = updates.status;
-    if (updates.remarks !== undefined) backendUpdates.remarks = updates.remarks;
-    if (updates.recentCall !== undefined)
-      backendUpdates.last_call = updates.recentCall;
-    if (updates.nextCall !== undefined)
-      backendUpdates.next_call = updates.nextCall;
-    if (updates.device !== undefined) backendUpdates.device = updates.device;
-    if (updates.age !== undefined) backendUpdates.age = updates.age;
-    if (updates.grade !== undefined) backendUpdates.grade = updates.grade;
-    if (updates.permanentAddress !== undefined)
-      backendUpdates.address_line_1 = updates.permanentAddress;
-    if (updates.temporaryAddress !== undefined)
-      backendUpdates.address_line_2 = updates.temporaryAddress;
-    if (updates.city !== undefined) backendUpdates.city = updates.city;
-    if (updates.county !== undefined) backendUpdates.county = updates.county;
-    if (updates.postCode !== undefined)
-      backendUpdates.post_code = updates.postCode;
-    if (updates.studentName !== undefined)
-      backendUpdates.student_name = updates.studentName;
-    if (updates.parentsName !== undefined)
-      backendUpdates.parents_name = updates.parentsName;
-    if (updates.email !== undefined) backendUpdates.email = updates.email;
-    if (updates.phone !== undefined)
-      backendUpdates.phone_number = updates.phone;
-    if (updates.contactWhatsapp !== undefined)
-      backendUpdates.whatsapp_number = updates.contactWhatsapp;
-    if (updates.course !== undefined) backendUpdates.course = updates.course;
-    if (updates.source !== undefined) backendUpdates.source = updates.source;
-    if (updates.classType !== undefined)
-      backendUpdates.class_type = updates.classType;
-    if (updates.value !== undefined) backendUpdates.value = updates.value;
-    if (updates.adsetName !== undefined)
-      backendUpdates.adset_name = updates.adsetName;
-    if (updates.shift !== undefined) backendUpdates.shift = updates.shift;
-    if (updates.paymentType !== undefined)
-      backendUpdates.payment_type = updates.paymentType;
-    if (updates.previousCodingExp !== undefined)
-      backendUpdates.previous_coding_experience = updates.previousCodingExp;
-    if (updates.workshopBatch !== undefined)
-      backendUpdates.workshop_batch = updates.workshopBatch;
-    if (updates.changeLog !== undefined)
-      backendUpdates.change_log = updates.changeLog;
-
-    const response = await fetch(
-      `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${id}/`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(backendUpdates),
-      }
-    );
-
-    if (!response.ok) {
-      let errorMsg = "Failed to update lead";
-      try {
-        const errData = await response.json();
-        if (errData.detail) errorMsg = errData.detail;
-      } catch {
-        // ignore error parsing
-      }
-      throw new Error(errorMsg);
-    }
-
-    return response.json();
-  },
-};
-
-// Services are simplified or removed as the backend will handle these actions
-const changeLogService = {
-  getLeadLogs: async (leadId, authToken) => {
-    if (!authToken) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-    const response = await fetch(
-      `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${leadId}/logs/`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      }
-    );
-
-    if (!response.ok) {
-      let errorMsg = "Failed to fetch change logs";
-      try {
-        const errData = await response.json();
-        if (errData.detail) errorMsg = errData.detail;
-      } catch {
-        // ignore error parsing
-      }
-      throw new Error(errorMsg);
-    }
-    const logs = await response.json();
-    return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  },
-};
-
-const courseService = {
-  getCourses: async (authToken) => {
-    if (!authToken) {
-      throw new Error("No authentication token found. Please log in again.");
-    }
-
-    const response = await fetch(
-      "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/courses/",
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      }
-    );
-
-    if (!response.ok) {
-      let errorMsg = "Failed to fetch courses";
-      try {
-        const errData = await response.json();
-        if (errData.detail) errorMsg = errData.detail;
-      } catch {
-        // ignore error parsing
-      }
-      throw new Error(errorMsg);
-    }
-
-    return await response.json();
-  },
-};
+import { leadService, courseService, changeLogService } from "../services/api";
 
 const Leads = () => {
   const { authToken } = useAuth();
@@ -293,6 +85,7 @@ const Leads = () => {
     "Other",
   ];
 
+  // Load leads & courses
   useEffect(() => {
     if (!authToken) {
       setError("You are not logged in. Please log in to view leads.");
@@ -300,128 +93,55 @@ const Leads = () => {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
-    Promise.all([
-      leadService.getLeads(authToken),
-      courseService.getCourses(authToken),
-    ])
-      .then(([leadsData, coursesData]) => {
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [leadsData, coursesData] = await Promise.all([
+          leadService.getLeads(authToken),
+          courseService.getCourses(authToken),
+        ]);
         setAllLeads(leadsData);
         setCourses(coursesData);
-        setLoading(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         setError(err.message || "Failed to fetch data");
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    run();
   }, [authToken]);
 
-  const handleOpenAddModal = useCallback(() => {
-    setIsAddModalOpen(true);
-  }, []);
+  const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
+  const handleCloseAddModal = useCallback(() => setIsAddModalOpen(false), []);
 
-  const handleCloseAddModal = useCallback(() => {
-    setIsAddModalOpen(false);
-  }, []);
-
+  // Add lead via service; map course to ID if needed, then refresh
   const handleAddNewLead = useCallback(
     async (newLeadData) => {
-      console.log("Adding new lead:", newLeadData);
       try {
-        const selectedCourse = courses.find(
-          (c) => c.course_name === newLeadData.course
-        );
-        const courseId = selectedCourse ? selectedCourse.id : null;
-
-        const backendData = {
-          student_name: newLeadData.studentName || "",
-          parents_name: newLeadData.parentsName || "",
-          email: newLeadData.email || "",
-          phone_number: newLeadData.phone || "",
-          whatsapp_number: newLeadData.contactWhatsapp || "",
-          age: newLeadData.age || "",
-          grade: newLeadData.grade || "",
-          source: newLeadData.source || "",
-          class_type: newLeadData.classType || "",
-          shift: newLeadData.shift || "",
-          previous_coding_experience: newLeadData.previousCodingExp || "",
-          device: newLeadData.device || "",
-          status: newLeadData.status || "New",
-          remarks: newLeadData.remarks || "",
-          course: courseId,
-          value: newLeadData.value || "",
-          adset_name: newLeadData.adsetName || "",
-          payment_type: newLeadData.paymentType || "",
-          workshop_batch: newLeadData.workshopBatch || "",
-          address_line_1: newLeadData.permanentAddress || "",
-          address_line_2: newLeadData.temporaryAddress || "",
-          city: newLeadData.city || "",
-          county: newLeadData.county || "",
-          post_code: newLeadData.postCode || "",
-          change_log: [],
-        };
-
-        const response = await fetch(
-          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Token ${authToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(backendData),
-          }
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Failed to create lead:", errorText);
-          throw new Error("Failed to create lead: " + errorText);
+        let courseId = null;
+        if (newLeadData.course != null) {
+          const selected = courses.find(
+            (c) =>
+              c.course_name === newLeadData.course ||
+              c.id === newLeadData.course
+          );
+          courseId = selected ? selected.id : newLeadData.course;
         }
 
-        const newLead = await response.json();
-        console.log("New lead successfully created:", newLead);
+        await leadService.addLead(
+          { ...newLeadData, course: courseId },
+          authToken
+        );
 
-        const frontendLead = {
-          _id: newLead.id.toString(),
-          studentName: newLead.student_name || "",
-          parentsName: newLead.parents_name || "",
-          email: newLead.email || "",
-          phone: newLead.phone_number || "",
-          contactWhatsapp: newLead.whatsapp_number || "",
-          age: newLead.age || "",
-          grade: newLead.grade || "",
-          course: newLead.course_name || "",
-          source: newLead.source || "",
-          addDate: newLead.add_date || "",
-          recentCall: newLead.last_call || "",
-          nextCall: newLead.next_call || "",
-          status: newLead.status || "New",
-          permanentAddress: newLead.address_line_1 || "",
-          temporaryAddress: newLead.address_line_2 || "",
-          city: newLead.city || "",
-          county: newLead.county || "",
-          postCode: newLead.post_code || "",
-          classType: newLead.class_type || "",
-          value: newLead.value || "",
-          adsetName: newLead.adset_name || "",
-          remarks: newLead.remarks || "",
-          shift: newLead.shift || "",
-          paymentType: newLead.payment_type || "",
-          device: newLead.device || "",
-          previousCodingExp: newLead.previous_coding_experience || "",
-          workshopBatch: newLead.workshop_batch || "",
-        };
-
-        setAllLeads((prevLeads) => [...prevLeads, frontendLead]);
+        await handleRefresh();
         handleCloseAddModal();
       } catch (err) {
         setError(err.message || "Failed to create lead");
       }
     },
-    [authToken, handleCloseAddModal, courses]
+    [authToken, courses, handleCloseAddModal]
   );
 
   const handleEdit = useCallback((lead) => {
@@ -434,65 +154,42 @@ const Leads = () => {
     setEditingLead(null);
   }, []);
 
+  // Save edits: send camelCase object; map course name -> id if needed
   const handleSaveEdit = useCallback(
     async (updatedLead) => {
       try {
-        const backendUpdates = {
-          student_name: updatedLead.studentName,
-          parents_name: updatedLead.parentsName,
-          email: updatedLead.email,
-          phone_number: updatedLead.phone,
-          whatsapp_number: updatedLead.contactWhatsapp,
-          age: updatedLead.age,
-          grade: updatedLead.grade,
-          course:
-            courses.find((c) => c.course_name === updatedLead.course)?.id ||
-            null,
-          source: updatedLead.source,
-          last_call: updatedLead.recentCall,
-          next_call: updatedLead.nextCall,
-          status: updatedLead.status,
-          address_line_1: updatedLead.permanentAddress,
-          address_line_2: updatedLead.temporaryAddress,
-          city: updatedLead.city,
-          county: updatedLead.county,
-          post_code: updatedLead.postCode,
-          class_type: updatedLead.classType,
-          value: updatedLead.value,
-          adset_name: updatedLead.adsetName,
-          remarks: updatedLead.remarks,
-          shift: updatedLead.shift,
-          payment_type: updatedLead.paymentType,
-          device: updatedLead.device,
-          previous_coding_experience: updatedLead.previousCodingExp,
-          workshop_batch: updatedLead.workshopBatch,
-          change_log: updatedLead.changeLog,
-        };
+        let payload = { ...updatedLead };
+        if (updatedLead.course != null) {
+          const selected = courses.find(
+            (c) =>
+              c.course_name === updatedLead.course ||
+              c.id === updatedLead.course
+          );
+          payload.course = selected ? selected.id : updatedLead.course;
+        }
 
-        await leadService.updateLead(
-          updatedLead._id,
-          backendUpdates,
-          authToken
-        );
-        setAllLeads((prevLeads) =>
-          prevLeads.map((lead) =>
-            lead._id === updatedLead._id ? updatedLead : lead
+        await leadService.updateLead(updatedLead._id, payload, authToken);
+
+        // Update local copy
+        setAllLeads((prev) =>
+          prev.map((l) =>
+            l._id === updatedLead._id ? { ...l, ...updatedLead } : l
           )
         );
+
         handleCloseEditModal();
       } catch (err) {
         setError(err.message || "Failed to update lead");
       }
     },
-    [authToken, handleCloseEditModal, courses]
+    [authToken, courses, handleCloseEditModal]
   );
 
+  // Single-field update from table cells
   const updateLeadField = useCallback(
     async (leadId, fieldName, newValue) => {
       try {
-        // If the status is being changed to 'Converted', 'Lost', or 'Junk',
-        // we'll send a single PATCH request to the lead endpoint.
-        // The backend will handle the subsequent enrollment/trashing.
+        // Special behavior for status transitions
         if (
           fieldName === "status" &&
           (newValue === "Converted" ||
@@ -504,106 +201,65 @@ const Leads = () => {
             { [fieldName]: newValue },
             authToken
           );
-          // If the update is successful, remove the lead from the local state
           setAllLeads((prevLeads) =>
             prevLeads.filter((lead) => lead._id !== leadId)
           );
-          return; // Exit after processing the status change
+          return;
         }
 
-        // For all other field updates (that are not status changes)
+        // Map course name -> id on change
         const updatesToSend = { [fieldName]: newValue };
         if (fieldName === "course") {
           const selectedCourse = courses.find(
-            (c) => c.course_name === newValue
+            (c) => c.course_name === newValue || c.id === newValue
           );
-          updatesToSend.course = selectedCourse ? selectedCourse.id : null;
+          updatesToSend.course = selectedCourse ? selectedCourse.id : newValue;
         }
 
         await leadService.updateLead(leadId, updatesToSend, authToken);
 
-        // Update the local state with the new value
+        // Local update
         setAllLeads((prevLeads) =>
-          prevLeads.map((lead) => {
-            if (lead._id === leadId) {
-              const updatedLead = { ...lead, [fieldName]: newValue };
-              return updatedLead;
-            }
-            return lead;
-          })
+          prevLeads.map((lead) =>
+            lead._id === leadId ? { ...lead, [fieldName]: newValue } : lead
+          )
         );
         console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
       } catch (err) {
         setError(err.message || `Failed to update ${fieldName}`);
       }
     },
-    [authToken, allLeads, courses]
+    [authToken, courses]
   );
 
   const handleStatusChange = useCallback(
-    (leadId, newStatus) => {
-      updateLeadField(leadId, "status", newStatus);
-    },
+    (leadId, newStatus) => updateLeadField(leadId, "status", newStatus),
     [updateLeadField]
   );
-
   const handleRemarkChange = useCallback(
-    (leadId, newRemark) => {
-      updateLeadField(leadId, "remarks", newRemark);
-    },
+    (leadId, newRemark) => updateLeadField(leadId, "remarks", newRemark),
     [updateLeadField]
   );
-
   const handleRecentCallChange = useCallback(
-    (leadId, newDate) => {
-      updateLeadField(leadId, "recentCall", newDate);
-    },
+    (leadId, newDate) => updateLeadField(leadId, "recentCall", newDate),
     [updateLeadField]
   );
-
   const handleNextCallChange = useCallback(
-    (leadId, newDate) => {
-      updateLeadField(leadId, "nextCall", newDate);
-    },
+    (leadId, newDate) => updateLeadField(leadId, "nextCall", newDate),
     [updateLeadField]
   );
   const handleAgeChange = useCallback(
-    (leadId, newAge) => {
-      updateLeadField(leadId, "age", newAge);
-    },
+    (leadId, newAge) => updateLeadField(leadId, "age", newAge),
     [updateLeadField]
   );
-
   const handleGradeChange = useCallback(
-    (leadId, newGrade) => {
-      updateLeadField(leadId, "grade", newGrade);
-    },
+    (leadId, newGrade) => updateLeadField(leadId, "grade", newGrade),
     [updateLeadField]
   );
-
-  const handleImport = useCallback(async () => {
-    console.log(
-      "Import CSV functionality - to be implemented with file upload."
-    );
-  }, []);
 
   const handleExport = useCallback(async () => {
     try {
-      const response = await fetch(
-        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/export-csv/",
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Token ${authToken}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to export CSV");
-      }
-
-      const blob = await response.blob();
+      const blob = await leadService.exportLeads(authToken);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -617,10 +273,8 @@ const Leads = () => {
 
   const handleRefresh = useCallback(async () => {
     if (!authToken) return;
-
     setLoading(true);
     setError(null);
-
     try {
       const data = await leadService.getLeads(authToken);
       setAllLeads(data);
@@ -637,10 +291,7 @@ const Leads = () => {
     async (leadId) => {
       if (window.confirm("Are you sure you want to move this lead to trash?")) {
         try {
-          // Send a PATCH request to change the status to "Junk"
-          // The backend will handle the actual move to trash.
           await leadService.updateLead(leadId, { status: "Junk" }, authToken);
-          // Remove from local state after successful API call
           setAllLeads((prevLeads) =>
             prevLeads.filter((lead) => lead._id !== leadId)
           );
@@ -652,6 +303,7 @@ const Leads = () => {
     [authToken]
   );
 
+  // Filtering
   const displayedLeads = useMemo(() => {
     let currentLeads = allLeads;
 
@@ -660,53 +312,43 @@ const Leads = () => {
         (lead) => lead.status === filterStatus
       );
     }
-
     if (searchTerm) {
-      const lowerCaseSearchTerm = searchTerm.toLowerCase();
+      const q = searchTerm.toLowerCase();
       currentLeads = currentLeads.filter(
         (lead) =>
-          (lead.studentName &&
-            lead.studentName.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.email &&
-            lead.email.toLowerCase().includes(lowerCaseSearchTerm)) ||
-          (lead.phone && lead.phone.toLowerCase().includes(lowerCaseSearchTerm))
+          (lead.studentName && lead.studentName.toLowerCase().includes(q)) ||
+          (lead.email && lead.email.toLowerCase().includes(q)) ||
+          (lead.phone && lead.phone.toLowerCase().includes(q))
       );
     }
-
     if (filterAge) {
       currentLeads = currentLeads.filter(
         (lead) => lead.age && lead.age.toString().includes(filterAge)
       );
     }
-
     if (filterGrade) {
       currentLeads = currentLeads.filter(
         (lead) => lead.grade && lead.grade.toString().includes(filterGrade)
       );
     }
-
     if (filterLastCall) {
       currentLeads = currentLeads.filter(
         (lead) => lead.recentCall && lead.recentCall === filterLastCall
       );
     }
-
     if (filterClassType && filterClassType !== "Class") {
       currentLeads = currentLeads.filter(
         (lead) => lead.classType === filterClassType
       );
     }
-
     if (filterShift && filterShift !== "Shift") {
       currentLeads = currentLeads.filter((lead) => lead.shift === filterShift);
     }
-
     if (filterDevice && filterDevice !== "Device") {
       currentLeads = currentLeads.filter(
         (lead) => lead.device === filterDevice
       );
     }
-
     if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
       currentLeads = currentLeads.filter(
         (lead) => lead.previousCodingExp === filterPrevCodingExp
@@ -762,13 +404,14 @@ const Leads = () => {
             <PlusIcon className="h-5 w-5 inline-block mr-2" />
             Add New Lead
           </button>
-          <button
-            onClick={handleImport}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <ArrowUpTrayIcon className="h-5 w-5 inline-block mr-2" />
-            Import CSV
-          </button>
+
+          {/* Import CSV (posts to /leads/from/ via service) */}
+          <ImportCsvButton
+            authToken={authToken}
+            courses={courses}
+            onImported={handleRefresh}
+          />
+
           <button
             onClick={handleExport}
             className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
