@@ -1,6 +1,6 @@
 // C:/Users/aryal/Desktop/EDU_CRM/client/src/layouts/MainLayout.jsx
 
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { NavLink, useNavigate, Outlet } from "react-router-dom";
 import {
   HomeIcon,
@@ -13,37 +13,34 @@ import {
   UserMinusIcon,
   UserPlusIcon,
   PlusCircleIcon,
+  BookOpenIcon,
 } from "@heroicons/react/24/outline";
 
-import { useAuth } from "../context/AuthContext.jsx";
+import { AuthContext } from "../context/AuthContext.jsx";
+
+/** exact-role check: admin, superadmin, sales_rep */
+const getRole = () => (localStorage.getItem("role") || "").trim().toLowerCase();
+const canManage = (role) => role === "admin" || role === "superadmin";
+
+const getUsername = () => (localStorage.getItem("username") || "").trim();
+
+const getInitials = (name) => {
+  const n = (name || "").trim();
+  if (!n) return "U";
+  const parts = n.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return n[0].toUpperCase();
+};
 
 const MainLayout = () => {
-  const { logout, user } = useAuth();
+  const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Get role/username from context, fallback to localStorage
-  const role = (user?.role || localStorage.getItem("role") || "").toLowerCase();
-  const username = user?.username || localStorage.getItem("username") || "User";
-
-  const canManageUsers = role === "admin" || role === "superadmin"; // for Create User
-  const canCreateCourse = canManageUsers; // for Create Course
-
-  // initials avatar (first 2 characters of username)
-  const initials = (username || "U")
-    .toString()
-    .trim()
-    .split(/\s+/)
-    .map((p) => p[0]?.toUpperCase() || "")
-    .join("")
-    .slice(0, 2);
+  const username = getUsername() || "User";
+  const role = getRole(); // "admin" | "superadmin" | "sales_rep" | ""
 
   const handleLogout = () => {
-    // Clear any extra persisted fields if you stored them during login
-    try {
-      localStorage.removeItem("username");
-      localStorage.removeItem("role");
-    } catch {}
     logout();
     navigate("/login");
   };
@@ -149,8 +146,8 @@ const MainLayout = () => {
             Reports
           </NavLink>
 
-          {/* Create User (admins only) */}
-          {canManageUsers && (
+          {/* Only admins & superadmins can see these */}
+          {canManage(role) && (
             <NavLink
               to="/register-user"
               className={({ isActive }) =>
@@ -167,10 +164,9 @@ const MainLayout = () => {
             </NavLink>
           )}
 
-          {/* Create Course (admins only) */}
-          {canCreateCourse && (
+          {canManage(role) && (
             <NavLink
-              to="/create-course"
+              to="/courses/new"
               className={({ isActive }) =>
                 `flex items-center p-3 rounded-lg transition-colors duration-200 ${
                   isActive
@@ -180,24 +176,23 @@ const MainLayout = () => {
               }
               onClick={() => setSidebarOpen(false)}
             >
-              <PlusCircleIcon className="h-6 w-6 mr-3" />
+              <BookOpenIcon className="h-6 w-6 mr-3" />
               Create Course
             </NavLink>
           )}
         </nav>
 
+        {/* User panel + Logout */}
         <div className="mt-auto pt-4 border-t border-gray-700">
           <div className="flex items-center p-3 mb-4 rounded-lg bg-gray-700">
-            <div className="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center text-lg font-bold text-white mr-3 select-none">
-              {initials || "U"}
+            <div className="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center text-lg font-bold text-white mr-3">
+              {getInitials(username)}
             </div>
             <div className="flex flex-col">
-              <span className="text-gray-200 font-semibold">{username}</span>
-              {role && (
-                <span className="text-xs text-gray-400 uppercase tracking-wide">
-                  {role}
-                </span>
-              )}
+              <span className="text-gray-200 font-medium">{username}</span>
+              <span className="text-gray-400 text-xs">
+                Role: {role || "unknown"}
+              </span>
             </div>
           </div>
 
@@ -211,7 +206,7 @@ const MainLayout = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
         <Outlet />
       </main>

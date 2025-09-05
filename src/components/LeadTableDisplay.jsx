@@ -1,5 +1,21 @@
-import React, { useState, useCallback, useEffect } from "react";
-import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import {
+  PencilIcon,
+  TrashIcon,
+  Bars3Icon,
+  Cog6ToothIcon,
+  ChevronLeftIcon, // Import ChevronLeftIcon
+  ChevronRightIcon, // Import ChevronRightIcon
+} from "@heroicons/react/24/outline";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Menu } from "@headlessui/react";
 
 /* ------------------------------ date helpers ------------------------------ */
 const getFormattedDate = (dateString) => {
@@ -48,51 +64,36 @@ const getCourseClasses = (courseName) => {
   if (!courseName) return "bg-gray-100 text-gray-800 border-gray-200";
   const n = normalizeCourse(courseName);
 
-  // python beginner / beginer / begineer
   if (n.startsWith("python") && (n.includes("begin") || n.includes("begine"))) {
     return "bg-yellow-100 text-yellow-800 border-yellow-200";
   }
-  // python advance / advanced
   if (n.startsWith("python") && (n.includes("adv") || n.includes("advance"))) {
     return "bg-amber-100 text-amber-800 border-amber-200";
   }
-
-  // scratch beginner / begineer
   if (
     n.startsWith("scratch") &&
     (n.includes("begin") || n.includes("begine"))
   ) {
     return "bg-orange-100 text-orange-800 border-orange-200";
   }
-  // scratch advance / advanced
   if (n.startsWith("scratch") && (n.includes("adv") || n.includes("advance"))) {
     return "bg-orange-200 text-orange-900 border-orange-300";
   }
-
-  // html/css
   if (n.includes("htmlcss") || (n.includes("html") && n.includes("css"))) {
     return "bg-blue-100 text-blue-800 border-blue-200";
   }
-
-  // webdevelopment / web development
   if (n.includes("webdevelopment") || n.includes("webdev")) {
     return "bg-sky-100 text-sky-800 border-sky-200";
   }
-
-  // robotics
   if (n.includes("robotics")) {
     return "bg-emerald-100 text-emerald-800 border-emerald-200";
   }
-
-  // data science
   if (
     n.includes("datascience") ||
     (n.includes("data") && n.includes("science"))
   ) {
     return "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200";
   }
-
-  // advance ai / advanced ai
   if (
     n.includes("advanceai") ||
     n.includes("advancedai") ||
@@ -100,8 +101,6 @@ const getCourseClasses = (courseName) => {
   ) {
     return "bg-purple-100 text-purple-800 border-purple-200";
   }
-
-  // fallback
   return "bg-gray-100 text-gray-800 border-gray-200";
 };
 
@@ -238,11 +237,101 @@ const LeadLogDisplay = ({
   );
 };
 
+const DraggableRow = ({ lead, columns, selected, onSelect, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: lead._id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : "auto",
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-gray-50 ${
+        isDragging ? "bg-gray-100 shadow-lg" : ""
+      }`}
+    >
+      <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing"
+        >
+          <Bars3Icon className="h-5 w-5 text-gray-400" />
+        </button>
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onSelect(lead._id)}
+          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+        />
+      </td>
+      {children}
+    </tr>
+  );
+};
+
+const ColumnToggler = ({ columns, setColumns }) => {
+  const toggleColumn = (key) => {
+    setColumns((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], visible: !prev[key].visible },
+    }));
+  };
+
+  return (
+    <Menu as="div" className="relative inline-block text-left">
+      <div>
+        <Menu.Button className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          <Cog6ToothIcon className="h-5 w-5 mr-2" />
+          Columns
+        </Menu.Button>
+      </div>
+      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+        <div className="py-1">
+          {Object.entries(columns).map(([key, { label, visible }]) => (
+            <Menu.Item key={key}>
+              {({ active }) => (
+                <label
+                  className={`${
+                    active ? "bg-gray-100 text-gray-900" : "text-gray-700"
+                  } flex items-center px-4 py-2 text-sm cursor-pointer`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={visible}
+                    onChange={() => toggleColumn(key)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
+                  />
+                  {label}
+                </label>
+              )}
+            </Menu.Item>
+          ))}
+        </div>
+      </Menu.Items>
+    </Menu>
+  );
+};
+
 /* ----------------------------- main component ----------------------------- */
 const LeadTableDisplay = ({
   leads,
   handleEdit,
   handleDelete,
+  handleBulkDelete,
   onStatusChange,
   onRemarkChange,
   onRecentCallChange,
@@ -265,8 +354,14 @@ const LeadTableDisplay = ({
     "Junk",
   ];
 
-  const [localRemarks, setLocalRemarks] = useState({});
+  const [orderedLeads, setOrderedLeads] = useState([]);
+  useEffect(() => {
+    setOrderedLeads(leads);
+  }, [leads]);
 
+  const [selectedLeads, setSelectedLeads] = useState(new Set());
+
+  const [localRemarks, setLocalRemarks] = useState({});
   useEffect(() => {
     const initialRemarks = {};
     leads.forEach((lead) => {
@@ -274,6 +369,75 @@ const LeadTableDisplay = ({
     });
     setLocalRemarks(initialRemarks);
   }, [leads]);
+
+  useEffect(() => {
+    setSelectedLeads(new Set());
+  }, [leads]);
+
+  const [columns, setColumns] = useState({
+    studentName: { label: "Student Name", visible: true },
+    parentsName: { label: "Parents' Name", visible: true },
+    email: { label: "Email", visible: true },
+    phone: { label: "Phone", visible: true },
+    contactWhatsapp: { label: "WhatsApp Number", visible: false },
+    age: { label: "Age", visible: true },
+    grade: { label: "Grade", visible: true },
+    source: { label: "Source", visible: false },
+    course: { label: "Course", visible: true },
+    classType: { label: "Class Type", visible: false },
+    shift: { label: "Shift", visible: false },
+    previousCodingExp: { label: "Previous Coding", visible: false },
+    recentCall: { label: "Last Call", visible: true },
+    nextCall: { label: "Next Call", visible: true },
+    device: { label: "Device", visible: false },
+    status: { label: "Status", visible: true },
+    remarks: { label: "Remarks", visible: true },
+    changeLog: { label: "Change Log", visible: true },
+    actions: { label: "Actions", visible: true },
+  });
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (active.id !== over.id) {
+      setOrderedLeads((items) => {
+        const oldIndex = items.findIndex((item) => item._id === active.id);
+        const newIndex = items.findIndex((item) => item._id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allLeadIds = new Set(orderedLeads.map((lead) => lead._id));
+      setSelectedLeads(allLeadIds);
+    } else {
+      setSelectedLeads(new Set());
+    }
+  };
+
+  const handleSelectRow = (leadId) => {
+    setSelectedLeads((prev) => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(leadId)) {
+        newSelection.delete(leadId);
+      } else {
+        newSelection.add(leadId);
+      }
+      return newSelection;
+    });
+  };
+
+  const onBulkDeleteClick = () => {
+    if (
+      window.confirm(
+        `Are you sure you want to delete ${selectedLeads.size} leads?`
+      )
+    ) {
+      handleBulkDelete([...selectedLeads]);
+      setSelectedLeads(new Set());
+    }
+  };
 
   const getStatusClasses = (status) => {
     switch (status) {
@@ -306,11 +470,75 @@ const LeadTableDisplay = ({
   const handleRemarkBlur = useCallback(
     (leadId, value) => {
       onRemarkChange(leadId, value);
-      // parent updates the lead; when that lead prop changes,
-      // our refreshKey (below) changes and triggers a refetch
     },
     [onRemarkChange]
   );
+
+  /* -------------------------- PAGINATION LOGIC -------------------------- */
+  const [currentPage, setCurrentPage] = useState(1);
+  const leadsPerPage = 20;
+
+  const totalPages = Math.ceil(orderedLeads.length / leadsPerPage);
+  const indexOfLastLead = currentPage * leadsPerPage;
+  const indexOfFirstLead = indexOfLastLead - leadsPerPage;
+  const currentLeads = orderedLeads.slice(indexOfFirstLead, indexOfLastLead);
+
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  };
+
+  /* ---------------------- HORIZONTAL SCROLL LOGIC ----------------------- */
+  const tableContainerRef = useRef(null);
+  const scrollIntervalRef = useRef(null);
+
+  const handleMouseMove = useCallback((e) => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const { clientX } = e;
+    const { left, right } = container.getBoundingClientRect();
+    const scrollSpeed = 10;
+    const edgeThreshold = 50;
+
+    if (clientX < left + edgeThreshold) {
+      if (scrollIntervalRef.current) return;
+      scrollIntervalRef.current = setInterval(() => {
+        container.scrollLeft -= scrollSpeed;
+      }, 20);
+    } else if (clientX > right - edgeThreshold) {
+      if (scrollIntervalRef.current) return;
+      scrollIntervalRef.current = setInterval(() => {
+        container.scrollLeft += scrollSpeed;
+      }, 20);
+    } else {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    clearInterval(scrollIntervalRef.current);
+    scrollIntervalRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("mouseleave", handleMouseLeave);
+
+    return () => {
+      container.removeEventListener("mousemove", handleMouseMove);
+      container.removeEventListener("mouseleave", handleMouseLeave);
+      clearInterval(scrollIntervalRef.current);
+    };
+  }, [handleMouseMove, handleMouseLeave]);
 
   if (!leads || leads.length === 0) {
     return (
@@ -321,229 +549,283 @@ const LeadTableDisplay = ({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Student Name
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Parents' Name
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Email
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Phone
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              WhatsApp Number
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Age
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Grade
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Source
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Course
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              ClassType
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Shift
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Previous Coding
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Last Call
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Next Call
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Device
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Status
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Remarks
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Change Log
-            </th>
-            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Edit
-            </th>
-            <th className="relative px-3 py-3">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
+    <div>
+      <div className="flex justify-end items-center mb-4 space-x-2">
+        {selectedLeads.size > 0 && (
+          <button
+            onClick={onBulkDeleteClick}
+            className="inline-flex items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            <TrashIcon className="h-5 w-5 mr-2" />
+            Delete Selected ({selectedLeads.size})
+          </button>
+        )}
 
-        <tbody className="bg-white divide-y divide-gray-200">
-          {leads.map((lead) => {
-            const displayCourse =
-              lead.course_name || lead.courseName || lead.course || "N/A";
-            return (
-              <tr key={lead._id} className="hover:bg-gray-50">
-                <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {lead.studentName}
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.parentsName || "N/A"}
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.email}
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.phone}
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.contactWhatsapp}
-                </td>
+        <ColumnToggler columns={columns} setColumns={setColumns} />
+      </div>
 
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  <input
-                    type="text"
-                    value={lead.age || ""}
-                    onChange={(e) => onAgeChange(lead._id, e.target.value)}
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
-                    style={{ minWidth: "60px" }}
-                  />
-                </td>
+      <div className="overflow-x-auto" ref={tableContainerRef}>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-3 py-3 w-10">
+                <span className="sr-only">Drag</span>
+              </th>
+              <th className="px-3 py-3 w-10">
+                <input
+                  type="checkbox"
+                  onChange={handleSelectAll}
+                  checked={
+                    orderedLeads.length > 0 &&
+                    selectedLeads.size === currentLeads.length &&
+                    selectedLeads.size === orderedLeads.length
+                  }
+                  indeterminate={
+                    selectedLeads.size > 0 &&
+                    selectedLeads.size < orderedLeads.length
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+              </th>
 
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  <input
-                    type="text"
-                    value={lead.grade || ""}
-                    onChange={(e) => onGradeChange(lead._id, e.target.value)}
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
-                    style={{ minWidth: "60px" }}
-                  />
-                </td>
-
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.source}
-                </td>
-
-                {/* Course with colored badge */}
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded border ${getCourseClasses(
-                      displayCourse
-                    )}`}
-                    title={displayCourse}
+              {Object.entries(columns).map(([key, { label, visible }]) =>
+                visible ? (
+                  <th
+                    key={key}
+                    className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    {displayCourse}
-                  </span>
-                </td>
+                    {label}
+                  </th>
+                ) : null
+              )}
+            </tr>
+          </thead>
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={orderedLeads.map((l) => l._id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody className="bg-white divide-y divide-gray-200">
+                {currentLeads.map((lead) => {
+                  const displayCourse =
+                    lead.course_name || lead.courseName || lead.course || "N/A";
+                  return (
+                    <DraggableRow
+                      key={lead._id}
+                      lead={lead}
+                      columns={columns}
+                      selected={selectedLeads.has(lead._id)}
+                      onSelect={handleSelectRow}
+                    >
+                      {columns.studentName.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {lead.studentName}
+                        </td>
+                      )}
+                      {columns.parentsName.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.parentsName || "N/A"}
+                        </td>
+                      )}
+                      {columns.email.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.email}
+                        </td>
+                      )}
+                      {columns.phone.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.phone}
+                        </td>
+                      )}
+                      {columns.contactWhatsapp.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.contactWhatsapp}
+                        </td>
+                      )}
+                      {columns.age.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <input
+                            type="text"
+                            value={lead.age || ""}
+                            onChange={(e) =>
+                              onAgeChange(lead._id, e.target.value)
+                            }
+                            className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+                            style={{ minWidth: "60px" }}
+                          />
+                        </td>
+                      )}
+                      {columns.grade.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <input
+                            type="text"
+                            value={lead.grade || ""}
+                            onChange={(e) =>
+                              onGradeChange(lead._id, e.target.value)
+                            }
+                            className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+                            style={{ minWidth: "60px" }}
+                          />
+                        </td>
+                      )}
+                      {columns.source.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.source}
+                        </td>
+                      )}
+                      {columns.course.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded border ${getCourseClasses(
+                              displayCourse
+                            )}`}
+                            title={displayCourse}
+                          >
+                            {displayCourse}
+                          </span>
+                        </td>
+                      )}
+                      {columns.classType.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.classType}
+                        </td>
+                      )}
+                      {columns.shift.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.shift}
+                        </td>
+                      )}
+                      {columns.previousCodingExp.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.previousCodingExp}
+                        </td>
+                      )}
+                      {columns.recentCall.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <input
+                            type="date"
+                            value={getFormattedDate(lead.recentCall)}
+                            onChange={(e) =>
+                              onRecentCallChange(lead._id, e.target.value)
+                            }
+                            className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                          />
+                        </td>
+                      )}
+                      {columns.nextCall.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <input
+                            type="date"
+                            value={getFormattedDate(lead.nextCall)}
+                            onChange={(e) =>
+                              onNextCallChange(lead._id, e.target.value)
+                            }
+                            className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                          />
+                        </td>
+                      )}
+                      {columns.device.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          {lead.device || "N/A"}
+                        </td>
+                      )}
+                      {columns.status.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm">
+                          <select
+                            value={lead.status}
+                            onChange={(e) =>
+                              onStatusChange(lead._id, e.target.value)
+                            }
+                            className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
+                              lead.status
+                            )}`}
+                            style={{ minWidth: "100px" }}
+                          >
+                            {statusOptions.map((option) => (
+                              <option
+                                key={option}
+                                value={option}
+                                className={`${getStatusClasses(option)}`}
+                              >
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+                      {columns.remarks.visible && (
+                        <td className="px-3 py-4 text-sm text-gray-700">
+                          <textarea
+                            value={localRemarks[lead._id] || ""}
+                            onChange={(e) =>
+                              handleLocalRemarkChange(lead._id, e.target.value)
+                            }
+                            onBlur={(e) =>
+                              handleRemarkBlur(lead._id, e.target.value)
+                            }
+                            rows="2"
+                            className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
+                            style={{ minWidth: "150px" }}
+                          ></textarea>
+                        </td>
+                      )}
+                      {columns.changeLog.visible && (
+                        <td className="px-3 py-4 text-sm text-gray-700">
+                          <LeadLogDisplay
+                            leadId={lead._id}
+                            authToken={authToken}
+                            changeLogService={changeLogService}
+                            refreshKey={`${lead.status}|${lead.remarks}|${lead.recentCall}|${lead.nextCall}|${lead.age}|${lead.grade}`}
+                          />
+                        </td>
+                      )}
+                      {columns.actions.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleEdit(lead)}
+                            className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 rounded-md hover:bg-indigo-50 transition-colors"
+                          >
+                            <PencilIcon className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(lead._id)}
+                            className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        </td>
+                      )}
+                    </DraggableRow>
+                  );
+                })}
+              </tbody>
+            </SortableContext>
+          </DndContext>
+        </table>
+      </div>
 
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.classType}
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.shift}
-                </td>
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.previousCodingExp}
-                </td>
-
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  <input
-                    type="date"
-                    value={getFormattedDate(lead.recentCall)}
-                    onChange={(e) =>
-                      onRecentCallChange(lead._id, e.target.value)
-                    }
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                  />
-                </td>
-
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  <input
-                    type="date"
-                    value={getFormattedDate(lead.nextCall)}
-                    onChange={(e) => onNextCallChange(lead._id, e.target.value)}
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none"
-                  />
-                </td>
-
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {lead.device || "N/A"}
-                </td>
-
-                <td className="px-3 py-4 whitespace-nowrap text-sm">
-                  <select
-                    value={lead.status}
-                    onChange={(e) => onStatusChange(lead._id, e.target.value)}
-                    className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
-                      lead.status
-                    )}`}
-                    style={{ minWidth: "100px" }}
-                  >
-                    {statusOptions.map((option) => (
-                      <option
-                        key={option}
-                        value={option}
-                        className={`${getStatusClasses(option)}`}
-                      >
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-3 py-4 text-sm text-gray-700">
-                  <textarea
-                    value={localRemarks[lead._id] || ""}
-                    onChange={(e) =>
-                      handleLocalRemarkChange(lead._id, e.target.value)
-                    }
-                    onBlur={(e) => handleRemarkBlur(lead._id, e.target.value)}
-                    rows="2"
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
-                    style={{ minWidth: "150px" }}
-                  ></textarea>
-                </td>
-
-                {/* Change Log */}
-                <td className="px-3 py-4 text-sm text-gray-700">
-                  <LeadLogDisplay
-                    leadId={lead._id}
-                    authToken={authToken}
-                    changeLogService={changeLogService}
-                    // refetch logs when any of these fields change:
-                    refreshKey={`${lead.status}|${lead.remarks}|${lead.recentCall}|${lead.nextCall}|${lead.age}|${lead.grade}`}
-                  />
-                </td>
-
-                <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <button
-                    onClick={() => handleEdit(lead)}
-                    className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 rounded-md hover:bg-indigo-50 transition-colors"
-                  >
-                    <PencilIcon className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(lead._id)}
-                    className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="flex justify-end items-center mt-4">
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronLeftIcon className="h-5 w-5 text-gray-500" />
+        </button>
+        <span className="mx-4 text-sm font-medium text-gray-700">
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+        </button>
+      </div>
     </div>
   );
 };
