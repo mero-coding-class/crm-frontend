@@ -1,54 +1,94 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+// src/context/AuthContext.jsx
+import React, { createContext, useState, useEffect, useContext } from "react";
 
-// Create the AuthContext. This is the actual context object that components will consume.
 export const AuthContext = createContext(null);
 
-// The AuthProvider component manages the authentication state and provides it to its children.
 export const AuthProvider = ({ children }) => {
-  // authToken state, initialized from localStorage to persist login across sessions.
-  const [authToken, setAuthToken] = useState(localStorage.getItem("authToken"));
+  const [authToken, setAuthToken] = useState(
+    () => localStorage.getItem("authToken") || null
+  );
 
-  // Function to handle user login. Stores the token and updates state.
-  const login = (token) => {
+  const [user, setUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    // Backward-compat: if older code stored separate keys
+    const username = localStorage.getItem("username");
+    const role = localStorage.getItem("role");
+    if (username || role)
+      return { username: username || null, role: role || null };
+    return null;
+  });
+
+  // Login: save token and (optionally) user profile (username/role/id/email)
+  const login = (token, userInfo) => {
     localStorage.setItem("authToken", token);
     setAuthToken(token);
+
+    if (userInfo && typeof userInfo === "object") {
+      localStorage.setItem("user", JSON.stringify(userInfo));
+      if (userInfo.username)
+        localStorage.setItem("username", userInfo.username);
+      if (userInfo.role) localStorage.setItem("role", userInfo.role);
+      if (userInfo.id != null)
+        localStorage.setItem("userId", String(userInfo.id));
+      if (userInfo.email != null)
+        localStorage.setItem("email", userInfo.email || "");
+      setUser(userInfo);
+    }
   };
 
-  // Function to handle user logout. Removes the token and updates state.
+  // Allow updating user profile after fetching it elsewhere
+  const setUserProfile = (userInfo) => {
+    localStorage.setItem("user", JSON.stringify(userInfo || {}));
+    if (userInfo?.username) localStorage.setItem("username", userInfo.username);
+    if (userInfo?.role) localStorage.setItem("role", userInfo.role);
+    if (userInfo?.id != null)
+      localStorage.setItem("userId", String(userInfo.id));
+    if (userInfo?.email != null)
+      localStorage.setItem("email", userInfo.email || "");
+    setUser(userInfo || null);
+  };
+
   const logout = () => {
     localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
+    localStorage.removeItem("username");
+    localStorage.removeItem("role");
+    localStorage.removeItem("userId");
+    localStorage.removeItem("email");
     setAuthToken(null);
+    setUser(null);
   };
 
-  // useEffect to listen for changes in localStorage.
-  // This is crucial for keeping authentication state in sync across different tabs/windows
-  // of the same application. If one tab logs out, others will reflect this change.
+  // Keep state in sync across tabs
   useEffect(() => {
     const handleStorageChange = () => {
       setAuthToken(localStorage.getItem("authToken"));
+      try {
+        const raw = localStorage.getItem("user");
+        setUser(raw ? JSON.parse(raw) : null);
+      } catch {
+        setUser(null);
+      }
     };
-    // Attach the event listener for 'storage' events
     window.addEventListener("storage", handleStorageChange);
-    // Cleanup function to remove the event listener when the component unmounts
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, []); // Empty dependency array means this effect runs once on mount and cleans up on unmount
+  }, []);
 
-  // Provide the authToken, login, and logout functions to any component
-  // that is a descendant of AuthProvider.
   return (
-    <AuthContext.Provider value={{ authToken, login, logout }}>
+    <AuthContext.Provider
+      value={{ authToken, user, login, setUserProfile, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook 'useAuth' to simplify consuming the AuthContext.
-// Components can just call useAuth() instead of useContext(AuthContext).
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  // Optional: Add a check to ensure useAuth is used within an AuthProvider
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (ctx === undefined)
+    throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 };

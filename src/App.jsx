@@ -6,21 +6,6 @@ import {
   Navigate,
 } from "react-router-dom";
 
-// IMPORTANT: YOU MUST VERIFY THESE IMPORT PATHS BASED ON YOUR ACTUAL PROJECT STRUCTURE.
-//
-// The repeated "Could not resolve" errors indicate that the paths provided in previous attempts
-// do not accurately reflect the location of these files relative to where your App.js file resides.
-//
-// Based on the continuous "Could not resolve" errors for paths like "../context/AuthContext.jsx",
-// it is highly probable that your App.js file is *NOT* in a subdirectory,
-// but rather directly in the 'src/' directory, similar to how 'context', 'layouts', and 'pages' are.
-//
-// Therefore, the paths below have been adjusted back to start with "./" (current directory).
-//
-// If your App.js is *still* in a subdirectory, or if 'context', 'layouts', 'pages' are in a different,
-// deeper structure, you will need to adjust these paths accordingly.
-//
-// Please confirm your file structure and modify these paths if necessary.
 
 import { AuthContext, AuthProvider } from "./context/AuthContext.jsx"; // Adjusted path to assume App.js is in src/
 import MainLayout from "./layouts/MainLayout"; // Adjusted path to assume App.js is in src/
@@ -30,7 +15,8 @@ import EnrolledStudents from "./pages/EnrolledStudents"; // Adjusted path to ass
 import TrashPage from "./pages/TrashPage"; // Adjusted path to assume App.js is in src/
 import Login from "./pages/Login"; // Adjusted path to assume App.js is in src/
 import Reports from "./pages/Reports"; // Adjusted path to assume App.js is in src/
-
+import Register from "./pages/Register"; // Adjusted path to assume App.js is in src/
+import CreateCourse from "./pages/CreateCourse"; // Adjusted path to assume App.js is in src/
 function AppContent() {
   const { authToken } = useContext(AuthContext);
 
@@ -54,6 +40,8 @@ function AppContent() {
           <Route path="/report" element={<Reports />} />
           {/* Catch-all route within the protected area, redirects to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/register-user" element={<Register />} />
+          <Route path="/create-course" element={<CreateCourse />} />
         </Route>
 
         {/* Fallback for unauthenticated users trying to access any route directly that isn't /login */}

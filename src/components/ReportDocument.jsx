@@ -1,181 +1,167 @@
 // src/components/ReportDocument.jsx
 
-import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import React from "react";
+import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
-// Helper to format date for display in PDF
+// PDF date helper
 const formatDateForPdf = (dateString) => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  return isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
 };
 
-// Create styles for your PDF report
 const styles = StyleSheet.create({
-  page: {
-    padding: 30,
-    fontFamily: 'Helvetica',
-  },
+  page: { padding: 30, fontFamily: "Helvetica" },
   header: {
     fontSize: 24,
     marginBottom: 10,
-    textAlign: 'center',
-    color: '#333',
-    fontWeight: 'bold',
+    textAlign: "center",
+    color: "#333",
+    fontWeight: "bold",
   },
   subHeader: {
     fontSize: 12,
     marginBottom: 20,
-    textAlign: 'center',
-    color: '#666',
+    textAlign: "center",
+    color: "#666",
   },
   section: {
     marginBottom: 15,
     padding: 10,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
     borderRadius: 5,
   },
   sectionTitle: {
     fontSize: 18,
     marginBottom: 10,
-    fontWeight: 'bold',
-    color: '#555',
+    fontWeight: "bold",
+    color: "#555",
   },
   statsGrid: {
-    display: 'flex',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     marginBottom: 20,
   },
   statCard: {
-    width: '30%',
+    width: "30%",
     padding: 10,
     marginBottom: 10,
     borderRadius: 5,
-    textAlign: 'center',
-    backgroundColor: '#e0f7fa',
-    border: '1px solid #b2ebf2',
+    textAlign: "center",
+    backgroundColor: "#e0f7fa",
+    border: "1px solid #b2ebf2",
   },
-  statTitle: {
-    fontSize: 12,
-    color: '#666',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#007bff',
-  },
-  listContainer: {
-    marginTop: 20,
-  },
+  statTitle: { fontSize: 12, color: "#666" },
+  statValue: { fontSize: 20, fontWeight: "bold", color: "#007bff" },
+
+  listContainer: { marginTop: 20 },
   table: {
     display: "table",
     width: "auto",
     borderStyle: "solid",
     borderWidth: 1,
-    borderColor: '#bfbfbf',
+    borderColor: "#bfbfbf",
     marginBottom: 10,
   },
-  tableRow: {
-    margin: "auto",
-    flexDirection: "row",
-  },
+  tableRow: { margin: "auto", flexDirection: "row" },
   tableColHeader: {
     width: "14%",
     borderStyle: "solid",
     borderBottomWidth: 1,
     borderRightWidth: 1,
-    borderColor: '#bfbfbf',
+    borderColor: "#bfbfbf",
     padding: 5,
-    backgroundColor: '#f2f2f2',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 7, // Reduced font size for more columns
+    backgroundColor: "#f2f2f2",
+    textAlign: "center",
+    fontWeight: "bold",
+    fontSize: 7,
   },
   tableCol: {
     width: "14%",
     borderStyle: "solid",
     borderBottomWidth: 0,
     borderRightWidth: 1,
-    borderColor: '#bfbfbf',
+    borderColor: "#bfbfbf",
     padding: 5,
-    fontSize: 6, // Reduced font size for more columns
+    fontSize: 6,
   },
-  colName: { width: '8%' },
-  colEmail: { width: '10%' },
-  colPhone: { width: '7%' },
-  colWhatsApp: { width: '7%' },
-  colCourse: { width: '8%' },
-  colSource: { width: '6%' },
-  colAddDate: { width: '6%' },
-  colRecentCall: { width: '6%' },
-  colNextCall: { width: '6%' },
-  colStatus: { width: '5%' },
-  colAddress: { width: '8%' },
-  colCity: { width: '5%' },
-  colCountry: { width: '5%' },
-  colPostCode: { width: '5%' },
-  colClassType: { width: '5%' },
-  colValue: { width: '5%' },
-  colAdsetName: { width: '6%' },
-  colRemarks: { width: '8%' },
-  colShift: { width: '5%' },
-  colPaymentType: { width: '6%' },
-  colDevice: { width: '5%' },
-  colCourseType: { width: '6%' },
-  colPrevCodingExp: { width: '7%' },
-  colWorkshopBatch: { width: '7%' },
+  colName: { width: "8%" },
+  colEmail: { width: "10%" },
+  colPhone: { width: "7%" },
+  colCourse: { width: "8%" },
+  colStatus: { width: "5%" },
+  colAddDate: { width: "6%" },
+  colRecentCall: { width: "6%" },
+  colNextCall: { width: "6%" },
+  colAddress: { width: "8%" },
+  colCity: { width: "5%" },
+  colCourseType: { width: "6%" },
+  colRemarks: { width: "8%" },
 });
 
-
-// Define the columns you want in the PDF table (subset for readability)
-const qualifiedStudentsPdfTableColumns = [
+// Columns used in the PDF table (subset for readability)
+const convertedStudentsPdfTableColumns = [
   { header: "Name", accessor: "studentName", style: styles.colName },
   { header: "Email", accessor: "email", style: styles.colEmail },
   { header: "Phone", accessor: "phone", style: styles.colPhone },
   { header: "Course", accessor: "course", style: styles.colCourse },
   { header: "Status", accessor: "status", style: styles.colStatus },
   { header: "Add Date", accessor: "addDate", style: styles.colAddDate },
-  { header: "Recent Call", accessor: "recentCall", style: styles.colRecentCall },
+  {
+    header: "Recent Call",
+    accessor: "recentCall",
+    style: styles.colRecentCall,
+  },
   { header: "Next Call", accessor: "nextCall", style: styles.colNextCall },
   { header: "Address", accessor: "address", style: styles.colAddress },
   { header: "City", accessor: "city", style: styles.colCity },
-  { header: "Course Type", accessor: "courseType", style: styles.colCourseType },
+  {
+    header: "Course Type",
+    accessor: "courseType",
+    style: styles.colCourseType,
+  },
   { header: "Remarks", accessor: "remarks", style: styles.colRemarks },
 ];
 
-
-// Helper function to render table headers
 const TableHeader = ({ columns }) => (
   <View style={styles.tableRow} fixed>
-    {columns.map((col, index) => (
-      <View key={index} style={[styles.tableColHeader, col.style || {}]}>
+    {columns.map((col, i) => (
+      <View key={i} style={[styles.tableColHeader, col.style || {}]}>
         <Text>{col.header}</Text>
       </View>
     ))}
   </View>
 );
 
-// Helper function to render table rows
-const TableRow = ({ student, columns }) => (
+const TableRow = ({ row, columns }) => (
   <View style={styles.tableRow}>
-    {columns.map((col, index) => (
-      <View key={index} style={[styles.tableCol, col.style || {}]}>
-        <Text>{student[col.accessor]}</Text>
+    {columns.map((col, i) => (
+      <View key={i} style={[styles.tableCol, col.style || {}]}>
+        <Text>{row[col.accessor]}</Text>
       </View>
     ))}
   </View>
 );
 
-
 const ReportDocument = ({ reportData, filterCriteria }) => {
-  let filterText = 'All Time';
-  if (filterCriteria.filterType === 'dateRange' && filterCriteria.startDate && filterCriteria.endDate) {
-    filterText = `From ${formatDateForPdf(filterCriteria.startDate)} to ${formatDateForPdf(filterCriteria.endDate)}`;
+  let filterText = "All Time";
+  if (
+    filterCriteria.filterType === "dateRange" &&
+    filterCriteria.startDate &&
+    filterCriteria.endDate
+  ) {
+    filterText = `From ${formatDateForPdf(
+      filterCriteria.startDate
+    )} to ${formatDateForPdf(filterCriteria.endDate)}`;
   }
-  // Removed month specific filter text logic
 
   return (
     <Document>
@@ -183,7 +169,7 @@ const ReportDocument = ({ reportData, filterCriteria }) => {
         <Text style={styles.header}>CRM Performance Report</Text>
         <Text style={styles.subHeader}>Report Period: {filterText}</Text>
 
-        {/* Summary Statistics */}
+        {/* Overview */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Overview</Text>
           <View style={styles.statsGrid}>
@@ -196,7 +182,7 @@ const ReportDocument = ({ reportData, filterCriteria }) => {
               <Text style={styles.statValue}>{reportData.activeLeads}</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statTitle}>Qualified Leads</Text>
+              <Text style={styles.statTitle}>Converted Leads</Text>
               <Text style={styles.statValue}>{reportData.convertedLeads}</Text>
             </View>
             <View style={styles.statCard}>
@@ -210,36 +196,36 @@ const ReportDocument = ({ reportData, filterCriteria }) => {
           </View>
         </View>
 
-        {/* Qualified Students List */}
+        {/* Converted Students */}
         <View style={[styles.section, styles.listContainer]}>
-          <Text style={styles.sectionTitle}>Qualified Students List</Text>
+          <Text style={styles.sectionTitle}>Converted Students List</Text>
           <View style={styles.table}>
-            <TableHeader columns={qualifiedStudentsPdfTableColumns} />
-            {reportData.qualifiedStudentsList.map((student) => (
+            <TableHeader columns={convertedStudentsPdfTableColumns} />
+            {reportData.convertedStudentsList.map((row) => (
               <TableRow
-                key={student._id}
-                student={student}
-                columns={qualifiedStudentsPdfTableColumns}
+                key={row._id}
+                row={row}
+                columns={convertedStudentsPdfTableColumns}
               />
             ))}
           </View>
-          {reportData.qualifiedStudentsList.length === 0 && (
-            <Text style={{ fontSize: 10, textAlign: 'center', color: '#777' }}>
-              No qualified students found for this report period.
+          {reportData.convertedStudentsList.length === 0 && (
+            <Text style={{ fontSize: 10, textAlign: "center", color: "#777" }}>
+              No converted students found for this report period.
             </Text>
           )}
         </View>
 
-        {/* Footer / Page Number */}
+        {/* Footer */}
         <Text
           style={{
-            position: 'absolute',
+            position: "absolute",
             fontSize: 8,
             bottom: 30,
             left: 0,
             right: 0,
-            textAlign: 'center',
-            color: 'grey',
+            textAlign: "center",
+            color: "grey",
           }}
           render={({ pageNumber, totalPages }) =>
             `Page ${pageNumber} of ${totalPages}`

@@ -1,20 +1,17 @@
 // C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Dashboard.jsx
 
 import React, { useState, useEffect, useMemo } from "react";
-// Corrected import path for AuthContext and using useAuth hook
-import { useAuth } from "../context/AuthContext.jsx"; // <<<-- Corrected import
-
+import { useAuth } from "../context/AuthContext.jsx";
 import Loader from "../components/common/Loader";
 
-// Import your mock leads data
-import initialMockLeads from "../data/mockLeads";
-
-// Import new dashboard components
 import StatCard from "../components/dashboard/StatCard";
 import LatestLeadsTable from "../components/dashboard/LatestLeadsTable";
 import TopCoursesTable from "../components/dashboard/TopCoursesTable";
 
-// Import Recharts components
+// 👉 use your real API service
+import { leadService } from "../services/api";
+
+// Recharts
 import {
   PieChart,
   Pie,
@@ -31,7 +28,7 @@ import {
   Bar,
 } from "recharts";
 
-// Import icons for stat cards and other elements
+// Icons
 import {
   UsersIcon,
   AcademicCapIcon,
@@ -41,27 +38,21 @@ import {
   GlobeAltIcon,
 } from "@heroicons/react/24/outline";
 
-// Define a custom reusable ChartContainer component for consistent styling and responsiveness
 const ChartContainer = ({ title, description, children }) => (
   <div className="bg-white p-6 rounded-lg shadow-md flex flex-col h-full">
     <h3 className="text-lg font-semibold text-gray-800 mb-2">{title}</h3>
     <p className="text-gray-500 text-sm mb-4">{description}</p>
-    <div className="flex-grow min-h-[250px]">
-      {" "}
-      {/* min-h for charts */}
-      {children}
-    </div>
+    <div className="flex-grow min-h-[250px]">{children}</div>
   </div>
 );
 
 const Dashboard = () => {
-  // Use the useAuth hook to get the authToken
-  const { authToken } = useAuth(); // <<<-- Using useAuth hook
-  const [allLeads, setAllLeads] = useState([]); // State to hold all leads from mock data
+  const { authToken } = useAuth();
+  const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Define colors for the pie chart segments
+  // Pie segment colors
   const PIE_COLORS = [
     "#8884d8",
     "#82ca9d",
@@ -73,181 +64,168 @@ const Dashboard = () => {
     "#FF8042",
   ];
 
+  // Load real leads from backend
   useEffect(() => {
     const fetchLeadsData = async () => {
       setLoading(true);
       setError(null);
       try {
-        // In a real application, you'd fetch data from an API here:
-        // const response = await fetch('/api/all-leads', {
-        //   headers: { Authorization: `Bearer ${authToken}` }
-        // });
-        // if (!response.ok) throw new Error('Failed to fetch leads');
-        // const data = await response.json();
-        // setAllLeads(data);
-
-        // For now, using mock leads data:
-        setAllLeads(initialMockLeads);
+        if (!authToken) throw new Error("Not authenticated.");
+        const leads = await leadService.getLeads(authToken);
+        setAllLeads(Array.isArray(leads) ? leads : []);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || "Failed to fetch leads");
       } finally {
         setLoading(false);
       }
     };
-
     fetchLeadsData();
-  }, [authToken]); // Dependency on authToken to refetch if auth changes
+  }, [authToken]);
 
-  // --- Dynamic Dashboard Data Calculation ---
+  // Helper: parse date safely
+  const toDate = (d) => {
+    if (!d) return null;
+    const t = new Date(d);
+    return isNaN(t.getTime()) ? null : t;
+  };
+
+  // Build all dashboard aggregates from real leads
   const dashboardData = useMemo(() => {
-    if (allLeads.length === 0) {
-      return null; // Return null if no leads yet
-    }
+    if (!allLeads || allLeads.length === 0) return null;
 
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // --- Stats Calculation ---
     const totalLeads = allLeads.length;
+
+    // Define "enrolled" as status === Converted
     const enrolledLeads = allLeads.filter(
-      (lead) => lead.status === "Qualified" || lead.status === "Closed"
+      (l) => (l.status || "").toLowerCase() === "converted"
     );
     const totalEnrolledStudents = enrolledLeads.length;
 
+    // New leads in current month (by addDate)
     const newLeadsThisMonth = allLeads.filter((lead) => {
-      const addDate = new Date(lead.addDate);
+      const dt = toDate(lead.addDate);
       return (
-        addDate.getMonth() === currentMonth &&
-        addDate.getFullYear() === currentYear
+        dt && dt.getMonth() === currentMonth && dt.getFullYear() === currentYear
       );
     }).length;
 
+    // Revenue this month — if you track value per lead, sum value for Converted in current month
+    // Adjust this logic if your backend uses a different revenue field.
     let revenueThisMonth = 0;
     enrolledLeads.forEach((lead) => {
-      // Sum up installment payments if their dates fall within the current month
-      if (lead.installment1Date) {
-        const date1 = new Date(lead.installment1Date);
-        if (
-          date1.getMonth() === currentMonth &&
-          date1.getFullYear() === currentYear
-        ) {
-          revenueThisMonth += lead.installment1 || 0;
-        }
-      }
-      if (lead.installment2Date) {
-        const date2 = new Date(lead.installment2Date);
-        if (
-          date2.getMonth() === currentMonth &&
-          date2.getFullYear() === currentYear
-        ) {
-          revenueThisMonth += lead.installment2 || 0;
-        }
-      }
-      if (lead.installment3Date) {
-        const date3 = new Date(lead.installment3Date);
-        if (
-          date3.getMonth() === currentMonth &&
-          date3.getFullYear() === currentYear
-        ) {
-          revenueThisMonth += lead.installment3 || 0;
-        }
+      const dt = toDate(lead.addDate);
+      const val = Number(lead.value) || 0;
+      if (
+        dt &&
+        dt.getMonth() === currentMonth &&
+        dt.getFullYear() === currentYear
+      ) {
+        revenueThisMonth += val;
       }
     });
 
+    // Upcoming calls/classes in next 7 days (by nextCall)
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start of today
-    const sevenDaysFromNow = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysFromNow = new Date(today);
     sevenDaysFromNow.setDate(today.getDate() + 7);
-    sevenDaysFromNow.setHours(23, 59, 59, 999); // End of 7th day
+    sevenDaysFromNow.setHours(23, 59, 59, 999);
 
     const upcomingClassesCalls = allLeads.filter((lead) => {
-      if (!lead.nextCall || lead.nextCall === "N/A") return false;
-      const nextCallDate = new Date(lead.nextCall);
-      return nextCallDate >= today && nextCallDate <= sevenDaysFromNow;
+      const dt = toDate(lead.nextCall);
+      return dt && dt >= today && dt <= sevenDaysFromNow;
     }).length;
 
-    // --- Charts Data Calculation ---
-    const leadStatusDistributionMap = new Map();
+    // Chart: status distribution
+    const statusCounts = new Map();
     allLeads.forEach((lead) => {
-      const status = lead.status || "Unknown";
-      leadStatusDistributionMap.set(
-        status,
-        (leadStatusDistributionMap.get(status) || 0) + 1
-      );
+      const s = lead.status || "Unknown";
+      statusCounts.set(s, (statusCounts.get(s) || 0) + 1);
     });
-    const leadStatusDistribution = Array.from(
-      leadStatusDistributionMap.entries()
-    ).map(([name, value]) => ({ name, value }));
-
-    const enrollmentTrendsMap = new Map(); // Key: YYYY-MM, Value: count
-    enrolledLeads.forEach((lead) => {
-      const addDate = new Date(lead.addDate);
-      const monthYear = `${addDate.getFullYear()}-${String(
-        addDate.getMonth() + 1
-      ).padStart(2, "0")}`;
-      enrollmentTrendsMap.set(
-        monthYear,
-        (enrollmentTrendsMap.get(monthYear) || 0) + 1
-      );
-    });
-    // Sort months chronologically and format for chart
-    const enrollmentTrends = Array.from(enrollmentTrendsMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([monthYear, students]) => ({
-        month: monthYear.substring(5),
-        students,
-      })); // Use MM for month
-
-    const leadsBySourceMap = new Map();
-    allLeads.forEach((lead) => {
-      const source = lead.source || "Unknown";
-      leadsBySourceMap.set(source, (leadsBySourceMap.get(source) || 0) + 1);
-    });
-    const leadsBySource = Array.from(leadsBySourceMap.entries()).map(
-      ([source, leads]) => ({ source, leads })
+    const leadStatusDistribution = Array.from(statusCounts.entries()).map(
+      ([name, value]) => ({ name, value })
     );
 
-    // --- Tables Data Calculation ---
-    const latestLeads = [...allLeads] // Create a copy to sort
-      .sort((a, b) => new Date(b.addDate) - new Date(a.addDate))
-      .slice(0, 10) // Get top 10 latest leads
+    // Chart: enrollment trends by month (for Converted)
+    const enrollByMonth = new Map(); // key "YYYY-MM" -> count
+    enrolledLeads.forEach((lead) => {
+      const dt = toDate(lead.addDate);
+      if (!dt) return;
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}`;
+      enrollByMonth.set(key, (enrollByMonth.get(key) || 0) + 1);
+    });
+    const enrollmentTrends = Array.from(enrollByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthYear, students]) => ({
+        month: monthYear.substring(5), // "MM"
+        students,
+      }));
+
+    // Chart: leads by source
+    const bySource = new Map();
+    allLeads.forEach((lead) => {
+      const src = lead.source || "Unknown";
+      bySource.set(src, (bySource.get(src) || 0) + 1);
+    });
+    const leadsBySource = Array.from(bySource.entries()).map(
+      ([source, leads]) => ({
+        source,
+        leads,
+      })
+    );
+
+    // Tables
+    const latestLeads = [...allLeads]
+      .sort(
+        (a, b) =>
+          (toDate(b.addDate)?.getTime() || 0) -
+          (toDate(a.addDate)?.getTime() || 0)
+      )
+      .slice(0, 10)
       .map((lead) => ({
         _id: lead._id,
         studentName: lead.studentName,
         email: lead.email,
-        course: lead.course,
+        // Prefer course_name if your mapping provides it; fall back to course
+        course: lead.course_name || lead.course || "",
         status: lead.status,
-        registeredOn: lead.addDate, // Using addDate as registeredOn
+        registeredOn: lead.addDate,
       }));
 
-    const topCoursesMap = new Map(); // Key: courseName, Value: { enrollments: count, revenue: sum }
+    const topCoursesMap = new Map(); // course -> { enrollments, revenue }
     enrolledLeads.forEach((lead) => {
-      const courseName = lead.course || "Unknown Course";
-      const currentData = topCoursesMap.get(courseName) || {
+      const courseName = lead.course_name || lead.course || "Unknown Course";
+      const prev = topCoursesMap.get(courseName) || {
         enrollments: 0,
         revenue: 0,
       };
       topCoursesMap.set(courseName, {
-        enrollments: currentData.enrollments + 1,
-        revenue: currentData.revenue + (lead.totalPayment || 0),
+        enrollments: prev.enrollments + 1,
+        revenue: prev.revenue + (Number(lead.value) || 0),
       });
     });
     const topCourses = Array.from(topCoursesMap.entries())
       .map(([name, data]) => ({
         name,
         enrollments: data.enrollments,
-        revenue: `$${data.revenue.toLocaleString()}`, // Format revenue
+        revenue: `$${data.revenue.toLocaleString()}`,
       }))
-      .sort((a, b) => b.enrollments - a.enrollments) // Sort by enrollments descending
-      .slice(0, 7); // Get top 7 courses
+      .sort((a, b) => b.enrollments - a.enrollments)
+      .slice(0, 7);
 
     return {
       stats: {
         totalLeads,
         totalEnrolledStudents,
         newLeadsThisMonth,
-        revenueThisMonth: `$${revenueThisMonth.toLocaleString()}`, // Format revenue
+        revenueThisMonth: `Rs ${revenueThisMonth.toLocaleString()}`,
         upcomingClassesCalls,
       },
       charts: {
@@ -258,11 +236,9 @@ const Dashboard = () => {
       latestLeads,
       topCourses,
     };
-  }, [allLeads]); // Recalculate whenever allLeads changes
+  }, [allLeads]);
 
-  if (loading) {
-    return <Loader />;
-  }
+  if (loading) return <Loader />;
 
   if (error) {
     return (
@@ -284,7 +260,7 @@ const Dashboard = () => {
     <div className="container mx-auto p-4 md:p-6 bg-gray-50 min-h-screen text-gray-900">
       <h1 className="text-3xl font-bold mb-8">Education CRM Dashboard</h1>
 
-      {/* Top Statistical Cards */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
         <StatCard
           title="Total Leads"
@@ -297,7 +273,7 @@ const Dashboard = () => {
           title="Enrolled Students"
           value={dashboardData.stats.totalEnrolledStudents}
           icon={AcademicCapIcon}
-          description="Qualified or Closed leads"
+          description='Leads with status "Converted"'
           colorClass="text-purple-600 bg-purple-100"
         />
         <StatCard
@@ -311,7 +287,7 @@ const Dashboard = () => {
           title="Revenue This Month"
           value={dashboardData.stats.revenueThisMonth}
           icon={CurrencyDollarIcon}
-          description="Payments received in current month"
+          description='Sum of "value" for Converted leads'
           colorClass="text-teal-600 bg-teal-100"
         />
         <StatCard
@@ -323,9 +299,8 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Charts Section */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Lead Status Distribution (Pie Chart) */}
         <ChartContainer
           title="Lead Status Distribution"
           description="Current breakdown of leads by their status."
@@ -357,10 +332,9 @@ const Dashboard = () => {
           </ResponsiveContainer>
         </ChartContainer>
 
-        {/* Enrollment Trends (Line Chart) */}
         <ChartContainer
           title="Student Enrollment Trends"
-          description="Monthly trend of new student enrollments (based on add date)."
+          description='Monthly trend of "Converted" leads (by Add Date).'
         >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -369,7 +343,7 @@ const Dashboard = () => {
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
-              <YAxis />
+              <YAxis allowDecimals={false} />
               <Tooltip />
               <Legend />
               <Line
@@ -382,7 +356,6 @@ const Dashboard = () => {
           </ResponsiveContainer>
         </ChartContainer>
 
-        {/* Leads by Source (Bar Chart) */}
         <ChartContainer
           title="Leads by Source"
           description="Distribution of leads across various marketing channels."
@@ -399,7 +372,7 @@ const Dashboard = () => {
                 textAnchor="end"
                 height={50}
               />
-              <YAxis />
+              <YAxis allowDecimals={false} />
               <Tooltip />
               <Legend />
               <Bar dataKey="leads" fill="#82ca9d" />
@@ -408,22 +381,19 @@ const Dashboard = () => {
         </ChartContainer>
       </div>
 
-      {/* Tables Section */}
+      {/* Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Latest Lead Registrations Table */}
         <LatestLeadsTable leads={dashboardData.latestLeads} />
-
-        {/* Top Courses by Enrollment Table */}
         <TopCoursesTable courses={dashboardData.topCourses} />
       </div>
 
-      {/* Optional: Map Placeholder for Geographic Distribution */}
+      {/* Optional map placeholder */}
       <ChartContainer
         title="Geographical Lead Distribution"
         description="Visualizing where your leads are coming from globally."
       >
         <div className="flex-grow flex items-center justify-center bg-gray-100 border border-dashed border-gray-300 rounded-md text-gray-400 text-center text-sm">
-          <GlobeAltIcon className="h-10 w-10 mb-2 text-gray-300" />
+          <GlobeAltIcon className="h-10 w-10 mr-2 text-gray-300" />
           <p>Map component will go here</p>
         </div>
       </ChartContainer>
