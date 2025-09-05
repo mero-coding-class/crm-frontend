@@ -1,10 +1,12 @@
-// src/components/dashboard/TopCoursesTable.jsx
-import React from 'react';
+import React from "react";
 
-const TopCoursesTable = ({ courses }) => {
+const TopCoursesTable = ({ courses = [] }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Courses by Enrollment</h3>
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">
+        Top Courses by Enrollment
+      </h3>
+
       {courses.length === 0 ? (
         <p className="text-gray-500 text-center py-4">No top courses data.</p>
       ) : (
@@ -23,6 +25,7 @@ const TopCoursesTable = ({ courses }) => {
                 </th>
               </tr>
             </thead>
+
             <tbody className="bg-white divide-y divide-gray-200">
               {courses.map((course, index) => (
                 <tr key={index} className="hover:bg-gray-50">

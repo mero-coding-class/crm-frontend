@@ -1,26 +1,38 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import axios from "axios"; // Import axios for consistent API calls
+import axios from "axios";
+import { useAuth } from "../context/AuthContext.jsx";
 
-// IMPORTANT: The "Could not resolve" error for this path indicates that
-// the specified location of 'AuthContext.jsx' is incorrect RELATIVE TO THIS 'Login.jsx' file.
-//
-// Based on the error path: C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Login.jsx
-// And the presumed location of AuthContext: C:/Users/aryal/Desktop/EDU_CRM/client/src/context/AuthContext.jsx
-//
-// The path "../context/AuthContext.jsx" is the standard and logically correct relative path:
-// 1. ".." goes up one directory from 'pages/' to 'src/'.
-// 2. "context/" then navigates into the 'context' folder.
-// 3. "AuthContext.jsx" specifies the file.
-//
-// IF THIS ERROR PERSISTS, YOU MUST:
-// 1. DOUBLE-CHECK THE EXACT SPELLING AND CASE (e.g., 'context' vs 'Context')
-//    OF YOUR FOLDERS AND 'AuthContext.jsx' FILE ON YOUR SYSTEM.
-// 2. CONFIRM THAT 'Login.jsx' IS INDEED IN 'src/pages/' and 'AuthContext.jsx' is in 'src/context/'.
-// 3. If your 'client' directory is not the root, your build tool might have a different base.
-//    However, for typical React setups, this relative path is correct.
+// Adjust if you have BASE_URL in config
+const API_BASE = "https://crmmerocodingbackend.ktm.yetiappcloud.com/api";
 
-import { useAuth } from "../context/AuthContext.jsx"; // Verify this path on your system!
+async function fetchUserProfile(token, fallbackUsername) {
+  const headers = { Authorization: `Token ${token}` };
+  // Try /users/me/
+  try {
+    const { data } = await axios.get(`${API_BASE}/users/me/`, { headers });
+    return data; // { id, username, email, role }
+  } catch (_) {}
+
+  // Try /auth/user/
+  try {
+    const { data } = await axios.get(`${API_BASE}/auth/user/`, { headers });
+    return data;
+  } catch (_) {}
+
+  // Fallback: /users/ (list) and match by username
+  try {
+    const { data } = await axios.get(`${API_BASE}/users/`, { headers });
+    if (Array.isArray(data)) {
+      const found =
+        data.find((u) => u?.username === fallbackUsername) ?? data[0] ?? null;
+      return found;
+    }
+    return data;
+  } catch (_) {
+    return { username: fallbackUsername }; // last resort
+  }
+}
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -33,17 +45,14 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Use the useAuth hook to get the login function
   const { login } = useAuth();
 
-  // Pre-fill username if coming from successful registration
   useEffect(() => {
     if (location.state?.registrationSuccess && location.state?.username) {
       setFormData((prev) => ({ ...prev, username: location.state.username }));
-      // Inform user about successful registration, clear after some time
       setError("Registration successful! Please log in.");
-      const timer = setTimeout(() => setError(null), 5000); // Clear message after 5 seconds
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(t);
     }
   }, [location.state]);
 
@@ -61,37 +70,44 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post(
-        // Using axios for API call
-        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/auth/login/",
+      // 1) Login to get token
+      const { data } = await axios.post(
+        `${API_BASE}/auth/login/`,
         {
           username: formData.username,
           password: formData.password,
         },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      const data = response.data; // Axios automatically parses JSON
-      const token = data.key || data.token; // Backend might send 'key' or 'token'
+      const token = data.key || data.token;
+      if (!token) throw new Error("No token received from server.");
 
-      if (!token) {
-        throw new Error("No token received from server.");
-      }
+      // 2) Fetch profile (username + role)
+      const me = await fetchUserProfile(token, formData.username);
 
-      login(token); // Use the login function from AuthContext to store token and update state
-      navigate("/dashboard", { replace: true }); // Navigate to dashboard on successful login
+      // 3) Persist token in context (existing behavior)
+      //    If your AuthContext.login accepts only token, this is fine.
+      //    (Your MainLayout reads username/role from localStorage too.)
+      login(token);
+
+      // 4) Save username/role so MainLayout can display them
+      if (me?.username) localStorage.setItem("username", me.username);
+      if (me?.role) localStorage.setItem("role", me.role);
+      // optional: id/email
+      if (me?.id) localStorage.setItem("userId", String(me.id));
+      if (me?.email !== undefined)
+        localStorage.setItem("email", me.email || "");
+
+      // 5) Go to dashboard
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      // Improved error handling for axios responses
       setError(
         err.response?.data?.detail ||
           err.message ||
           "Login failed. Please check your credentials."
       );
-      console.error("Login error:", err.response?.data || err.message); // Log detailed error
+      console.error("Login error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -160,8 +176,8 @@ const Login = () => {
               </label>
             </div>
             <button
-              type="button" // Use type="button" to prevent form submission
-              onClick={() => console.log("Navigate to Forgot Password page")} // Placeholder
+              type="button"
+              onClick={() => console.log("Navigate to Forgot Password page")}
               className="text-blue-600 hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md px-1 py-0.5"
             >
               Forgot password?
@@ -178,7 +194,7 @@ const Login = () => {
 
         <div className="text-center mt-6 text-gray-600 text-sm">
           <p>
-            Don't have an account?
+            Don&apos;t have an account?
             <button
               onClick={() => navigate("/register")}
               disabled={loading}

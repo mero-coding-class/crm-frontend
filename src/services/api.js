@@ -2,9 +2,6 @@
 
 import { BASE_URL } from "../config";
 
-/* ------------------------------------------------------------------ */
-/* Shared response handler                                             */
-/* ------------------------------------------------------------------ */
 const handleResponse = async (response) => {
   if (!response.ok) {
     let errorMsg = "An error occurred";
@@ -23,9 +20,6 @@ const handleResponse = async (response) => {
   return response.json();
 };
 
-/* ------------------------------------------------------------------ */
-/* CSV import helpers                                                  */
-/* ------------------------------------------------------------------ */
 
 // normalize header keys like "Student Name" -> "student_name"
 const _norm = (s = "") =>
@@ -88,54 +82,56 @@ const _csvRowToLeadPayload = (row, courses) => {
   };
 };
 
-/* ------------------------------------------------------------------ */
-/* Services                                                            */
-/* ------------------------------------------------------------------ */
 
 export const leadService = {
-  getLeads: async (authToken) => {
-    if (!authToken) throw new Error("Authentication token not found.");
-    const response = await fetch(`${BASE_URL}/leads/`, {
-      headers: { Authorization: `Token ${authToken}` },
-    });
-    const backendLeads = await handleResponse(response);
-    return backendLeads.map((lead) => ({
-      _id: lead.id.toString(),
-      id: lead.id,
-      studentName: lead.student_name || "",
-      parentsName: lead.parents_name || "",
-      email: lead.email || "",
-      phone: lead.phone_number || "",
-      contactWhatsapp: lead.whatsapp_number || "",
-      age: lead.age || "",
-      grade: lead.grade || "",
-      // If your API returns course_name instead of course, you can do:
-      // course: lead.course_name || lead.course || "",
-      course: lead.course || "",
-      source: lead.source || "",
-      addDate: lead.add_date || "",
-      recentCall: lead.last_call || "",
-      nextCall: lead.next_call || "",
-      status: lead.status || "New",
-      permanentAddress: lead.address_line_1 || "",
-      temporaryAddress: lead.address_line_2 || "",
-      city: lead.city || "",
-      county: lead.county || "",
-      postCode: lead.post_code || "",
-      classType: lead.class_type || "",
-      value: lead.value || "",
-      adsetName: lead.adset_name || "",
-      remarks: lead.remarks || "",
-      shift: lead.shift || "",
-      paymentType: lead.payment_type || "",
-      device: lead.device || "",
-      previousCodingExp: lead.previous_coding_experience || "",
-      workshopBatch: lead.workshop_batch || "",
-      changeLog: lead.change_log || [],
-    }));
-  },
+ getLeads: async (authToken) => {
+  if (!authToken) throw new Error("Authentication token not found.");
+  const response = await fetch(`${BASE_URL}/leads/`, {
+    headers: { Authorization: `Token ${authToken}` },
+  });
+  const backendLeads = await handleResponse(response);
 
-  // CORRECTED: maps camelCase -> snake_case and uses provided id
+  return backendLeads.map((lead) => ({
+    _id: lead.id.toString(),
+    id: lead.id,
+
+    // 👇 show course NAME in the table
+    course: lead.course_name || "",
+
+    // 👇 keep the raw FK/id if backend returns it (handy for updates)
+    courseId: lead.course ?? null,
+
+    studentName: lead.student_name || "",
+    parentsName: lead.parents_name || "",
+    email: lead.email || "",
+    phone: lead.phone_number || "",
+    contactWhatsapp: lead.whatsapp_number || "",
+    age: lead.age || "",
+    grade: lead.grade || "",
+    source: lead.source || "",
+    addDate: lead.add_date || "",
+    recentCall: lead.last_call || "",
+    nextCall: lead.next_call || "",
+    status: lead.status || "New",
+    permanentAddress: lead.address_line_1 || "",
+    temporaryAddress: lead.address_line_2 || "",
+    city: lead.city || "",
+    county: lead.county || "",
+    postCode: lead.post_code || "",
+    classType: lead.class_type || "",
+    value: lead.value || "",
+    adsetName: lead.adset_name || "",
+    remarks: lead.remarks || "",
+    shift: lead.shift || "",
+    paymentType: lead.payment_type || "",
+    device: lead.device || "",
+    previousCodingExp: lead.previous_coding_experience || "",
+    workshopBatch: lead.workshop_batch || "",
+    changeLog: lead.change_log || [],
+  }));
+},
+
+
   updateLead: async (id, updates, authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
 
@@ -373,11 +369,26 @@ export const trashService = {
   },
 };
 
+
 export const courseService = {
   getCourses: async (authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
     const response = await fetch(`${BASE_URL}/courses/`, {
       headers: { Authorization: `Token ${authToken}` },
+    });
+    return handleResponse(response);
+  },
+
+  // ✅ NEW: create a single course
+  createCourse: async (courseName, authToken) => {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const response = await fetch(`${BASE_URL}/courses/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ course_name: courseName }),
     });
     return handleResponse(response);
   },
