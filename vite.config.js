@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: false,
       rollupOptions: {
-        external: ['path']
+        external: ['path', '@dnd-kit/core'] 
       },
     },
   };
