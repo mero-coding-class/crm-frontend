@@ -1,5 +1,3 @@
-// C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Leads.jsx
-
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import LeadTableDisplay from "../components/LeadTableDisplay";
@@ -116,7 +114,7 @@ const Leads = () => {
   const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
   const handleCloseAddModal = useCallback(() => setIsAddModalOpen(false), []);
 
-  // Add lead via service; map course to ID if needed, then refresh
+  // Add lead via service; map course to ID if needed, then update state immediately
   const handleAddNewLead = useCallback(
     async (newLeadData) => {
       try {
@@ -130,12 +128,20 @@ const Leads = () => {
           courseId = selected ? selected.id : newLeadData.course;
         }
 
-        await leadService.addLead(
+        const createdLead = await leadService.addLead(
           { ...newLeadData, course: courseId },
           authToken
         );
 
-        await handleRefresh();
+        // Update the state with the new lead at the top of the list
+        setAllLeads((prevLeads) => [createdLead, ...prevLeads]);
+
+        // This is a good practice to ensure the table reflects the change,
+        // although your `useMemo` should handle it.
+        // It forces a re-evaluation of the filtered list.
+        setSearchTerm("");
+        setFilterStatus("All");
+
         handleCloseAddModal();
       } catch (err) {
         setError(err.message || "Failed to create lead");
@@ -298,6 +304,25 @@ const Leads = () => {
         } catch (err) {
           setError(err.message || "Failed to move lead to trash");
         }
+      }
+    },
+    [authToken]
+  );
+
+  const handleBulkDelete = useCallback(
+    async (leadIds) => {
+      try {
+        await Promise.all(
+          leadIds.map((id) =>
+            leadService.updateLead(id, { status: "Junk" }, authToken)
+          )
+        );
+        // Remove the leads from the local state
+        setAllLeads((prevLeads) =>
+          prevLeads.filter((lead) => !leadIds.includes(lead._id))
+        );
+      } catch (err) {
+        setError(err.message || "Failed to move selected leads to trash");
       }
     },
     [authToken]
@@ -562,6 +587,7 @@ const Leads = () => {
             leads={displayedLeads}
             handleEdit={handleEdit}
             handleDelete={handleDelete}
+            handleBulkDelete={handleBulkDelete}
             onStatusChange={handleStatusChange}
             onRemarkChange={handleRemarkChange}
             onRecentCallChange={handleRecentCallChange}

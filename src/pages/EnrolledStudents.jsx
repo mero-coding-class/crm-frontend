@@ -18,9 +18,8 @@ const EnrolledStudents = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
-  const [filterPaymentCompleted, setFilterPaymentCompleted] = useState(false);
+  const [filterPaymentCompleted, setFilterPaymentCompleted] = useState(false); // Refactored fetch function to use useCallback
 
-  // Refactored fetch function to use useCallback
   const fetchEnrolledStudents = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -200,6 +199,43 @@ const EnrolledStudents = () => {
       }
     },
     [authToken]
+  ); // ADD THIS FUNCTION FOR BULK DELETE
+  const handleBulkDelete = useCallback(
+    async (studentIds) => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Create an array of delete promises
+        const deletePromises = studentIds.map((id) =>
+          fetch(`${BASE_URL}/enrollments/${id}/`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Token ${authToken}`,
+            },
+            credentials: "include",
+          })
+        ); // Wait for all delete requests to complete
+
+        const responses = await Promise.all(deletePromises);
+        const failedDeletes = responses.filter((response) => !response.ok);
+
+        if (failedDeletes.length > 0) {
+          throw new Error(
+            `Failed to delete ${failedDeletes.length} student(s).`
+          );
+        } // Update the state to reflect the successful deletions
+
+        setAllStudents((prevStudents) =>
+          prevStudents.filter((student) => !studentIds.includes(student.id))
+        );
+      } catch (err) {
+        console.error("Error during bulk delete:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [authToken]
   );
 
   const handleUpdatePaymentStatus = useCallback(
@@ -258,26 +294,31 @@ const EnrolledStudents = () => {
   if (error) {
     return (
       <div className="text-red-500 p-4 bg-red-100 rounded-md">
-        Error: {error}
+        Error: {error}{" "}
       </div>
     );
   }
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
-      <h1 className="text-3xl font-bold mb-6">Enrolled Students</h1>
+     <h1 className="text-3xl font-bold mb-6">Enrolled Students</h1>
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+       {" "}
         <h2 className="text-xl font-semibold mb-4">
-          Filter Enrolled Students:
+          Filter Enrolled Students: 
         </h2>
+     
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        
           <div>
+          
             <label
               htmlFor="searchQuery"
               className="block text-sm font-medium text-gray-700"
             >
-              Student Name or Email
+             Student Name or Email 
             </label>
+            
             <input
               type="text"
               id="searchQuery"
@@ -286,14 +327,17 @@ const EnrolledStudents = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name or email"
             />
+         
           </div>
+        
           <div>
+            
             <label
               htmlFor="searchLastPaymentDate"
               className="block text-sm font-medium text-gray-700"
-            >
-              Last Payment Date
+            > Last Payment Date 
             </label>
+          
             <input
               type="date"
               id="searchLastPaymentDate"
@@ -301,8 +345,11 @@ const EnrolledStudents = () => {
               value={searchLastPaymentDate}
               onChange={(e) => setSearchLastPaymentDate(e.target.value)}
             />
+            
           </div>
+          
           <div className="flex items-center mt-6">
+         
             <input
               type="checkbox"
               id="filterPaymentCompleted"
@@ -310,23 +357,33 @@ const EnrolledStudents = () => {
               checked={filterPaymentCompleted}
               onChange={(e) => setFilterPaymentCompleted(e.target.checked)}
             />
+         
             <label
               htmlFor="filterPaymentCompleted"
               className="ml-2 block text-sm font-medium text-gray-700"
             >
-              Payment Completed
+               Payment Completed 
             </label>
+          
           </div>
+         
         </div>
+        
       </div>
+    
       <div className="bg-white p-6 rounded-lg shadow-md">
+      
         <EnrolledStudentsTable
           students={enrolledStudents}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
+          // ADD THE handleBulkDelete PROP HERE
+          handleBulkDelete={handleBulkDelete}
         />
+        
       </div>
+    
       {isModalOpen && editingStudent && (
         <EnrolledStudentEditModal
           student={editingStudent}
@@ -334,6 +391,7 @@ const EnrolledStudents = () => {
           onSave={handleSaveEdit}
         />
       )}
+         {" "}
     </div>
   );
 };

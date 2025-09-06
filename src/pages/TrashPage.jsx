@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import TrashTableDisplay from "../components/TrashDisplayTable.jsx";
+import TrashTableDisplay from "../components/TrashDisplayTable.jsx"; // Note: The file name in your prompt was "TrashDisplayTable.jsx", but I'm using "TrashTableDisplay.jsx" to match the component name you provided. Please ensure the import path is correct.
 import LeadEditModal from "../components/LeadEditModal.jsx";
 import {
   MagnifyingGlassIcon,
@@ -145,7 +145,6 @@ const TrashPage = () => {
 
   const handlePermanentDeleteLead = useCallback(
     async (id) => {
-      console.log(`User wants to permanently delete lead with ID: ${id}`);
       if (
         window.confirm(
           "Are you sure you want to permanently delete this lead? This action cannot be undone."
@@ -167,7 +166,6 @@ const TrashPage = () => {
 
   const handleRestoreLead = useCallback(
     async (id) => {
-      console.log(`User wants to restore lead with ID: ${id}`);
       if (
         window.confirm(
           "Are you sure you want to restore this lead? It will be moved back to active leads."
@@ -204,6 +202,76 @@ const TrashPage = () => {
       }
     },
     [allLeads, authToken, currentUser]
+  );
+
+  // --- NEW LOGIC FOR BULK ACTIONS ---
+
+  const handleBulkRestoreLeads = useCallback(
+    async (leadIds) => {
+      setError(null);
+      const restoredIds = new Set();
+      const newLogs = {
+        timestamp: new Date().toISOString(),
+        updaterName: currentUser?.username || "Unknown User",
+        updaterRole: currentUser?.role || "Guest",
+        message: "Restored from Trash (Bulk Action).",
+      };
+
+      try {
+        await Promise.all(
+          leadIds.map(async (id) => {
+            const originalLead = allLeads.find((lead) => lead.id === id);
+            if (!originalLead) return;
+
+            const updatedChangeLog = originalLead.changeLog
+              ? [...originalLead.changeLog, newLogs]
+              : [newLogs];
+
+            await leadService.updateLead(
+              id,
+              { status: "New", changeLog: updatedChangeLog },
+              authToken
+            );
+            restoredIds.add(id);
+          })
+        );
+        // Optimistically update the UI to remove restored leads
+        setAllLeads((prevLeads) =>
+          prevLeads.filter((lead) => !restoredIds.has(lead.id))
+        );
+      } catch (err) {
+        console.error("Error during bulk restore:", err);
+        setError("Failed to restore some or all leads.");
+        // A full refresh is a good fallback for partial failures
+        fetchLeads();
+      }
+    },
+    [authToken, currentUser, allLeads, fetchLeads]
+  );
+
+  const handleBulkPermanentDeleteLeads = useCallback(
+    async (leadIds) => {
+      setError(null);
+      const deletedIds = new Set();
+      try {
+        await Promise.all(
+          leadIds.map(async (id) => {
+            await trashService.deleteTrashedLead(id, authToken);
+            deletedIds.add(id);
+          })
+        );
+        // Optimistically update the UI to remove deleted leads
+        setAllLeads((prevLeads) =>
+          prevLeads.filter((lead) => !deletedIds.has(lead.id))
+        );
+      } catch (err) {
+        console.error("Error during bulk permanent delete:", err);
+        setError("Failed to permanently delete some or all leads.");
+        // A full refresh is a good fallback for partial failures
+        fetchLeads();
+      }
+    },
+    [authToken, fetchLeads]
   );
 
   const updateLeadField = useCallback(
@@ -532,6 +600,8 @@ const TrashPage = () => {
             handleEdit={handleEditLead}
             onPermanentDelete={handlePermanentDeleteLead}
             onRestoreLead={handleRestoreLead}
+            onBulkRestore={handleBulkRestoreLeads} // Pass the new bulk restore function
+            onBulkPermanentDelete={handleBulkPermanentDeleteLeads} // Pass the new bulk delete function
             onStatusChange={(leadId, newStatus) =>
               updateLeadField(leadId, "status", newStatus)
             }
