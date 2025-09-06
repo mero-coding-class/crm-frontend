@@ -15,14 +15,14 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      host:"0.0.0.0",
-      port:3000,
+      host: "0.0.0.0",
+      port: 3000,
     },
     build: {
       outDir: 'dist',
       sourcemap: false,
       rollupOptions: {
-        external: ['path', '@dnd-kit/core'] 
+       
       },
     },
   };
