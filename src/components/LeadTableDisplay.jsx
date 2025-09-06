@@ -4,8 +4,8 @@ import {
   TrashIcon,
   Bars3Icon,
   Cog6ToothIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  ChevronLeftIcon, // Import ChevronLeftIcon
+  ChevronRightIcon, // Import ChevronRightIcon
 } from "@heroicons/react/24/outline";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import {
@@ -105,185 +105,183 @@ const getCourseClasses = (courseName) => {
 };
 
 /* ---------------------------- change log widget --------------------------- */
-const LeadLogDisplay = React.memo(
-  ({ leadId, authToken, changeLogService, refreshKey }) => {
-    const [logs, setLogs] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [isExpanded, setIsExpanded] = useState(false);
+const LeadLogDisplay = ({
+  leadId,
+  authToken,
+  changeLogService,
+  refreshKey,
+}) => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-    useEffect(() => {
-      const fetchLogs = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-          const fetchedLogs = await changeLogService.getLeadLogs(
-            leadId,
-            authToken
-          );
-          const sorted = (
-            Array.isArray(fetchedLogs)
-              ? fetchedLogs
-              : fetchedLogs?.results || []
-          ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          setLogs(sorted);
-        } catch (err) {
-          setError(err.message || "Failed to fetch logs.");
-          console.error("Error fetching logs for lead", leadId, ":", err);
-        } finally {
-          setLoading(false);
-        }
-      };
+  useEffect(() => {
+    const fetchLogs = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const fetchedLogs = await changeLogService.getLeadLogs(
+          leadId,
+          authToken
+        );
+        const sorted = (
+          Array.isArray(fetchedLogs) ? fetchedLogs : fetchedLogs?.results || []
+        ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setLogs(sorted);
+      } catch (err) {
+        setError(err.message || "Failed to fetch logs.");
+        console.error("Error fetching logs for lead", leadId, ":", err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      if (leadId && authToken && changeLogService) fetchLogs();
-    }, [leadId, authToken, changeLogService, refreshKey]);
+    if (leadId && authToken && changeLogService) fetchLogs();
+  }, [leadId, authToken, changeLogService, refreshKey]);
 
-    const toggleExpansion = useCallback(() => setIsExpanded((p) => !p), []);
+  const toggleExpansion = useCallback(() => setIsExpanded((p) => !p), []);
 
-    const getLogEntryClasses = (changedByName) => {
-      const name = changedByName ? changedByName.toLowerCase() : "";
-      switch (name) {
-        case "admin":
-          return "bg-green-50 text-green-800 border-green-200";
-        case "superadmin":
-          return "bg-blue-50 text-blue-800 border-blue-200";
-        case "sales_rep":
-          return "bg-purple-50 text-purple-800 border-purple-200";
+  const getLogEntryClasses = (changedByName) => {
+    const name = changedByName ? changedByName.toLowerCase() : "";
+    switch (name) {
+      case "admin":
+        return "bg-green-50 text-green-800 border-green-200";
+      case "superadmin":
+        return "bg-blue-50 text-blue-800 border-blue-200";
+      case "sales_rep":
+        return "bg-purple-50 text-purple-800 border-purple-200";
+      default:
+        return "bg-gray-50 text-gray-700 border-gray-200";
+    }
+  };
+
+  const formatLogEntry = (log) => {
+    const timestamp = formatTimestamp(log.timestamp);
+    let descriptionText = log.description;
+
+    if (
+      !descriptionText &&
+      log.field_changed &&
+      log.old_value !== undefined &&
+      log.new_value !== undefined
+    ) {
+      switch (log.field_changed) {
+        case "status":
+          descriptionText = `Status changed from '${log.old_value}' to '${log.new_value}'.`;
+          break;
+        case "remarks":
+          descriptionText = `Remarks updated.`;
+          break;
+        case "last_call":
+          descriptionText = `Last Call changed from '${getFormattedDate(
+            log.old_value
+          )}' to '${getFormattedDate(log.new_value)}'.`;
+          break;
+        case "next_call":
+          descriptionText = `Next Call changed from '${getFormattedDate(
+            log.old_value
+          )}' to '${getFormattedDate(log.new_value)}'.`;
+          break;
+        case "age":
+          descriptionText = `Age changed from '${log.old_value}' to '${log.new_value}'.`;
+          break;
+        case "grade":
+          descriptionText = `Grade changed from '${log.old_value}' to '${log.new_value}'.`;
+          break;
         default:
-          return "bg-gray-50 text-gray-700 border-gray-200";
+          descriptionText = `${log.field_changed} changed from '${log.old_value}' to '${log.new_value}'.`;
       }
-    };
+    } else if (!descriptionText) {
+      descriptionText = "No specific description available.";
+    }
 
-    const formatLogEntry = (log) => {
-      const timestamp = formatTimestamp(log.timestamp);
-      let descriptionText = log.description;
+    return `${
+      log.changed_by_name || "System"
+    } at ${timestamp}: ${descriptionText}`;
+  };
 
-      if (
-        !descriptionText &&
-        log.field_changed &&
-        log.old_value !== undefined &&
-        log.new_value !== undefined
-      ) {
-        switch (log.field_changed) {
-          case "status":
-            descriptionText = `Status changed from '${log.old_value}' to '${log.new_value}'.`;
-            break;
-          case "remarks":
-            descriptionText = `Remarks updated.`;
-            break;
-          case "last_call":
-            descriptionText = `Last Call changed from '${getFormattedDate(
-              log.old_value
-            )}' to '${getFormattedDate(log.new_value)}'.`;
-            break;
-          case "next_call":
-            descriptionText = `Next Call changed from '${getFormattedDate(
-              log.old_value
-            )}' to '${getFormattedDate(log.new_value)}'.`;
-            break;
-          case "age":
-            descriptionText = `Age changed from '${log.old_value}' to '${log.new_value}'.`;
-            break;
-          case "grade":
-            descriptionText = `Grade changed from '${log.old_value}' to '${log.new_value}'.`;
-            break;
-          default:
-            descriptionText = `${log.field_changed} changed from '${log.old_value}' to '${log.new_value}'.`;
-        }
-      } else if (!descriptionText) {
-        descriptionText = "No specific description available.";
-      }
+  if (loading)
+    return <div className="text-gray-500 text-xs">Loading logs...</div>;
+  if (error) return <div className="text-red-500 text-xs">Error: {error}</div>;
+  if (!logs || logs.length === 0)
+    return <div className="text-gray-500 text-xs">No log entries.</div>;
 
-      return `${
-        log.changed_by_name || "System"
-      } at ${timestamp}: ${descriptionText}`;
-    };
+  const logsToDisplay = isExpanded ? logs : logs.slice(0, 4);
+  const hasMoreLogs = logs.length > 4;
 
-    if (loading)
-      return <div className="text-gray-500 text-xs">Loading logs...</div>;
-    if (error)
-      return <div className="text-red-500 text-xs">Error: {error}</div>;
-    if (!logs || logs.length === 0)
-      return <div className="text-gray-500 text-xs">No log entries.</div>;
+  return (
+    <div
+      className="whitespace-pre-wrap max-h-20 overflow-y-auto text-xs"
+      style={{ minWidth: "200px" }}
+    >
+      {logsToDisplay.map((log) => (
+        <div
+          key={log.id}
+          className={`mb-1 last:mb-0 p-1 rounded-sm border ${getLogEntryClasses(
+            log.changed_by_name
+          )}`}
+        >
+          {formatLogEntry(log)}
+        </div>
+      ))}
+      {hasMoreLogs && (
+        <button
+          onClick={toggleExpansion}
+          className="text-blue-600 hover:text-blue-800 text-xs mt-1 block underline"
+        >
+          {isExpanded ? "Show Less" : "Show More"}
+        </button>
+      )}
+    </div>
+  );
+};
 
-    const logsToDisplay = isExpanded ? logs : logs.slice(0, 4);
-    const hasMoreLogs = logs.length > 4;
+const DraggableRow = ({ lead, columns, selected, onSelect, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: lead._id });
 
-    return (
-      <div
-        className="whitespace-pre-wrap max-h-20 overflow-y-auto text-xs"
-        style={{ minWidth: "200px" }}
-      >
-        {logsToDisplay.map((log) => (
-          <div
-            key={log.id}
-            className={`mb-1 last:mb-0 p-1 rounded-sm border ${getLogEntryClasses(
-              log.changed_by_name
-            )}`}
-          >
-            {formatLogEntry(log)}
-          </div>
-        ))}
-        {hasMoreLogs && (
-          <button
-            onClick={toggleExpansion}
-            className="text-blue-600 hover:text-blue-800 text-xs mt-1 block underline"
-          >
-            {isExpanded ? "Show Less" : "Show More"}
-          </button>
-        )}
-      </div>
-    );
-  }
-);
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : "auto",
+  };
 
-const DraggableRow = React.memo(
-  ({ lead, columns, selected, onSelect, children }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: lead._id });
-
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      zIndex: isDragging ? 10 : "auto",
-    };
-
-    return (
-      <tr
-        ref={setNodeRef}
-        style={style}
-        className={`hover:bg-gray-50 ${
-          isDragging ? "bg-gray-100 shadow-lg" : ""
-        }`}
-      >
-        <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
-          <button
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing"
-          >
-            <Bars3Icon className="h-5 w-5 text-gray-400" />
-          </button>
-        </td>
-        <td className="px-3 py-4 whitespace-nowrap">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => onSelect(lead._id)}
-            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-          />
-        </td>
-        {children}
-      </tr>
-    );
-  }
-);
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-gray-50 ${
+        isDragging ? "bg-gray-100 shadow-lg" : ""
+      }`}
+    >
+      <td className="px-3 py-4 whitespace-nowrap text-sm font-medium">
+        <button
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing"
+        >
+          <Bars3Icon className="h-5 w-5 text-gray-400" />
+        </button>
+      </td>
+      <td className="px-3 py-4 whitespace-nowrap">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onSelect(lead._id)}
+          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+        />
+      </td>
+      {children}
+    </tr>
+  );
+};
 
 const ColumnToggler = ({ columns, setColumns }) => {
   const toggleColumn = (key) => {
@@ -304,21 +302,22 @@ const ColumnToggler = ({ columns, setColumns }) => {
       <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
         <div className="py-1">
           {Object.entries(columns).map(([key, { label, visible }]) => (
-            <Menu.Item
-              key={key}
-              as="div"
-              className="block px-4 py-2 text-sm text-gray-700 cursor-pointer hover:bg-gray-100"
-            >
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visible}
-                  onChange={() => toggleColumn(key)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
-                />
-                {label}
-              </label>
+            <Menu.Item key={key}>
+              {({ active }) => (
+                <label
+                  className={`${
+                    active ? "bg-gray-100 text-gray-900" : "text-gray-700"
+                  } flex items-center px-4 py-2 text-sm cursor-pointer`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={visible}
+                    onChange={() => toggleColumn(key)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
+                  />
+                  {label}
+                </label>
+              )}
             </Menu.Item>
           ))}
         </div>
@@ -408,19 +407,16 @@ const LeadTableDisplay = ({
     }
   };
 
-  const handleSelectAll = useCallback(
-    (e) => {
-      if (e.target.checked) {
-        const allLeadIds = new Set(orderedLeads.map((lead) => lead._id));
-        setSelectedLeads(allLeadIds);
-      } else {
-        setSelectedLeads(new Set());
-      }
-    },
-    [orderedLeads]
-  );
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allLeadIds = new Set(orderedLeads.map((lead) => lead._id));
+      setSelectedLeads(allLeadIds);
+    } else {
+      setSelectedLeads(new Set());
+    }
+  };
 
-  const handleSelectRow = useCallback((leadId) => {
+  const handleSelectRow = (leadId) => {
     setSelectedLeads((prev) => {
       const newSelection = new Set(prev);
       if (newSelection.has(leadId)) {
@@ -430,7 +426,7 @@ const LeadTableDisplay = ({
       }
       return newSelection;
     });
-  }, []);
+  };
 
   const onBulkDeleteClick = () => {
     if (
@@ -487,17 +483,14 @@ const LeadTableDisplay = ({
   const indexOfFirstLead = indexOfLastLead - leadsPerPage;
   const currentLeads = orderedLeads.slice(indexOfFirstLead, indexOfLastLead);
 
-  const handlePageChange = useCallback(
-    (pageNumber) => {
-      if (pageNumber > 0 && pageNumber <= totalPages) {
-        setCurrentPage(pageNumber);
-        if (tableContainerRef.current) {
-          tableContainerRef.current.scrollIntoView({ behavior: "smooth" });
-        }
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollIntoView({ behavior: "smooth" });
       }
-    },
-    [totalPages]
-  );
+    }
+  };
 
   /* ---------------------- HORIZONTAL SCROLL LOGIC ----------------------- */
   const tableContainerRef = useRef(null);
@@ -583,19 +576,18 @@ const LeadTableDisplay = ({
                   type="checkbox"
                   onChange={handleSelectAll}
                   checked={
-                    currentLeads.length > 0 &&
-                    Array.from(selectedLeads).every((id) =>
-                      currentLeads.some((lead) => lead._id === id)
-                    ) &&
-                    selectedLeads.size === currentLeads.length
+                    orderedLeads.length > 0 &&
+                    selectedLeads.size === currentLeads.length &&
+                    selectedLeads.size === orderedLeads.length
                   }
                   indeterminate={
                     selectedLeads.size > 0 &&
-                    selectedLeads.size < currentLeads.length
+                    selectedLeads.size < orderedLeads.length
                   }
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
               </th>
+
               {Object.entries(columns).map(([key, { label, visible }]) =>
                 visible ? (
                   <th
@@ -838,4 +830,4 @@ const LeadTableDisplay = ({
   );
 };
 
-export default React.memo(LeadTableDisplay);
+export default LeadTableDisplay;

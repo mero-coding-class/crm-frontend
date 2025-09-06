@@ -1,3 +1,5 @@
+// src/components/TrashTableDisplay.jsx
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   TrashIcon,
@@ -5,8 +7,8 @@ import {
   ClockIcon,
   Bars3Icon,
   Cog6ToothIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  ChevronLeftIcon, // New for pagination
+  ChevronRightIcon, // New for pagination
 } from "@heroicons/react/24/outline";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import {
@@ -16,6 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Menu } from "@headlessui/react";
 
 // Helper function to safely format date for input type="date"
 const getFormattedDate = (dateString) => {
@@ -65,9 +68,6 @@ const getRoleBadgeClasses = (role) => {
 };
 
 const ColumnToggler = ({ columns, setColumns }) => {
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
   const toggleColumn = (key) => {
     setColumns((prev) => ({
       ...prev,
@@ -75,50 +75,38 @@ const ColumnToggler = ({ columns, setColumns }) => {
     }));
   };
 
-  useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, []);
-
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef}>
+    <Menu as="div" className="relative inline-block text-left">
       <div>
-        <button
-          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
+        <Menu.Button className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
           <Cog6ToothIcon className="h-5 w-5 mr-2" />
           Columns
-        </button>
+        </Menu.Button>
       </div>
-      {isDropdownOpen && (
-        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-          <div className="py-1">
-            {Object.entries(columns).map(([key, { label }]) => (
-              <label
-                key={key}
-                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={columns[key].visible}
-                  onChange={() => toggleColumn(key)}
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+        <div className="py-1">
+          {Object.entries(columns).map(([key, { label }]) => (
+            <Menu.Item key={key}>
+              {({ active }) => (
+                <label
+                  className={`${
+                    active ? "bg-gray-100 text-gray-900" : "text-gray-700"
+                  } flex items-center px-4 py-2 text-sm cursor-pointer`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={columns[key].visible}
+                    onChange={() => toggleColumn(key)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
+                  />
+                  {label}
+                </label>
+              )}
+            </Menu.Item>
+          ))}
         </div>
-      )}
-    </div>
+      </Menu.Items>
+    </Menu>
   );
 };
 
