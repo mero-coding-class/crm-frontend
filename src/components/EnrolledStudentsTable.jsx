@@ -87,11 +87,15 @@ const ColumnToggler = ({ columns, setColumns }) => {
 };
 
 const EnrolledStudentsTable = ({
-  students,
+  students = [], // Default to an empty array to prevent TypeError
   handleEdit,
   handleDelete,
   handleBulkDelete,
   onUpdatePaymentStatus,
+  // Add pagination props
+  currentPage,
+  totalPages,
+  onPageChange,
 }) => {
   const [orderedStudents, setOrderedStudents] = useState([]);
   const [selectedStudents, setSelectedStudents] = useState(new Set());
@@ -110,34 +114,23 @@ const EnrolledStudentsTable = ({
     actions: { label: "Actions", visible: true },
   });
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(students.length / itemsPerPage);
-
   const scrollContainerRef = useRef(null);
   const [scrollInterval, setScrollInterval] = useState(null);
   const scrollSpeed = 5; // Pixels per interval
 
   useEffect(() => {
+    // The `students` prop is now the paginated list, so we don't need to slice it here
     setOrderedStudents(students);
     setSelectedStudents(new Set());
-    setCurrentPage(1);
   }, [students]);
 
   useEffect(() => {
-    // Cleanup interval on unmount
     return () => {
       if (scrollInterval) {
         clearInterval(scrollInterval);
       }
     };
   }, [scrollInterval]);
-
-  const paginatedStudents = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return orderedStudents.slice(startIndex, endIndex);
-  }, [orderedStudents, currentPage, itemsPerPage]);
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
@@ -152,7 +145,7 @@ const EnrolledStudentsTable = ({
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      const allStudentIds = new Set(paginatedStudents.map((s) => s.id));
+      const allStudentIds = new Set(orderedStudents.map((s) => s.id));
       setSelectedStudents(allStudentIds);
     } else {
       setSelectedStudents(new Set());
@@ -185,34 +178,24 @@ const EnrolledStudentsTable = ({
     onUpdatePaymentStatus(studentId, newStatus === "Yes");
   };
 
-  const handlePageChange = (pageNumber) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
-      setSelectedStudents(new Set());
-    }
-  };
-
   const handleMouseMove = (e) => {
     const container = scrollContainerRef.current;
     if (!container) return;
-
     const containerRect = container.getBoundingClientRect();
     const clientX = e.clientX;
-    const boundary = 50; // Pixels from the edge to start scrolling
-
+    const boundary = 50;
     let direction = 0;
     if (clientX < containerRect.left + boundary) {
-      direction = -1; // Scroll left
+      direction = -1;
     } else if (clientX > containerRect.right - boundary) {
-      direction = 1; // Scroll right
+      direction = 1;
     }
-
     if (direction !== 0 && !scrollInterval) {
       const interval = setInterval(() => {
         if (container) {
           container.scrollLeft += direction * scrollSpeed;
         }
-      }, 20); // Interval speed
+      }, 20);
       setScrollInterval(interval);
     } else if (direction === 0 && scrollInterval) {
       clearInterval(scrollInterval);
@@ -272,12 +255,12 @@ const EnrolledStudentsTable = ({
                     type="checkbox"
                     onChange={handleSelectAll}
                     checked={
-                      paginatedStudents.length > 0 &&
-                      selectedStudents.size === paginatedStudents.length
+                      students.length > 0 &&
+                      selectedStudents.size === students.length
                     }
                     indeterminate={
                       selectedStudents.size > 0 &&
-                      selectedStudents.size < paginatedStudents.length
+                      selectedStudents.size < students.length
                     }
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
@@ -295,11 +278,11 @@ const EnrolledStudentsTable = ({
               </tr>
             </thead>
             <SortableContext
-              items={paginatedStudents.map((s) => s.id)}
+              items={students.map((s) => s.id)}
               strategy={verticalListSortingStrategy}
             >
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedStudents.map((student) => (
+                {students.map((student) => (
                   <SortableStudentRow
                     key={student.id}
                     student={student}
@@ -320,7 +303,7 @@ const EnrolledStudentsTable = ({
       {totalPages > 1 && (
         <div className="flex justify-end items-center mt-4 space-x-2">
           <button
-            onClick={() => handlePageChange(currentPage - 1)}
+            onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
             className="p-2 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -330,7 +313,7 @@ const EnrolledStudentsTable = ({
             Page {currentPage} of {totalPages}
           </span>
           <button
-            onClick={() => handlePageChange(currentPage + 1)}
+            onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
             className="p-2 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -370,9 +353,7 @@ const SortableStudentRow = ({
     <tr
       ref={setNodeRef}
       style={style}
-      className={`hover:bg-gray-50 ${
-        isDragging ? "bg-gray-100 shadow-lg" : ""
-      }`}
+      className={`hover:bg-gray-50 ${isDragging ? "bg-gray-100 shadow-lg" : ""}`}
     >
       <td className="px-3 py-4">
         <button

@@ -41,7 +41,7 @@ function AppContent() {
           {/* Catch-all route within the protected area, redirects to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
           <Route path="/register-user" element={<Register />} />
-          <Route path="/create-course" element={<CreateCourse />} />
+          <Route path="/courses/new" element={<CreateCourse />} />
         </Route>
 
         {/* Fallback for unauthenticated users trying to access any route directly that isn't /login */}

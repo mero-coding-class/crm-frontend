@@ -12,13 +12,11 @@ const EnrolledStudents = () => {
   const [allStudents, setAllStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
-  const [filterPaymentCompleted, setFilterPaymentCompleted] = useState(false); // Refactored fetch function to use useCallback
+  const [filterPaymentCompleted, setFilterPaymentCompleted] = useState(false);
 
   const fetchEnrolledStudents = useCallback(async () => {
     setLoading(true);
@@ -39,7 +37,12 @@ const EnrolledStudents = () => {
       }
 
       const data = await response.json();
-      setAllStudents(data);
+
+      // **CHANGE MADE HERE:** Sort the data to display the newest entries first.
+      // Assuming a higher 'id' or a recent 'created_at' date indicates a newer entry.
+      // Sorting by 'id' in descending order is a simple and effective approach.
+      const sortedData = data.sort((a, b) => b.id - a.id);
+      setAllStudents(sortedData);
     } catch (err) {
       console.error("Failed to fetch enrolled students:", err);
       setError(err.message);
@@ -97,9 +100,7 @@ const EnrolledStudents = () => {
       setLoading(true);
       try {
         const url = `${BASE_URL}/enrollments/${updatedStudent.id}/`;
-
         const oldStudent = allStudents.find((s) => s.id === updatedStudent.id);
-
         const hasNewPayment =
           (updatedStudent.first_installment &&
             updatedStudent.first_installment !==
@@ -199,13 +200,13 @@ const EnrolledStudents = () => {
       }
     },
     [authToken]
-  ); // ADD THIS FUNCTION FOR BULK DELETE
+  );
+
   const handleBulkDelete = useCallback(
     async (studentIds) => {
       setLoading(true);
       setError(null);
       try {
-        // Create an array of delete promises
         const deletePromises = studentIds.map((id) =>
           fetch(`${BASE_URL}/enrollments/${id}/`, {
             method: "DELETE",
@@ -214,8 +215,7 @@ const EnrolledStudents = () => {
             },
             credentials: "include",
           })
-        ); // Wait for all delete requests to complete
-
+        );
         const responses = await Promise.all(deletePromises);
         const failedDeletes = responses.filter((response) => !response.ok);
 
@@ -223,7 +223,7 @@ const EnrolledStudents = () => {
           throw new Error(
             `Failed to delete ${failedDeletes.length} student(s).`
           );
-        } // Update the state to reflect the successful deletions
+        }
 
         setAllStudents((prevStudents) =>
           prevStudents.filter((student) => !studentIds.includes(student.id))
@@ -294,31 +294,26 @@ const EnrolledStudents = () => {
   if (error) {
     return (
       <div className="text-red-500 p-4 bg-red-100 rounded-md">
-        Error: {error}{" "}
+        Error: {error}
       </div>
     );
   }
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
-     <h1 className="text-3xl font-bold mb-6">Enrolled Students</h1>
+      <h1 className="text-3xl font-bold mb-6">Enrolled Students</h1>
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
-       {" "}
         <h2 className="text-xl font-semibold mb-4">
-          Filter Enrolled Students: 
+          Filter Enrolled Students:
         </h2>
-     
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        
           <div>
-          
             <label
               htmlFor="searchQuery"
               className="block text-sm font-medium text-gray-700"
             >
-             Student Name or Email 
+              Student Name or Email
             </label>
-            
             <input
               type="text"
               id="searchQuery"
@@ -327,17 +322,14 @@ const EnrolledStudents = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name or email"
             />
-         
           </div>
-        
           <div>
-            
             <label
               htmlFor="searchLastPaymentDate"
               className="block text-sm font-medium text-gray-700"
-            > Last Payment Date 
+            >
+              Last Payment Date
             </label>
-          
             <input
               type="date"
               id="searchLastPaymentDate"
@@ -345,11 +337,8 @@ const EnrolledStudents = () => {
               value={searchLastPaymentDate}
               onChange={(e) => setSearchLastPaymentDate(e.target.value)}
             />
-            
           </div>
-          
           <div className="flex items-center mt-6">
-         
             <input
               type="checkbox"
               id="filterPaymentCompleted"
@@ -357,33 +346,24 @@ const EnrolledStudents = () => {
               checked={filterPaymentCompleted}
               onChange={(e) => setFilterPaymentCompleted(e.target.checked)}
             />
-         
             <label
               htmlFor="filterPaymentCompleted"
               className="ml-2 block text-sm font-medium text-gray-700"
             >
-               Payment Completed 
+              Payment Completed
             </label>
-          
           </div>
-         
         </div>
-        
       </div>
-    
       <div className="bg-white p-6 rounded-lg shadow-md">
-      
         <EnrolledStudentsTable
           students={enrolledStudents}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
-          // ADD THE handleBulkDelete PROP HERE
           handleBulkDelete={handleBulkDelete}
         />
-        
       </div>
-    
       {isModalOpen && editingStudent && (
         <EnrolledStudentEditModal
           student={editingStudent}
@@ -391,7 +371,6 @@ const EnrolledStudents = () => {
           onSave={handleSaveEdit}
         />
       )}
-         {" "}
     </div>
   );
 };

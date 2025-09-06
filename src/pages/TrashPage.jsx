@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import TrashTableDisplay from "../components/TrashDisplayTable.jsx"; // Note: The file name in your prompt was "TrashDisplayTable.jsx", but I'm using "TrashTableDisplay.jsx" to match the component name you provided. Please ensure the import path is correct.
+import TrashTableDisplay from "../components/TrashDisplayTable.jsx";
 import LeadEditModal from "../components/LeadEditModal.jsx";
 import {
   MagnifyingGlassIcon,
@@ -67,7 +67,10 @@ const TrashPage = () => {
     setError(null);
     try {
       const data = await trashService.getTrashedLeads(authToken);
-      setAllLeads(data);
+      // **CHANGE MADE HERE:** Sort the data by id in descending order
+      // to show the newest entries at the top.
+      const sortedData = data.sort((a, b) => b.id - a.id);
+      setAllLeads(sortedData);
     } catch (err) {
       console.error("Failed to fetch leads from trash:", err);
       setError(
@@ -600,8 +603,8 @@ const TrashPage = () => {
             handleEdit={handleEditLead}
             onPermanentDelete={handlePermanentDeleteLead}
             onRestoreLead={handleRestoreLead}
-            onBulkRestore={handleBulkRestoreLeads} // Pass the new bulk restore function
-            onBulkPermanentDelete={handleBulkPermanentDeleteLeads} // Pass the new bulk delete function
+            onBulkRestore={handleBulkRestoreLeads}
+            onBulkPermanentDelete={handleBulkPermanentDeleteLeads}
             onStatusChange={(leadId, newStatus) =>
               updateLeadField(leadId, "status", newStatus)
             }

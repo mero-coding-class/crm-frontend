@@ -134,7 +134,7 @@ const Leads = () => {
         );
 
         // Update the state with the new lead at the top of the list
-        setAllLeads((prevLeads) => [createdLead, ...prevLeads]);
+        setAllLeads([newLead, ...allLeads]);
 
         // This is a good practice to ensure the table reflects the change,
         // although your `useMemo` should handle it.
