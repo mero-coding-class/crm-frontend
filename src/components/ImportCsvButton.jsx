@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Papa from "papaparse";
 import moment from "moment";
+import { XIcon } from "lucide-react";
 
 const CHUNK_SIZE = 500;
 const CONCURRENCY = 10;
@@ -32,6 +33,10 @@ const ImportCsvButton = ({
   const [progress, setProgress] = useState(0);
   const [imported, setImported] = useState(0);
   const [total, setTotal] = useState(0);
+  const [cancelled, setCancelled] = useState(false);
+
+  // keep a ref for cancellation
+  const cancelRef = useRef(false);
 
   const validShifts = [
     "7 A.M. - 9 A.M.",
@@ -61,25 +66,17 @@ const ImportCsvButton = ({
   const mapShift = (rawShift) => {
     if (validShifts.includes(rawShift)) return rawShift;
 
-    if (/morning/i.test(rawShift)) {
-      return "7 A.M. - 9 A.M.";
-    }
-    if (/afternoon/i.test(rawShift)) {
-      return "2 P.M. - 4 P.M.";
-    }
-    if (/evening/i.test(rawShift)) {
-      return "6 P.M. - 8 P.M.";
-    }
+    if (/morning/i.test(rawShift)) return "7 A.M. - 9 A.M.";
+    if (/afternoon/i.test(rawShift)) return "2 P.M. - 4 P.M.";
+    if (/evening/i.test(rawShift)) return "6 P.M. - 8 P.M.";
 
-    return validShifts[0]; // fallback
+    return validShifts[0];
   };
 
   const mapDevice = (rawDevice) => {
     if (validDevices.includes(rawDevice)) return rawDevice;
-
-    if (/laptop|pc|computer|desktop|tablet|mobile/i.test(rawDevice)) {
+    if (/laptop|pc|computer|desktop|tablet|mobile/i.test(rawDevice))
       return "Yes";
-    }
     return "No";
   };
 
@@ -133,6 +130,7 @@ const ImportCsvButton = ({
   };
 
   const createLead = async (row) => {
+    if (cancelRef.current) return null; // stop if cancelled
     const payload = transformRow(row);
     try {
       const saved = await apiFetch(
@@ -163,7 +161,7 @@ const ImportCsvButton = ({
     const results = [];
     let index = 0;
     const worker = async () => {
-      while (index < tasks.length) {
+      while (index < tasks.length && !cancelRef.current) {
         const i = index++;
         results[i] = await tasks[i]();
       }
@@ -178,13 +176,16 @@ const ImportCsvButton = ({
     setProgress(0);
 
     for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      if (cancelRef.current) break;
       const chunk = rows.slice(i, i + CHUNK_SIZE);
       const tasks = chunk.map((row) => () => createLead(row));
       await runWithConcurrency(tasks, CONCURRENCY);
       console.log(`✅ Imported chunk ${i / CHUNK_SIZE + 1}`);
     }
 
-    if (onImported) onImported();
+    if (!cancelRef.current && onImported) onImported();
+    setBusy(false);
+    setCancelled(false);
   };
 
   const handleFile = (event) => {
@@ -192,15 +193,22 @@ const ImportCsvButton = ({
     if (!file) return;
 
     setBusy(true);
+    cancelRef.current = false;
+    setCancelled(false);
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         await processInChunks(results.data);
-        setBusy(false);
       },
     });
+  };
+
+  const handleCancel = () => {
+    cancelRef.current = true;
+    setCancelled(true);
+    setBusy(false);
   };
 
   return (
@@ -217,13 +225,30 @@ const ImportCsvButton = ({
       </label>
 
       {busy && (
-        <>
-          <div className="w-full bg-gray-200 rounded-full h-4"></div>
-          <p className="text-sm text-gray-600">
-            {imported}/{total} leads imported ({progress.toFixed(1)}%)
-          </p>
-        </>
+        <div className="space-y-2">
+          {/* progress bar with smooth animation */}
+          <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+            <div
+              className="bg-green-500 h-4 transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              {imported}/{total} leads imported ({progress.toFixed(1)}%)
+            </p>
+            <button
+              onClick={handleCancel}
+              className="text-red-600 hover:text-red-800"
+              title="Cancel Import"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
       )}
+
+      {cancelled && <p className="text-sm text-red-600">🚫 Import cancelled</p>}
     </div>
   );
 };

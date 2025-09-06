@@ -4,8 +4,8 @@ import {
   TrashIcon,
   Bars3Icon,
   Cog6ToothIcon,
-  ChevronLeftIcon, // Import ChevronLeftIcon
-  ChevronRightIcon, // Import ChevronRightIcon
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import {
@@ -354,10 +354,11 @@ const LeadTableDisplay = ({
     "Junk",
   ];
 
-  const [orderedLeads, setOrderedLeads] = useState([]);
-  useEffect(() => {
-    setOrderedLeads(leads);
-  }, [leads]);
+  // We no longer need this, as the `leads` prop is already the filtered list
+  // const [orderedLeads, setOrderedLeads] = useState([]);
+  // useEffect(() => {
+  //   setOrderedLeads(leads);
+  // }, [leads]);
 
   const [selectedLeads, setSelectedLeads] = useState(new Set());
 
@@ -399,20 +400,27 @@ const LeadTableDisplay = ({
   const handleDragEnd = (event) => {
     const { active, over } = event;
     if (active.id !== over.id) {
-      setOrderedLeads((items) => {
-        const oldIndex = items.findIndex((item) => item._id === active.id);
-        const newIndex = items.findIndex((item) => item._id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+      // Since leads are passed from parent, we need to handle the state change there
+      // This part would ideally trigger an `onReorder` prop function
+      // that sends the new order to the parent component.
+      // For now, the drag-and-drop effect will be temporary.
+      console.warn(
+        "Drag and drop functionality is for display only. To make it persistent, pass a handler to the parent component."
+      );
     }
   };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      const allLeadIds = new Set(orderedLeads.map((lead) => lead._id));
-      setSelectedLeads(allLeadIds);
+      const currentPageLeadIds = leads.map((lead) => lead._id);
+      setSelectedLeads((prev) => new Set([...prev, ...currentPageLeadIds]));
     } else {
-      setSelectedLeads(new Set());
+      const currentPageLeadIds = leads.map((lead) => lead._id);
+      setSelectedLeads((prev) => {
+        const newSelection = new Set(prev);
+        currentPageLeadIds.forEach((id) => newSelection.delete(id));
+        return newSelection;
+      });
     }
   };
 
@@ -478,10 +486,10 @@ const LeadTableDisplay = ({
   const [currentPage, setCurrentPage] = useState(1);
   const leadsPerPage = 20;
 
-  const totalPages = Math.ceil(orderedLeads.length / leadsPerPage);
+  const totalPages = Math.ceil(leads.length / leadsPerPage);
   const indexOfLastLead = currentPage * leadsPerPage;
   const indexOfFirstLead = indexOfLastLead - leadsPerPage;
-  const currentLeads = orderedLeads.slice(indexOfFirstLead, indexOfLastLead);
+  const currentLeads = leads.slice(indexOfFirstLead, indexOfLastLead);
 
   const handlePageChange = (pageNumber) => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
@@ -491,6 +499,11 @@ const LeadTableDisplay = ({
       }
     }
   };
+
+  useEffect(() => {
+    // Reset to the first page if the number of leads changes
+    setCurrentPage(1);
+  }, [leads.length]);
 
   /* ---------------------- HORIZONTAL SCROLL LOGIC ----------------------- */
   const tableContainerRef = useRef(null);
@@ -560,7 +573,6 @@ const LeadTableDisplay = ({
             Delete Selected ({selectedLeads.size})
           </button>
         )}
-
         <ColumnToggler columns={columns} setColumns={setColumns} />
       </div>
 
@@ -576,13 +588,13 @@ const LeadTableDisplay = ({
                   type="checkbox"
                   onChange={handleSelectAll}
                   checked={
-                    orderedLeads.length > 0 &&
-                    selectedLeads.size === currentLeads.length &&
-                    selectedLeads.size === orderedLeads.length
+                    currentLeads.length > 0 &&
+                    currentLeads.every((lead) => selectedLeads.has(lead._id))
                   }
                   indeterminate={
                     selectedLeads.size > 0 &&
-                    selectedLeads.size < orderedLeads.length
+                    currentLeads.some((lead) => selectedLeads.has(lead._id)) &&
+                    !currentLeads.every((lead) => selectedLeads.has(lead._id))
                   }
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
@@ -605,7 +617,7 @@ const LeadTableDisplay = ({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={orderedLeads.map((l) => l._id)}
+              items={leads.map((l) => l._id)}
               strategy={verticalListSortingStrategy}
             >
               <tbody className="bg-white divide-y divide-gray-200">
