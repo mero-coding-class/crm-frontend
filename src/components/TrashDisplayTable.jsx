@@ -1,5 +1,3 @@
-// src/components/TrashTableDisplay.jsx
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   TrashIcon,
@@ -7,8 +5,8 @@ import {
   ClockIcon,
   Bars3Icon,
   Cog6ToothIcon,
-  ChevronLeftIcon, // New for pagination
-  ChevronRightIcon, // New for pagination
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import {
@@ -18,7 +16,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Menu } from "@headlessui/react";
 
 // Helper function to safely format date for input type="date"
 const getFormattedDate = (dateString) => {
@@ -68,6 +65,9 @@ const getRoleBadgeClasses = (role) => {
 };
 
 const ColumnToggler = ({ columns, setColumns }) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
   const toggleColumn = (key) => {
     setColumns((prev) => ({
       ...prev,
@@ -75,38 +75,50 @@ const ColumnToggler = ({ columns, setColumns }) => {
     }));
   };
 
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
   return (
-    <Menu as="div" className="relative inline-block text-left">
+    <div className="relative inline-block text-left" ref={dropdownRef}>
       <div>
-        <Menu.Button className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+        <button
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          className="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
           <Cog6ToothIcon className="h-5 w-5 mr-2" />
           Columns
-        </Menu.Button>
+        </button>
       </div>
-      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
-        <div className="py-1">
-          {Object.entries(columns).map(([key, { label }]) => (
-            <Menu.Item key={key}>
-              {({ active }) => (
-                <label
-                  className={`${
-                    active ? "bg-gray-100 text-gray-900" : "text-gray-700"
-                  } flex items-center px-4 py-2 text-sm cursor-pointer`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={columns[key].visible}
-                    onChange={() => toggleColumn(key)}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
-                  />
-                  {label}
-                </label>
-              )}
-            </Menu.Item>
-          ))}
+      {isDropdownOpen && (
+        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+          <div className="py-1">
+            {Object.entries(columns).map(([key, { label }]) => (
+              <label
+                key={key}
+                className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={columns[key].visible}
+                  onChange={() => toggleColumn(key)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
-      </Menu.Items>
-    </Menu>
+      )}
+    </div>
   );
 };
 
@@ -268,115 +280,117 @@ const TrashTableDisplay = ({
     );
   }
 
-return (
-  <div>
-    {/* This container will align its children to the left and right sides */}
-    <div className="flex justify-between items-center mb-4">
-      {/* Container for the selected buttons, aligned to the left */}
-      <div className="flex space-x-2">
-        {selectedLeads.size > 0 && (
-          <>
-            <button
-              onClick={handleRestoreSelected}
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700"
-            >
-              <ArrowUturnLeftIcon className="h-5 w-5 mr-2" />
-              Restore Selected ({selectedLeads.size})
-            </button>
-            <button
-              onClick={handleDeleteSelected}
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700"
-            >
-              <TrashIcon className="h-5 w-5 mr-2" />
-              Delete Selected ({selectedLeads.size})
-            </button>
-          </>
-        )}
+  return (
+    <div>
+      {/* This container will align its children to the left and right sides */}
+      <div className="flex justify-between items-center mb-4">
+        {/* Container for the selected buttons, aligned to the left */}
+        <div className="flex space-x-2">
+          {selectedLeads.size > 0 && (
+            <>
+              <button
+                onClick={handleRestoreSelected}
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700"
+              >
+                <ArrowUturnLeftIcon className="h-5 w-5 mr-2" />
+                Restore Selected ({selectedLeads.size})
+              </button>
+              <button
+                onClick={handleDeleteSelected}
+                className="inline-flex items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-red-700"
+              >
+                <TrashIcon className="h-5 w-5 mr-2" />
+                Delete Selected ({selectedLeads.size})
+              </button>
+            </>
+          )}
+        </div>
+
+        <ColumnToggler columns={columns} setColumns={setColumns} />
       </div>
 
-     
-      <ColumnToggler columns={columns} setColumns={setColumns} />
-    </div>
+      <div className="overflow-x-auto" ref={tableContainerRef}>
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-3 py-3 w-10">
+                  <span className="sr-only">Drag</span>
+                </th>
+                <th className="px-3 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAll}
+                    checked={
+                      currentLeads.length > 0 &&
+                      currentLeads.every((lead) => selectedLeads.has(lead.id))
+                    }
+                    indeterminate={
+                      currentLeads.some((lead) => selectedLeads.has(lead.id)) &&
+                      !currentLeads.every((lead) => selectedLeads.has(lead.id))
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </th>
+                {Object.entries(columns).map(([key, { label, visible }]) =>
+                  visible ? (
+                    <th
+                      key={key}
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      {label}
+                    </th>
+                  ) : null
+                )}
+              </tr>
+            </thead>
+            <SortableContext
+              items={orderedLeads.map((l) => l.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody className="bg-white divide-y divide-gray-200">
+                {currentLeads.map((lead) => (
+                  <SortableTrashRow
+                    key={lead.id}
+                    lead={lead}
+                    columns={columns}
+                    isSelected={selectedLeads.has(lead.id)}
+                    onSelectRow={handleSelectRow}
+                    onPermanentDelete={onPermanentDelete}
+                    onRestoreLead={onRestoreLead}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </DndContext>
+      </div>
 
-    <div className="overflow-x-auto" ref={tableContainerRef}>
-      <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-3 py-3 w-10">
-                <span className="sr-only">Drag</span>
-              </th>
-              <th className="px-3 py-3 w-10">
-                <input
-                  type="checkbox"
-                  onChange={handleSelectAll}
-                  checked={
-                    currentLeads.length > 0 &&
-                    currentLeads.every((lead) => selectedLeads.has(lead.id))
-                  }
-                  indeterminate={
-                    currentLeads.some((lead) => selectedLeads.has(lead.id)) &&
-                    !currentLeads.every((lead) => selectedLeads.has(lead.id))
-                  }
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-              </th>
-              {Object.entries(columns).map(([key, { label, visible }]) =>
-                visible ? (
-                  <th
-                    key={key}
-                    className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {label}
-                  </th>
-                ) : null
-              )}
-            </tr>
-          </thead>
-          <SortableContext
-            items={orderedLeads.map((l) => l.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <tbody className="bg-white divide-y divide-gray-200">
-              {currentLeads.map((lead) => (
-                <SortableTrashRow
-                  key={lead.id}
-                  lead={lead}
-                  columns={columns}
-                  isSelected={selectedLeads.has(lead.id)}
-                  onSelectRow={handleSelectRow}
-                  onPermanentDelete={onPermanentDelete}
-                  onRestoreLead={onRestoreLead}
-                />
-              ))}
-            </tbody>
-          </SortableContext>
-        </table>
-      </DndContext>
+      {/* Pagination */}
+      <div className="flex justify-end items-center mt-4">
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronLeftIcon className="h-5 w-5 text-gray-500" />
+        </button>
+        <span className="mx-4 text-sm font-medium text-gray-700">
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+        </button>
+      </div>
     </div>
-
-    {/* Pagination */}
-    <div className="flex justify-end items-center mt-4">
-      <button
-        onClick={() => handlePageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <ChevronLeftIcon className="h-5 w-5 text-gray-500" />
-      </button>
-      <span className="mx-4 text-sm font-medium text-gray-700">
-        Page {currentPage} of {totalPages}
-      </span>
-      <button
-        onClick={() => handlePageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <ChevronRightIcon className="h-5 w-5 text-gray-500" />
-      </button>
-    </div>
-  </div>
-);
+  );
 };
 
 const SortableTrashRow = ({
