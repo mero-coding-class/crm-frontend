@@ -1,5 +1,3 @@
-// src/components/AddLeadModal.jsx
-
 import React, { useState, useRef } from "react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
@@ -66,10 +64,20 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+
+    // Create a new object to send, converting empty strings to null for date fields
+    const sanitizedFormData = {
+      ...formData,
+      recentCall: formData.recentCall === "" ? null : formData.recentCall,
+      nextCall: formData.nextCall === "" ? null : formData.nextCall,
+    };
+
+    onSave(sanitizedFormData);
   };
 
   // Dropdown options
+  const courseDurationOptions = ["Select", "12", "20", "40"];
+
   const statusOptions = [
     "New",
     "Open",
@@ -344,6 +352,28 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
               ))}
             </select>
           </div>
+          {/* Course Duration */}
+          <div>
+            <label
+              htmlFor="courseDuration"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Course Duration (hours)
+            </label>
+            <select
+              id="courseDuration"
+              name="courseDuration"
+              value={formData.courseDuration}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              {courseDurationOptions.map((option) => (
+                <option key={option} value={option === "Select" ? "" : option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Source */}
           <div>
@@ -560,7 +590,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
               htmlFor="workshopBatch"
               className="block text-sm font-medium text-gray-700"
             >
-              Workshop Batch
+              School/College
             </label>
             <input
               type="text"
