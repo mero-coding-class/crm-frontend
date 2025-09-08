@@ -115,6 +115,8 @@ const Leads = () => {
   const handleCloseAddModal = useCallback(() => setIsAddModalOpen(false), []);
 
   // Add lead via service; map course to ID if needed, then update state immediately
+  // Corrected handleAddNewLead function
+  // Corrected handleAddNewLead function with data transformation
   const handleAddNewLead = useCallback(
     async (newLeadData) => {
       try {
@@ -128,28 +130,35 @@ const Leads = () => {
           courseId = selected ? selected.id : newLeadData.course;
         }
 
-        const createdLead = await leadService.addLead(
-          { ...newLeadData, course: courseId },
-          authToken
-        );
+        // Transform the data to match back-end field names
+        const payload = {
+          student_name: newLeadData.studentName,
+          parents_name: newLeadData.parentsName,
+          phone_number: newLeadData.phone,
+          // Add other fields you need to transform here
+          course_name: newLeadData.course,
+          email: newLeadData.email,
+          // etc.
+          ...newLeadData, // Spread the rest of the data
+          course: courseId,
+        };
 
-        // Update the state with the new lead at the top of the list
-        setAllLeads([newLead, ...allLeads]);
+        const createdLead = await leadService.addLead(payload, authToken);
 
-        // This is a good practice to ensure the table reflects the change,
-        // although your `useMemo` should handle it.
-        // It forces a re-evaluation of the filtered list.
+        // Now, use the complete newLeadData object to update the state,
+        // and merge the new _id from the back end.
+        const updatedLeadForState = { ...newLeadData, _id: createdLead.id };
+        setAllLeads([updatedLeadForState, ...allLeads]);
+
         setSearchTerm("");
         setFilterStatus("All");
-
         handleCloseAddModal();
       } catch (err) {
         setError(err.message || "Failed to create lead");
       }
     },
-    [authToken, courses, handleCloseAddModal]
+    [authToken, courses, allLeads, handleCloseAddModal]
   );
-
   const handleEdit = useCallback((lead) => {
     setEditingLead(lead);
     setIsEditModalOpen(true);
@@ -619,4 +628,4 @@ const Leads = () => {
   );
 };
 
-export default Leads;
+export default Leads; 
