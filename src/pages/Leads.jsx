@@ -121,37 +121,60 @@ const Leads = () => {
     async (newLeadData) => {
       try {
         let courseId = null;
-        if (newLeadData.course != null) {
-          const selected = courses.find(
-            (c) =>
-              c.course_name === newLeadData.course ||
-              c.id === newLeadData.course
-          );
-          courseId = selected ? selected.id : newLeadData.course;
-        }
+       if (newLeadData.status === "Converted") {
+         await fetch(
+           "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
+           {
+             method: "POST",
+             headers: {
+               "Content-Type": "application/json",
+               Authorization: `Bearer ${authToken}`,
+             },
+             body: JSON.stringify(payload),
+           }
+         );
+         handleCloseAddModal();
+         return;
+       }
 
-        // Transform the data to match back-end field names
-        const payload = {
-          student_name: newLeadData.studentName,
-          parents_name: newLeadData.parentsName,
-          phone_number: newLeadData.phone,
-          // Add other fields you need to transform here
-          course_name: newLeadData.course,
-          email: newLeadData.email,
-          // etc.
-          ...newLeadData, // Spread the rest of the data
-          course: courseId,
-        };
+       if (newLeadData.status === "Lost" || newLeadData.status === "Junk") {
+         await fetch(
+           "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
+           {
+             method: "POST",
+             headers: {
+               "Content-Type": "application/json",
+               Authorization: `Bearer ${authToken}`,
+             },
+             body: JSON.stringify(payload),
+           }
+         );
+         handleCloseAddModal();
+         return;
+       }
 
-        const createdLead = await leadService.addLead(payload, authToken);
+       // Transform the data to match back-end field names
+       const payload = {
+         student_name: newLeadData.studentName,
+         parents_name: newLeadData.parentsName,
+         phone_number: newLeadData.phone,
+         // Add other fields you need to transform here
+         course_name: newLeadData.course,
+         email: newLeadData.email,
+         // etc.
+         ...newLeadData, // Spread the rest of the data
+         course: courseId,
+       };
 
-        // Now, use the complete newLeadData object to update the state,
-        // and merge the new _id from the back end.
-        const updatedLeadForState = { ...newLeadData, _id: createdLead.id };
-        setAllLeads([updatedLeadForState, ...allLeads]);
+       const createdLead = await leadService.addLead(payload, authToken);
 
-        setSearchTerm("");
-        setFilterStatus("All");
+       // Now, use the complete newLeadData object to update the state,
+       // and merge the new _id from the back end.
+       const updatedLeadForState = { ...newLeadData, _id: createdLead.id };
+       setAllLeads([updatedLeadForState, ...allLeads]);
+
+       setSearchTerm("");
+       setFilterStatus("Active");
         handleCloseAddModal();
       } catch (err) {
         setError(err.message || "Failed to create lead");

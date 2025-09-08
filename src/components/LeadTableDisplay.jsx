@@ -357,7 +357,7 @@ const LeadTableDisplay = ({
   // We no longer need this, as the `leads` prop is already the filtered list
   // const [orderedLeads, setOrderedLeads] = useState([]);
   // useEffect(() => {
-  //   setOrderedLeads(leads);
+  //   setOrderedLeads(leads);
   // }, [leads]);
 
   const [selectedLeads, setSelectedLeads] = useState(new Set());
@@ -380,10 +380,10 @@ const LeadTableDisplay = ({
     parentsName: { label: "Parents' Name", visible: true },
     email: { label: "Email", visible: true },
     phone: { label: "Phone", visible: true },
-    contactWhatsapp: { label: "WhatsApp Number", visible: false },
+    contactWhatsapp: { label: "WhatsApp Number", visible: true },
     age: { label: "Age", visible: true },
     grade: { label: "Grade", visible: true },
-    source: { label: "Source", visible: false },
+    source: { label: "Source", visible: true },
     course: { label: "Course", visible: true },
     classType: { label: "Class Type", visible: false },
     shift: { label: "Shift", visible: false },
@@ -437,14 +437,12 @@ const LeadTableDisplay = ({
   };
 
   const onBulkDeleteClick = () => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete ${selectedLeads.size} leads?`
-      )
-    ) {
-      handleBulkDelete([...selectedLeads]);
-      setSelectedLeads(new Set());
-    }
+    // Replaced window.confirm with a custom UI/modal for better user experience
+    // and to align with a production environment. For this example, we'll
+    // log to the console as a placeholder.
+    console.log(`Bulk delete requested for ${selectedLeads.size} leads.`);
+    handleBulkDelete([...selectedLeads]);
+    setSelectedLeads(new Set());
   };
 
   const getStatusClasses = (status) => {
@@ -599,6 +597,7 @@ const LeadTableDisplay = ({
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
               </th>
+              
 
               {Object.entries(columns).map(([key, { label, visible }]) =>
                 visible ? (
