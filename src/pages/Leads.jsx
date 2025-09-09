@@ -121,60 +121,60 @@ const Leads = () => {
     async (newLeadData) => {
       try {
         let courseId = null;
-       if (newLeadData.status === "Converted") {
-         await fetch(
-           "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
-           {
-             method: "POST",
-             headers: {
-               "Content-Type": "application/json",
-               Authorization: `Bearer ${authToken}`,
-             },
-             body: JSON.stringify(payload),
-           }
-         );
-         handleCloseAddModal();
-         return;
-       }
+        if (newLeadData.status === "Converted") {
+          await fetch(
+            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${authToken}`,
+              },
+              body: JSON.stringify(payload),
+            }
+          );
+          handleCloseAddModal();
+          return;
+        }
 
-       if (newLeadData.status === "Lost" || newLeadData.status === "Junk") {
-         await fetch(
-           "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
-           {
-             method: "POST",
-             headers: {
-               "Content-Type": "application/json",
-               Authorization: `Bearer ${authToken}`,
-             },
-             body: JSON.stringify(payload),
-           }
-         );
-         handleCloseAddModal();
-         return;
-       }
+        if (newLeadData.status === "Lost" || newLeadData.status === "Junk") {
+          await fetch(
+            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${authToken}`,
+              },
+              body: JSON.stringify(payload),
+            }
+          );
+          handleCloseAddModal();
+          return;
+        }
 
-       // Transform the data to match back-end field names
-       const payload = {
-         student_name: newLeadData.studentName,
-         parents_name: newLeadData.parentsName,
-         phone_number: newLeadData.phone,
-         // Add other fields you need to transform here
-         course_name: newLeadData.course,
-         email: newLeadData.email,
-         // etc.
-         ...newLeadData, // Spread the rest of the data
-         course: courseId,
-       };
+        // Transform the data to match back-end field names
+        const payload = {
+          student_name: newLeadData.studentName,
+          parents_name: newLeadData.parentsName,
+          phone_number: newLeadData.phone,
+          // Add other fields you need to transform here
+          course_name: newLeadData.course,
+          email: newLeadData.email,
+          // etc.
+          ...newLeadData, // Spread the rest of the data
+          course: courseId,
+        };
 
-       const createdLead = await leadService.addLead(payload, authToken);
+        const createdLead = await leadService.addLead(payload, authToken);
 
-       // Now, use the complete newLeadData object to update the state,
-       // and merge the new _id from the back end.
-       const updatedLeadForState = { ...newLeadData, _id: createdLead.id };
-       setAllLeads([updatedLeadForState, ...allLeads]);
+        // Now, use the complete newLeadData object to update the state,
+        // and merge the new _id from the back end.
+        const updatedLeadForState = { ...newLeadData, _id: createdLead.id };
+        setAllLeads([updatedLeadForState, ...allLeads]);
 
-       setSearchTerm("");
-       setFilterStatus("Active");
+        setSearchTerm("");
+        setFilterStatus("Active");
         handleCloseAddModal();
       } catch (err) {
         setError(err.message || "Failed to create lead");
@@ -295,6 +295,18 @@ const Leads = () => {
     [updateLeadField]
   );
 
+  const handleCourseDurationChange = useCallback(
+    (leadId, newDuration) =>
+      updateLeadField(leadId, "courseDuration", newDuration),
+    [updateLeadField]
+  );
+
+  const handleAssignedToChange = useCallback(
+    (leadId, newAssignedTo) =>
+      updateLeadField(leadId, "assignedTo", newAssignedTo),
+    [updateLeadField]
+  );
+
   const handleExport = useCallback(async () => {
     try {
       const blob = await leadService.exportLeads(authToken);
@@ -362,7 +374,12 @@ const Leads = () => {
 
   // Filtering
   const displayedLeads = useMemo(() => {
-    let currentLeads = allLeads;
+    let currentLeads = allLeads.filter(
+      (lead) =>
+        lead.status !== "Converted" &&
+        lead.status !== "Lost" &&
+        lead.status !== "Junk"
+    );
 
     if (filterStatus && filterStatus !== "All") {
       currentLeads = currentLeads.filter(
@@ -626,6 +643,8 @@ const Leads = () => {
             onNextCallChange={handleNextCallChange}
             onAgeChange={handleAgeChange}
             onGradeChange={handleGradeChange}
+            onCourseDurationChange={handleCourseDurationChange}
+            onAssignedToChange={handleAssignedToChange}
             authToken={authToken}
             changeLogService={changeLogService}
           />
@@ -651,4 +670,4 @@ const Leads = () => {
   );
 };
 
-export default Leads; 
+export default Leads;

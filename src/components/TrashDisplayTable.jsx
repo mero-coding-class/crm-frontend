@@ -83,9 +83,9 @@ const ColumnToggler = ({ columns, setColumns }) => {
           Columns
         </Menu.Button>
       </div>
-      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 max-h-60 overflow-y-auto">
         <div className="py-1">
-          {Object.entries(columns).map(([key, { label }]) => (
+          {Object.entries(columns).map(([key, { label, visible }]) => (
             <Menu.Item key={key}>
               {({ active }) => (
                 <label
@@ -95,7 +95,7 @@ const ColumnToggler = ({ columns, setColumns }) => {
                 >
                   <input
                     type="checkbox"
-                    checked={columns[key].visible}
+                    checked={visible}
                     onChange={() => toggleColumn(key)}
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
                   />

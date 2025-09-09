@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   PencilIcon,
   TrashIcon,
@@ -15,6 +15,86 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+// Dummy data for students
+const DUMMY_STUDENTS = [
+  {
+    id: 1,
+    student_name: "Alice Johnson",
+    parents_name: "Robert & Mary Johnson",
+    email: "alice.j@example.com",
+    phone_number: "555-0101",
+    course_name: "Computer Science",
+    total_payment: 1200.0,
+    first_installment: 400.0,
+    second_installment: 400.0,
+    third_installment: 400.0,
+    last_pay_date: "2024-03-15",
+    payment_completed: true,
+    batch_name: "Batch 101",
+    assigned_teacher: "Rashik",
+    course_duration: "6 months", // Note: This will be replaced by new durations
+    starting_date: "2024-01-10",
+  },
+  {
+    id: 2,
+    student_name: "Bob Williams",
+    parents_name: "David Williams",
+    email: "bob.w@example.com",
+    phone_number: "555-0102",
+    course_name: "Data Analytics",
+    total_payment: 1500.0,
+    first_installment: 500.0,
+    second_installment: 500.0,
+    third_installment: null,
+    last_pay_date: "2024-04-20",
+    payment_completed: false,
+    batch_name: "Batch 102",
+    assigned_teacher: "Rajat",
+    course_duration: "8 months", // Note: This will be replaced by new durations
+    starting_date: "2024-02-15",
+  },
+  {
+    id: 3,
+    student_name: "Charlie Brown",
+    parents_name: "Sally Brown",
+    email: "charlie.b@example.com",
+    phone_number: "555-0103",
+    course_name: "Graphic Design",
+    total_payment: 900.0,
+    first_installment: 300.0,
+    second_installment: 300.0,
+    third_installment: null,
+    last_pay_date: "2024-03-05",
+    payment_completed: false,
+    batch_name: "Batch 103",
+    assigned_teacher: "Swadesh",
+    course_duration: "4 months", // Note: This will be replaced by new durations
+    starting_date: "2024-03-01",
+  },
+];
+
+// --- UPDATED OPTIONS AND COLORS ---
+const BATCH_NAMES = ["Batch 101", "Batch 102", "Batch 103", "Batch 104"];
+const TEACHER_NAMES = ["Rashik", "Rajat", "Swadesh", "Abhinash"];
+const COURSE_DURATIONS = ["7 days", "12 days", "20 days", "40 days"];
+
+// Background colors for dropdown options
+const DROPDOWN_COLORS_MAP = {
+  "Batch 101": "bg-purple-100",
+  "Batch 102": "bg-blue-100",
+  "Batch 103": "bg-yellow-100",
+  "Batch 104": "bg-green-100",
+  Rashik: "bg-pink-100",
+  Rajat: "bg-indigo-100",
+  Swadesh: "bg-teal-100",
+  Abhinash: "bg-orange-100",
+  "7 days": "bg-red-100",
+  "12 days": "bg-fuchsia-100",
+  "20 days": "bg-sky-100",
+  "40 days": "bg-lime-100",
+};
+// --- END UPDATED SECTIONS ---
 
 const formatDisplayDate = (dateString) => {
   if (!dateString) return "N/A";
@@ -63,16 +143,16 @@ const ColumnToggler = ({ columns, setColumns }) => {
         </button>
       </div>
       {isDropdownOpen && (
-        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 max-h-60 overflow-y-auto">
           <div className="py-1">
-            {Object.entries(columns).map(([key, { label }]) => (
+            {Object.entries(columns).map(([key, { label, visible }]) => (
               <label
                 key={key}
                 className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
               >
                 <input
                   type="checkbox"
-                  checked={columns[key].visible}
+                  checked={visible}
                   onChange={() => toggleColumn(key)}
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3"
                 />
@@ -86,15 +166,56 @@ const ColumnToggler = ({ columns, setColumns }) => {
   );
 };
 
+// Reusable component for dropdown cells
+const DropdownCell = ({ value, options, onSave, field }) => {
+  const [selectedValue, setSelectedValue] = useState(value);
+
+  useEffect(() => {
+    setSelectedValue(value);
+  }, [value]);
+
+  const handleSelectChange = (e) => {
+    const newValue = e.target.value;
+    setSelectedValue(newValue);
+    onSave(newValue);
+  };
+
+  const getOptionColorClass = (optionValue) => {
+    return DROPDOWN_COLORS_MAP[optionValue] || "bg-white";
+  };
+
+  return (
+    <td className="px-3 py-4 whitespace-nowrap text-sm">
+      <select
+        value={selectedValue || ""}
+        onChange={handleSelectChange}
+        className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 ${
+          selectedValue && getOptionColorClass(selectedValue)
+        }`}
+      >
+        <option value="">Select</option>
+        {options.map((option) => (
+          <option
+            key={option}
+            value={option}
+            className={getOptionColorClass(option)}
+          >
+            {option}
+          </option>
+        ))}
+      </select>
+    </td>
+  );
+};
+
 const EnrolledStudentsTable = ({
-  students = [], // Default to an empty array to prevent TypeError
+  students = DUMMY_STUDENTS,
   handleEdit,
   handleDelete,
   handleBulkDelete,
   onUpdatePaymentStatus,
-  // Add pagination props
-  currentPage,
-  totalPages,
+  currentPage = 1,
+  totalPages = 1,
   onPageChange,
 }) => {
   const [orderedStudents, setOrderedStudents] = useState([]);
@@ -105,6 +226,10 @@ const EnrolledStudentsTable = ({
     email: { label: "Email", visible: true },
     phone_number: { label: "Phone", visible: true },
     course_name: { label: "Course", visible: true },
+    batch_name: { label: "Batch Name", visible: true },
+    assigned_teacher: { label: "Assigned Teacher", visible: true },
+    course_duration: { label: "Course Duration", visible: true },
+    starting_date: { label: "Starting Date", visible: true },
     total_payment: { label: "Total Payment", visible: true },
     first_installment: { label: "1st Installment", visible: false },
     second_installment: { label: "2nd Installment", visible: false },
@@ -116,10 +241,9 @@ const EnrolledStudentsTable = ({
 
   const scrollContainerRef = useRef(null);
   const [scrollInterval, setScrollInterval] = useState(null);
-  const scrollSpeed = 5; // Pixels per interval
+  const scrollSpeed = 5;
 
   useEffect(() => {
-    // The `students` prop is now the paginated list, so we don't need to slice it here
     setOrderedStudents(students);
     setSelectedStudents(new Set());
   }, [students]);
@@ -162,6 +286,14 @@ const EnrolledStudentsTable = ({
       }
       return newSelection;
     });
+  };
+
+  const handleUpdateField = (id, field, value) => {
+    setOrderedStudents((prevStudents) =>
+      prevStudents.map((student) =>
+        student.id === id ? { ...student, [field]: value } : student
+      )
+    );
   };
 
   const handleDeleteSelected = () => {
@@ -282,7 +414,7 @@ const EnrolledStudentsTable = ({
               strategy={verticalListSortingStrategy}
             >
               <tbody className="bg-white divide-y divide-gray-200">
-                {students.map((student) => (
+                {orderedStudents.map((student) => (
                   <SortableStudentRow
                     key={student.id}
                     student={student}
@@ -292,6 +424,7 @@ const EnrolledStudentsTable = ({
                     handleEdit={handleEdit}
                     handleDelete={handleDelete}
                     handlePaymentStatusChange={handlePaymentStatusChange}
+                    onUpdateField={handleUpdateField}
                   />
                 ))}
               </tbody>
@@ -333,6 +466,7 @@ const SortableStudentRow = ({
   handleEdit,
   handleDelete,
   handlePaymentStatusChange,
+  onUpdateField,
 }) => {
   const {
     attributes,
@@ -353,7 +487,9 @@ const SortableStudentRow = ({
     <tr
       ref={setNodeRef}
       style={style}
-      className={`hover:bg-gray-50 ${isDragging ? "bg-gray-100 shadow-lg" : ""}`}
+      className={`hover:bg-gray-50 ${
+        isDragging ? "bg-gray-100 shadow-lg" : ""
+      }`}
     >
       <td className="px-3 py-4">
         <button
@@ -397,6 +533,55 @@ const SortableStudentRow = ({
           {student.course_name}
         </td>
       )}
+
+      {/* Batch Name Dropdown */}
+      {columns.batch_name.visible && (
+        <DropdownCell
+          value={student.batch_name}
+          options={BATCH_NAMES}
+          onSave={(value) => onUpdateField(student.id, "batch_name", value)}
+          field="batch_name"
+        />
+      )}
+
+      {/* Assigned Teacher Dropdown */}
+      {columns.assigned_teacher.visible && (
+        <DropdownCell
+          value={student.assigned_teacher}
+          options={TEACHER_NAMES}
+          onSave={(value) =>
+            onUpdateField(student.id, "assigned_teacher", value)
+          }
+          field="assigned_teacher"
+        />
+      )}
+
+      {/* Course Duration Dropdown */}
+      {columns.course_duration.visible && (
+        <DropdownCell
+          value={student.course_duration}
+          options={COURSE_DURATIONS}
+          onSave={(value) =>
+            onUpdateField(student.id, "course_duration", value)
+          }
+          field="course_duration"
+        />
+      )}
+
+      {/* Starting Date */}
+      {columns.starting_date.visible && (
+        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+          <input
+            type="date"
+            value={student.starting_date || ""}
+            onChange={(e) =>
+              onUpdateField(student.id, "starting_date", e.target.value)
+            }
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+          />
+        </td>
+      )}
+
       {columns.total_payment.visible && (
         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
           {student.total_payment
