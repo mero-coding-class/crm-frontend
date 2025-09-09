@@ -1,3 +1,5 @@
+// src/components/LeadTableDisplay.jsx
+
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   PencilIcon,
@@ -299,12 +301,14 @@ const ColumnToggler = ({ columns, setColumns }) => {
           Columns
         </Menu.Button>
       </div>
-      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10">
+
+      <Menu.Items className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10 max-h-60 overflow-y-auto">
         <div className="py-1">
           {Object.entries(columns).map(([key, { label, visible }]) => (
-            <Menu.Item key={key}>
+            <Menu.Item key={key} as="div">
               {({ active }) => (
                 <label
+                  onClick={(e) => e.preventDefault()} // Prevent menu from closing
                   className={`${
                     active ? "bg-gray-100 text-gray-900" : "text-gray-700"
                   } flex items-center px-4 py-2 text-sm cursor-pointer`}
@@ -325,6 +329,7 @@ const ColumnToggler = ({ columns, setColumns }) => {
     </Menu>
   );
 };
+
 
 /* ----------------------------- main component ----------------------------- */
 const LeadTableDisplay = ({
@@ -354,12 +359,44 @@ const LeadTableDisplay = ({
     "Junk",
   ];
 
-  // We no longer need this, as the `leads` prop is already the filtered list
-  // const [orderedLeads, setOrderedLeads] = useState([]);
-  // useEffect(() => {
-  //   setOrderedLeads(leads);
-  // }, [leads]);
+  const courseDurationOptions = ["12 Days", "40 Days", "7 Days"];
+  const assignedToOptions = ["Rojina T", "Rojina G"];
+  const assignedTeacherOptions = ["Rasik", "Swadesh", "Rajat", "Abhinash"];
 
+  const getCourseDurationClasses = (duration) => {
+    switch (duration) {
+      case "12 Days":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "40 Days":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "7 Days":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const getAssignedToClasses = (assignedTo) => {
+    switch (assignedTo) {
+      case "Rojina.T":
+        return "bg-purple-100 text-purple-800 border-purple-200";
+      case "Rojina.G":
+        return "bg-teal-100 text-teal-800 border-teal-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const getAssignedTeacherClasses = (teacher) => {
+    switch (teacher) {
+      case "Teacher.A":
+        return "bg-pink-100 text-pink-800 border-pink-200";
+      case "Teacher.B":
+        return "bg-indigo-100 text-indigo-800 border-indigo-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
   const [selectedLeads, setSelectedLeads] = useState(new Set());
 
   const [localRemarks, setLocalRemarks] = useState({});
@@ -385,6 +422,9 @@ const LeadTableDisplay = ({
     grade: { label: "Grade", visible: true },
     source: { label: "Source", visible: true },
     course: { label: "Course", visible: true },
+    courseDuration: { label: "Course Duration", visible: true },
+    assignedTo: { label: "Assigned To", visible: true },
+    assignedTeachers: { label: "Assigned Teacher", visible: true },
     classType: { label: "Class Type", visible: false },
     shift: { label: "Shift", visible: false },
     previousCodingExp: { label: "Previous Coding", visible: false },
@@ -400,10 +440,6 @@ const LeadTableDisplay = ({
   const handleDragEnd = (event) => {
     const { active, over } = event;
     if (active.id !== over.id) {
-      // Since leads are passed from parent, we need to handle the state change there
-      // This part would ideally trigger an `onReorder` prop function
-      // that sends the new order to the parent component.
-      // For now, the drag-and-drop effect will be temporary.
       console.warn(
         "Drag and drop functionality is for display only. To make it persistent, pass a handler to the parent component."
       );
@@ -437,9 +473,6 @@ const LeadTableDisplay = ({
   };
 
   const onBulkDeleteClick = () => {
-    // Replaced window.confirm with a custom UI/modal for better user experience
-    // and to align with a production environment. For this example, we'll
-    // log to the console as a placeholder.
     console.log(`Bulk delete requested for ${selectedLeads.size} leads.`);
     handleBulkDelete([...selectedLeads]);
     setSelectedLeads(new Set());
@@ -499,7 +532,6 @@ const LeadTableDisplay = ({
   };
 
   useEffect(() => {
-    // Reset to the first page if the number of leads changes
     setCurrentPage(1);
   }, [leads.length]);
 
@@ -597,8 +629,6 @@ const LeadTableDisplay = ({
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
               </th>
-              
-
               {Object.entries(columns).map(([key, { label, visible }]) =>
                 visible ? (
                   <th
@@ -607,6 +637,7 @@ const LeadTableDisplay = ({
                   >
                     {label}
                   </th>
+
                 ) : null
               )}
             </tr>
@@ -699,6 +730,66 @@ const LeadTableDisplay = ({
                           </span>
                         </td>
                       )}
+                      {columns.courseDuration.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <select
+                            value={lead.courseDuration || "N/A"}
+                            onChange={(e) =>
+                              onCourseDurationChange(lead._id, e.target.value)
+                            }
+                            className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold appearance-none pr-6 ${getCourseDurationClasses(
+                              lead.courseDuration
+                            )}`}
+                          >
+                            {courseDurationOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+
+                      {columns.assignedTo.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <select
+                            value={lead.assignedTo || "N/A"}
+                            onChange={(e) =>
+                              onAssignedToChange(lead._id, e.target.value)
+                            }
+                            className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold appearance-none pr-6 ${getAssignedToClasses(
+                              lead.assignedTo
+                            )}`}
+                          >
+                            {assignedToOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+
+                      {columns.assignedTeachers.visible && (
+                        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                          <select
+                            value={lead.assignedTeacher || "N/A"}
+                            onChange={(e) =>
+                              onAssignedTeacherChange(lead._id, e.target.value)
+                            }
+                            className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold appearance-none pr-6 ${getAssignedTeacherClasses(
+                              lead.assignedTeacher
+                            )}`}
+                          >
+                            {assignedTeacherOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+
                       {columns.classType.visible && (
                         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                           {lead.classType}
