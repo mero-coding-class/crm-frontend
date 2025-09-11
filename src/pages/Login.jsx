@@ -189,7 +189,7 @@ const Login = () => {
             className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-md hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg hover:shadow-xl"
           >
             {loading ? "Signing In..." : "Sign In"}
-          </button>
+          </button>   
         </form>
 
         <div className="text-center mt-6 text-gray-600 text-sm">

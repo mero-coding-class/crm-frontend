@@ -4,6 +4,7 @@ import LeadTableDisplay from "../components/LeadTableDisplay";
 import LeadEditModal from "../components/LeadEditModal";
 import AddLeadModal from "../components/AddLeadModal";
 import ImportCsvButton from "../components/ImportCsvButton";
+import Toast from "../components/common/Toast";
 
 import {
   PlusIcon,
@@ -22,6 +23,11 @@ const Leads = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [courses, setCourses] = useState([]);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
@@ -83,7 +89,33 @@ const Leads = () => {
     "Other",
   ];
 
-  // Load leads & courses
+  const handleRefresh = useCallback(async () => {
+    if (!authToken) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Get leads and courses data
+      const [leadsData, coursesData] = await Promise.all([
+        leadService.getLeads(authToken),
+        courseService.getCourses(authToken),
+      ]);
+
+      // Process leads to ensure course_name is set
+      const processedLeads = leadsData.map((lead) => ({
+        ...lead,
+        course_name: lead.course_name || "N/A", // Ensure course_name is always set
+      }));
+
+      setAllLeads(processedLeads);
+      setCourses(coursesData);
+    } catch (err) {
+      setError(err.message || "Failed to refresh leads");
+    } finally {
+      setLoading(false);
+    }
+  }, [authToken]);
+
+  // Load leads & courses when component mounts
   useEffect(() => {
     if (!authToken) {
       setError("You are not logged in. Please log in to view leads.");
@@ -92,15 +124,85 @@ const Leads = () => {
     }
 
     const run = async () => {
-      setLoading(true);
-      setError(null);
       try {
-        const [leadsData, coursesData] = await Promise.all([
-          leadService.getLeads(authToken),
-          courseService.getCourses(authToken),
-        ]);
-        setAllLeads(leadsData);
+        // First fetch courses
+        const coursesData = await courseService.getCourses(authToken);
         setCourses(coursesData);
+
+        // Then fetch leads
+        const leadsData = await leadService.getLeads(authToken);
+        console.log("Raw leads data:", leadsData);
+        console.log("Available courses:", coursesData);
+
+        // Ensure each lead has the correct course_name and ID
+        const processedLeads = leadsData.map((lead) => {
+          // Log the lead's course information
+          console.log("Processing lead course info:", {
+            id: lead.id,
+            course: lead.course,
+            course_name: lead.course_name,
+          });
+
+          // First ensure we have consistent ID handling
+          const normalizedLead = {
+            ...lead,
+            id: lead.id || parseInt(lead._id),
+            _id: lead.id?.toString() || lead._id,
+          };
+
+          // If we have a course ID, try to find the matching course
+          if (lead.course) {
+            const matchingCourse = coursesData.find(
+              (c) => c.id === lead.course
+            );
+            console.log("Found matching course:", matchingCourse);
+
+            if (matchingCourse) {
+              return {
+                ...normalizedLead,
+                course_name:
+                  matchingCourse.course_name ||
+                  matchingCourse.name ||
+                  lead.course_name ||
+                  "N/A",
+              };
+            }
+          }
+
+          // Keep the original course_name if it exists
+          if (lead.course_name) {
+            console.log("Using existing course_name:", lead.course_name);
+            return normalizedLead;
+          }
+
+          // If we have a course ID, try to find its name
+          if (lead.course) {
+            console.log("Looking for course with ID:", lead.course);
+            const matchingCourse = coursesData.find(
+              (c) =>
+                c.id ===
+                (typeof lead.course === "string"
+                  ? parseInt(lead.course)
+                  : lead.course)
+            );
+            console.log("Found matching course:", matchingCourse);
+            if (matchingCourse) {
+              return {
+                ...normalizedLead,
+                course_name:
+                  matchingCourse.course_name || lead.course_name || "N/A",
+              };
+            }
+          }
+
+          // Keep any existing course_name or use N/A as fallback
+          return {
+            ...normalizedLead,
+            course_name: lead.course_name || "N/A",
+          };
+        });
+
+        setAllLeads(processedLeads);
       } catch (err) {
         setError(err.message || "Failed to fetch data");
       } finally {
@@ -114,13 +216,76 @@ const Leads = () => {
   const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
   const handleCloseAddModal = useCallback(() => setIsAddModalOpen(false), []);
 
-  // Add lead via service; map course to ID if needed, then update state immediately
-  // Corrected handleAddNewLead function
-  // Corrected handleAddNewLead function with data transformation
   const handleAddNewLead = useCallback(
     async (newLeadData) => {
       try {
-        let courseId = null;
+        // Create a complete lead object with all required fields
+        const formattedLead = {
+          ...newLeadData,
+          _id:
+            newLeadData.id?.toString() ||
+            newLeadData._id ||
+            `new-${Date.now()}`,
+          // Ensure both id and _id are set correctly
+          id: newLeadData.id || parseInt(newLeadData._id) || null,
+          // Snake case fields (for API)
+          student_name: newLeadData.student_name?.trim() || "",
+          parents_name: newLeadData.parents_name?.trim() || "",
+          phone_number: newLeadData.phone_number?.trim() || "",
+          whatsapp_number: newLeadData.whatsapp_number?.trim() || "",
+          email: newLeadData.email || "",
+          age: newLeadData.age || "",
+          grade: newLeadData.grade || "",
+          source: newLeadData.source || "",
+          // Ensure course_name is preserved
+          course_name: newLeadData.course_name || "",
+          status: newLeadData.status || "New",
+          // Camel case fields (for display)
+          studentName: newLeadData.student_name?.trim() || "",
+          parentsName: newLeadData.parents_name?.trim() || "",
+          phone: newLeadData.phone_number?.trim() || "",
+          contactWhatsapp: newLeadData.whatsapp_number?.trim() || "",
+          created_at: newLeadData.created_at || new Date().toISOString(),
+          updated_at: newLeadData.updated_at || new Date().toISOString(),
+          logs_url: newLeadData.logs_url || null,
+          change_logs: [
+            {
+              action: "Created",
+              timestamp: new Date().toISOString(),
+              changes: "New lead created",
+              user: "System",
+            },
+          ],
+        };
+
+        // Add lead at the beginning and ensure no duplicates
+        setAllLeads((prevLeads) => {
+          const existingLeadIndex = prevLeads.findIndex(
+            (lead) =>
+              lead._id === formattedLead._id ||
+              (lead.phone_number === formattedLead.phone_number &&
+                lead.student_name === formattedLead.student_name)
+          );
+
+          if (existingLeadIndex !== -1) {
+            // Replace existing lead
+            const updatedLeads = [...prevLeads];
+            updatedLeads[existingLeadIndex] = formattedLead;
+            return updatedLeads;
+          }
+
+          // Add new lead at the beginning
+          return [formattedLead, ...prevLeads];
+        });
+
+        // Show success message
+        setToast({
+          show: true,
+          message: `New lead added: ${formattedLead.student_name}`,
+          type: "success",
+        });
+
+        // Handle special cases after UI update
         if (newLeadData.status === "Converted") {
           await fetch(
             "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
@@ -128,59 +293,42 @@ const Leads = () => {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${authToken}`,
+                Authorization: `Token ${authToken}`,
               },
-              body: JSON.stringify(payload),
+              body: JSON.stringify(newLeadData),
             }
           );
-          handleCloseAddModal();
-          return;
-        }
-
-        if (newLeadData.status === "Lost" || newLeadData.status === "Junk") {
+        } else if (
+          newLeadData.status === "Lost" ||
+          newLeadData.status === "Junk"
+        ) {
           await fetch(
             "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
             {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${authToken}`,
+                Authorization: `Token ${authToken}`,
               },
-              body: JSON.stringify(payload),
+              body: JSON.stringify(newLeadData),
             }
           );
-          handleCloseAddModal();
-          return;
         }
 
-        // Transform the data to match back-end field names
-        const payload = {
-          student_name: newLeadData.studentName,
-          parents_name: newLeadData.parentsName,
-          phone_number: newLeadData.phone,
-          // Add other fields you need to transform here
-          course_name: newLeadData.course,
-          email: newLeadData.email,
-          // etc.
-          ...newLeadData, // Spread the rest of the data
-          course: courseId,
-        };
-
-        const createdLead = await leadService.addLead(payload, authToken);
-
-        // Now, use the complete newLeadData object to update the state,
-        // and merge the new _id from the back end.
-        const updatedLeadForState = { ...newLeadData, _id: createdLead.id };
-        setAllLeads([updatedLeadForState, ...allLeads]);
-
+        // Update filters and close modal
         setSearchTerm("");
         setFilterStatus("Active");
         handleCloseAddModal();
-      } catch (err) {
-        setError(err.message || "Failed to create lead");
+      } catch (error) {
+        console.error("Error adding lead:", error);
+        // Remove the failed lead if there was an error
+        setAllLeads((prevLeads) =>
+          prevLeads.filter((lead) => lead._id !== newLeadData._id)
+        );
+        alert("Failed to add lead. Please try again.");
       }
     },
-    [authToken, courses, allLeads, handleCloseAddModal]
+    [authToken, handleCloseAddModal]
   );
   const handleEdit = useCallback((lead) => {
     setEditingLead(lead);
@@ -278,12 +426,12 @@ const Leads = () => {
     (leadId, newRemark) => updateLeadField(leadId, "remarks", newRemark),
     [updateLeadField]
   );
-  const handleRecentCallChange = useCallback(
-    (leadId, newDate) => updateLeadField(leadId, "recentCall", newDate),
+  const handleLastCallChange = useCallback(
+    (leadId, newDate) => updateLeadField(leadId, "last_call", newDate),
     [updateLeadField]
   );
   const handleNextCallChange = useCallback(
-    (leadId, newDate) => updateLeadField(leadId, "nextCall", newDate),
+    (leadId, newDate) => updateLeadField(leadId, "next_call", newDate),
     [updateLeadField]
   );
   const handleAgeChange = useCallback(
@@ -297,13 +445,13 @@ const Leads = () => {
 
   const handleCourseDurationChange = useCallback(
     (leadId, newDuration) =>
-      updateLeadField(leadId, "courseDuration", newDuration),
+      updateLeadField(leadId, "course_duration", newDuration),
     [updateLeadField]
   );
 
   const handleAssignedToChange = useCallback(
     (leadId, newAssignedTo) =>
-      updateLeadField(leadId, "assignedTo", newAssignedTo),
+      updateLeadField(leadId, "assigned_to", newAssignedTo),
     [updateLeadField]
   );
 
@@ -320,22 +468,13 @@ const Leads = () => {
       setError(err.message || "Failed to export CSV");
     }
   }, [authToken]);
+  const [leads, setLeads] = useState([]);
 
-  const handleRefresh = useCallback(async () => {
-    if (!authToken) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await leadService.getLeads(authToken);
-      setAllLeads(data);
-      const courseData = await courseService.getCourses(authToken);
-      setCourses(courseData);
-    } catch (err) {
-      setError(err.message || "Failed to refresh leads");
-    } finally {
-      setLoading(false);
-    }
-  }, [authToken]);
+  const handleFieldChange = (id, field, value) => {
+    setLeads((prev) =>
+      prev.map((lead) => (lead._id === id ? { ...lead, [field]: value } : lead))
+    );
+  };
 
   const handleDelete = useCallback(
     async (leadId) => {
@@ -390,9 +529,9 @@ const Leads = () => {
       const q = searchTerm.toLowerCase();
       currentLeads = currentLeads.filter(
         (lead) =>
-          (lead.studentName && lead.studentName.toLowerCase().includes(q)) ||
+          (lead.student_name && lead.student_name.toLowerCase().includes(q)) ||
           (lead.email && lead.email.toLowerCase().includes(q)) ||
-          (lead.phone && lead.phone.toLowerCase().includes(q))
+          (lead.phone_number && lead.phone_number.toLowerCase().includes(q))
       );
     }
     if (filterAge) {
@@ -407,12 +546,12 @@ const Leads = () => {
     }
     if (filterLastCall) {
       currentLeads = currentLeads.filter(
-        (lead) => lead.recentCall && lead.recentCall === filterLastCall
+        (lead) => lead.last_call && lead.last_call === filterLastCall
       );
     }
     if (filterClassType && filterClassType !== "Class") {
       currentLeads = currentLeads.filter(
-        (lead) => lead.classType === filterClassType
+        (lead) => lead.class_type === filterClassType
       );
     }
     if (filterShift && filterShift !== "Shift") {
@@ -425,7 +564,7 @@ const Leads = () => {
     }
     if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
       currentLeads = currentLeads.filter(
-        (lead) => lead.previousCodingExp === filterPrevCodingExp
+        (lead) => lead.previous_coding_experience === filterPrevCodingExp
       );
     }
 
@@ -467,6 +606,15 @@ const Leads = () => {
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() =>
+            setToast({ show: false, message: "", type: "success" })
+          }
+        />
+      )}
       <h1 className="text-3xl font-bold mb-6">Leads Management</h1>
 
       <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
@@ -639,7 +787,7 @@ const Leads = () => {
             handleBulkDelete={handleBulkDelete}
             onStatusChange={handleStatusChange}
             onRemarkChange={handleRemarkChange}
-            onRecentCallChange={handleRecentCallChange}
+            onRecentCallChange={handleLastCallChange}
             onNextCallChange={handleNextCallChange}
             onAgeChange={handleAgeChange}
             onGradeChange={handleGradeChange}
@@ -647,6 +795,7 @@ const Leads = () => {
             onAssignedToChange={handleAssignedToChange}
             authToken={authToken}
             changeLogService={changeLogService}
+            handleFieldChange={handleFieldChange}
           />
         )}
       </div>
@@ -664,6 +813,7 @@ const Leads = () => {
           onClose={handleCloseAddModal}
           onSave={handleAddNewLead}
           courses={courses}
+          authToken={authToken}
         />
       )}
     </div>

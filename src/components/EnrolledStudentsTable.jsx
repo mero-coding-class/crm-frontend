@@ -16,86 +16,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// Dummy data for students
-const DUMMY_STUDENTS = [
-  {
-    id: 1,
-    student_name: "Alice Johnson",
-    parents_name: "Robert & Mary Johnson",
-    email: "alice.j@example.com",
-    phone_number: "555-0101",
-    course_name: "Computer Science",
-    total_payment: 1200.0,
-    first_installment: 400.0,
-    second_installment: 400.0,
-    third_installment: 400.0,
-    last_pay_date: "2024-03-15",
-    payment_completed: true,
-    batch_name: "Batch 101",
-    assigned_teacher: "Rashik",
-    course_duration: "6 months", // Note: This will be replaced by new durations
-    starting_date: "2024-01-10",
-  },
-  {
-    id: 2,
-    student_name: "Bob Williams",
-    parents_name: "David Williams",
-    email: "bob.w@example.com",
-    phone_number: "555-0102",
-    course_name: "Data Analytics",
-    total_payment: 1500.0,
-    first_installment: 500.0,
-    second_installment: 500.0,
-    third_installment: null,
-    last_pay_date: "2024-04-20",
-    payment_completed: false,
-    batch_name: "Batch 102",
-    assigned_teacher: "Rajat",
-    course_duration: "8 months", // Note: This will be replaced by new durations
-    starting_date: "2024-02-15",
-  },
-  {
-    id: 3,
-    student_name: "Charlie Brown",
-    parents_name: "Sally Brown",
-    email: "charlie.b@example.com",
-    phone_number: "555-0103",
-    course_name: "Graphic Design",
-    total_payment: 900.0,
-    first_installment: 300.0,
-    second_installment: 300.0,
-    third_installment: null,
-    last_pay_date: "2024-03-05",
-    payment_completed: false,
-    batch_name: "Batch 103",
-    assigned_teacher: "Swadesh",
-    course_duration: "4 months", // Note: This will be replaced by new durations
-    starting_date: "2024-03-01",
-  },
-];
-
-// --- UPDATED OPTIONS AND COLORS ---
-const BATCH_NAMES = ["Batch 101", "Batch 102", "Batch 103", "Batch 104"];
-const TEACHER_NAMES = ["Rashik", "Rajat", "Swadesh", "Abhinash"];
-const COURSE_DURATIONS = ["7 days", "12 days", "20 days", "40 days"];
-
-// Background colors for dropdown options
-const DROPDOWN_COLORS_MAP = {
-  "Batch 101": "bg-purple-100",
-  "Batch 102": "bg-blue-100",
-  "Batch 103": "bg-yellow-100",
-  "Batch 104": "bg-green-100",
-  Rashik: "bg-pink-100",
-  Rajat: "bg-indigo-100",
-  Swadesh: "bg-teal-100",
-  Abhinash: "bg-orange-100",
-  "7 days": "bg-red-100",
-  "12 days": "bg-fuchsia-100",
-  "20 days": "bg-sky-100",
-  "40 days": "bg-lime-100",
+// --- BACKGROUND COLORS FOR FIELDS ---
+const FIELD_BG_CLASSES = {
+  batch_name: "bg-purple-100",
+  assigned_teacher: "bg-blue-100",
+  course_duration: "bg-green-100",
 };
-// --- END UPDATED SECTIONS ---
 
+// Format date display
 const formatDisplayDate = (dateString) => {
   if (!dateString) return "N/A";
   try {
@@ -108,6 +36,7 @@ const formatDisplayDate = (dateString) => {
   }
 };
 
+// Column toggler
 const ColumnToggler = ({ columns, setColumns }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -166,50 +95,36 @@ const ColumnToggler = ({ columns, setColumns }) => {
   );
 };
 
-// Reusable component for dropdown cells
-const DropdownCell = ({ value, options, onSave, field }) => {
-  const [selectedValue, setSelectedValue] = useState(value);
+// Editable text cell
+const EditableTextCell = ({ value, field, onSave }) => {
+  const [text, setText] = useState(value || "");
 
   useEffect(() => {
-    setSelectedValue(value);
+    setText(value || "");
   }, [value]);
 
-  const handleSelectChange = (e) => {
+  const handleChange = (e) => {
     const newValue = e.target.value;
-    setSelectedValue(newValue);
-    onSave(newValue);
-  };
-
-  const getOptionColorClass = (optionValue) => {
-    return DROPDOWN_COLORS_MAP[optionValue] || "bg-white";
+    setText(newValue);
+    onSave(newValue); // instant update
   };
 
   return (
-    <td className="px-3 py-4 whitespace-nowrap text-sm">
-      <select
-        value={selectedValue || ""}
-        onChange={handleSelectChange}
+    <td className={`px-3 py-4 whitespace-nowrap text-sm`}>
+      <input
+        type="text"
+        value={text}
+        onChange={handleChange}
         className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 ${
-          selectedValue && getOptionColorClass(selectedValue)
+          FIELD_BG_CLASSES[field] || "bg-white"
         }`}
-      >
-        <option value="">Select</option>
-        {options.map((option) => (
-          <option
-            key={option}
-            value={option}
-            className={getOptionColorClass(option)}
-          >
-            {option}
-          </option>
-        ))}
-      </select>
+      />
     </td>
   );
 };
 
 const EnrolledStudentsTable = ({
-  students = DUMMY_STUDENTS,
+  students = [],
   handleEdit,
   handleDelete,
   handleBulkDelete,
@@ -250,11 +165,16 @@ const EnrolledStudentsTable = ({
 
   useEffect(() => {
     return () => {
-      if (scrollInterval) {
-        clearInterval(scrollInterval);
-      }
+      if (scrollInterval) clearInterval(scrollInterval);
     };
   }, [scrollInterval]);
+
+  // Instant field update
+  const onUpdateField = (studentId, field, value) => {
+    setOrderedStudents((prev) =>
+      prev.map((s) => (s.id === studentId ? { ...s, [field]: value } : s))
+    );
+  };
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
@@ -269,8 +189,8 @@ const EnrolledStudentsTable = ({
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      const allStudentIds = new Set(orderedStudents.map((s) => s.id));
-      setSelectedStudents(allStudentIds);
+      const allIds = new Set(orderedStudents.map((s) => s.id));
+      setSelectedStudents(allIds);
     } else {
       setSelectedStudents(new Set());
     }
@@ -279,21 +199,10 @@ const EnrolledStudentsTable = ({
   const handleSelectRow = (studentId) => {
     setSelectedStudents((prev) => {
       const newSelection = new Set(prev);
-      if (newSelection.has(studentId)) {
-        newSelection.delete(studentId);
-      } else {
-        newSelection.add(studentId);
-      }
+      if (newSelection.has(studentId)) newSelection.delete(studentId);
+      else newSelection.add(studentId);
       return newSelection;
     });
-  };
-
-  const handleUpdateField = (id, field, value) => {
-    setOrderedStudents((prevStudents) =>
-      prevStudents.map((student) =>
-        student.id === id ? { ...student, [field]: value } : student
-      )
-    );
   };
 
   const handleDeleteSelected = () => {
@@ -306,30 +215,21 @@ const EnrolledStudentsTable = ({
     }
   };
 
-  const handlePaymentStatusChange = (studentId, newStatus) => {
-    onUpdatePaymentStatus(studentId, newStatus === "Yes");
-  };
-
   const handleMouseMove = (e) => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    const containerRect = container.getBoundingClientRect();
-    const clientX = e.clientX;
+    const rect = container.getBoundingClientRect();
     const boundary = 50;
     let direction = 0;
-    if (clientX < containerRect.left + boundary) {
-      direction = -1;
-    } else if (clientX > containerRect.right - boundary) {
-      direction = 1;
-    }
-    if (direction !== 0 && !scrollInterval) {
+    if (e.clientX < rect.left + boundary) direction = -1;
+    else if (e.clientX > rect.right - boundary) direction = 1;
+
+    if (direction && !scrollInterval) {
       const interval = setInterval(() => {
-        if (container) {
-          container.scrollLeft += direction * scrollSpeed;
-        }
+        container.scrollLeft += direction * scrollSpeed;
       }, 20);
       setScrollInterval(interval);
-    } else if (direction === 0 && scrollInterval) {
+    } else if (!direction && scrollInterval) {
       clearInterval(scrollInterval);
       setScrollInterval(null);
     }
@@ -386,31 +286,25 @@ const EnrolledStudentsTable = ({
                   <input
                     type="checkbox"
                     onChange={handleSelectAll}
-                    checked={
-                      students.length > 0 &&
-                      selectedStudents.size === students.length
-                    }
-                    indeterminate={
-                      selectedStudents.size > 0 &&
-                      selectedStudents.size < students.length
-                    }
+                    checked={selectedStudents.size === orderedStudents.length}
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
                 </th>
-                {Object.entries(columns).map(([key, { label, visible }]) =>
-                  visible ? (
-                    <th
-                      key={key}
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      {label}
-                    </th>
-                  ) : null
+                {Object.entries(columns).map(
+                  ([key, { label, visible }]) =>
+                    visible && (
+                      <th
+                        key={key}
+                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        {label}
+                      </th>
+                    )
                 )}
               </tr>
             </thead>
             <SortableContext
-              items={students.map((s) => s.id)}
+              items={orderedStudents.map((s) => s.id)}
               strategy={verticalListSortingStrategy}
             >
               <tbody className="bg-white divide-y divide-gray-200">
@@ -423,8 +317,8 @@ const EnrolledStudentsTable = ({
                     onSelectRow={handleSelectRow}
                     handleEdit={handleEdit}
                     handleDelete={handleDelete}
-                    handlePaymentStatusChange={handlePaymentStatusChange}
-                    onUpdateField={handleUpdateField}
+                    handlePaymentStatusChange={onUpdatePaymentStatus}
+                    onUpdateField={onUpdateField}
                   />
                 ))}
               </tbody>
@@ -458,6 +352,7 @@ const EnrolledStudentsTable = ({
   );
 };
 
+// Sortable row
 const SortableStudentRow = ({
   student,
   columns,
@@ -476,7 +371,6 @@ const SortableStudentRow = ({
     transition,
     isDragging,
   } = useSortable({ id: student.id });
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -508,6 +402,7 @@ const SortableStudentRow = ({
           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
         />
       </td>
+
       {columns.student_name.visible && (
         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
           {student.student_name}
@@ -534,37 +429,26 @@ const SortableStudentRow = ({
         </td>
       )}
 
-      {/* Batch Name Dropdown */}
+      {/* Editable text fields */}
       {columns.batch_name.visible && (
-        <DropdownCell
-          value={student.batch_name}
-          options={BATCH_NAMES}
-          onSave={(value) => onUpdateField(student.id, "batch_name", value)}
+        <EditableTextCell
           field="batch_name"
+          value={student.batch_name}
+          onSave={(v) => onUpdateField(student.id, "batch_name", v)}
         />
       )}
-
-      {/* Assigned Teacher Dropdown */}
       {columns.assigned_teacher.visible && (
-        <DropdownCell
-          value={student.assigned_teacher}
-          options={TEACHER_NAMES}
-          onSave={(value) =>
-            onUpdateField(student.id, "assigned_teacher", value)
-          }
+        <EditableTextCell
           field="assigned_teacher"
+          value={student.assigned_teacher}
+          onSave={(v) => onUpdateField(student.id, "assigned_teacher", v)}
         />
       )}
-
-      {/* Course Duration Dropdown */}
       {columns.course_duration.visible && (
-        <DropdownCell
-          value={student.course_duration}
-          options={COURSE_DURATIONS}
-          onSave={(value) =>
-            onUpdateField(student.id, "course_duration", value)
-          }
+        <EditableTextCell
           field="course_duration"
+          value={student.course_duration}
+          onSave={(v) => onUpdateField(student.id, "course_duration", v)}
         />
       )}
 
@@ -589,39 +473,22 @@ const SortableStudentRow = ({
             : "N/A"}
         </td>
       )}
-      {columns.first_installment.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.first_installment
-            ? `Rs ${parseFloat(student.first_installment).toFixed(2)}`
-            : "N/A"}
-        </td>
-      )}
-      {columns.second_installment.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.second_installment
-            ? `Rs ${parseFloat(student.second_installment).toFixed(2)}`
-            : "N/A"}
-        </td>
-      )}
-      {columns.third_installment.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.third_installment
-            ? `Rs ${parseFloat(student.third_installment).toFixed(2)}`
-            : "N/A"}
-        </td>
-      )}
+
       {columns.last_pay_date.visible && (
         <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
           {formatDisplayDate(student.last_pay_date)}
         </td>
       )}
+
       {columns.payment_completed.visible && (
         <td className="px-3 py-4 whitespace-nowrap text-sm">
           <select
             value={student.payment_completed ? "Yes" : "No"}
-            onChange={(e) =>
-              handlePaymentStatusChange(student.id, e.target.value)
-            }
+            onChange={(e) => {
+              const newValue = e.target.value === "Yes";
+              handlePaymentStatusChange(student.id, newValue);
+              onUpdateField(student.id, "payment_completed", newValue);
+            }}
             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
           >
             <option value="Yes">Yes</option>
@@ -629,6 +496,7 @@ const SortableStudentRow = ({
           </select>
         </td>
       )}
+
       {columns.actions.visible && (
         <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
           <button

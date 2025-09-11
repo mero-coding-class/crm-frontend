@@ -84,20 +84,41 @@ const _csvRowToLeadPayload = (row, courses) => {
 export const leadService = {
   getLeads: async (authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
+    console.log('Fetching leads from:', `${BASE_URL}/leads/`);
     const response = await fetch(`${BASE_URL}/leads/`, {
-      headers: { Authorization: `Token ${authToken}` },
+      headers: { 
+        'Authorization': `Token ${authToken}`,
+        'Content-Type': 'application/json'
+      },
     });
     const backendLeads = await handleResponse(response);
+    console.log('Backend Leads Response:', backendLeads);
+    
+    // Log any leads with course information
+    backendLeads.forEach(lead => {
+      if (lead.course || lead.course_name) {
+        console.log('Lead with course info:', {
+          id: lead.id,
+          course: lead.course,
+          course_name: lead.course_name
+        });
+      }
+    });
 
     return backendLeads.map((lead) => ({
-      _id: lead.id.toString(),
+      // Use just 'id' since that's what backend uses
       id: lead.id,
-
-      // 👇 show course NAME in the table
-      course: lead.course_name || "",
-
-      // 👇 keep the raw FK/id if backend returns it (handy for updates)
-      courseId: lead.course ?? null,
+      student_name: lead.student_name || "",
+      parents_name: lead.parents_name || "",
+      phone_number: lead.phone_number || "",
+      whatsapp_number: lead.whatsapp_number || "",
+      // Directly use the course_name from the backend
+      course_name: lead.course_name,
+      // Keep course reference as is
+      course: lead.course,
+      email: lead.email || "",
+      age: lead.age || "",
+      grade: lead.grade || "",
 
       studentName: lead.student_name || "",
       parentsName: lead.parents_name || "",
@@ -158,6 +179,7 @@ export const leadService = {
     if (updates.contactWhatsapp !== undefined)
       backendUpdates.whatsapp_number = updates.contactWhatsapp;
     if (updates.course !== undefined) backendUpdates.course = updates.course;
+    if (updates.course_name !== undefined) backendUpdates.course_name = updates.course_name;
     if (updates.source !== undefined) backendUpdates.source = updates.source;
     if (updates.classType !== undefined)
       backendUpdates.class_type = updates.classType;
@@ -189,36 +211,17 @@ export const leadService = {
 
   addLead: async (newLeadData, authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
+
+    // The data should already be in the correct format from the form
     const backendData = {
-      student_name: newLeadData.studentName || "",
-      parents_name: newLeadData.parentsName || "",
-      email: newLeadData.email || "",
-      phone_number: newLeadData.phone || "",
-      whatsapp_number: newLeadData.contactWhatsapp || "",
-      age: newLeadData.age || "",
-      grade: newLeadData.grade || "",
-      course: newLeadData.course,
-      source: newLeadData.source || "",
-      add_date: newLeadData.addDate || "",
-      last_call: newLeadData.recentCall || null,
-      next_call: newLeadData.nextCall || null,
+      ...newLeadData,
+      // Ensure required fields have defaults
       status: newLeadData.status || "New",
-      address_line_1: newLeadData.permanentAddress || "",
-      address_line_2: newLeadData.temporaryAddress || "",
-      city: newLeadData.city || "",
-      county: newLeadData.county || "",
-      post_code: newLeadData.postCode || "",
-      class_type: newLeadData.classType || "",
-      value: newLeadData.value || "",
-      adset_name: newLeadData.adsetName || "",
-      remarks: newLeadData.remarks || "",
-      shift: newLeadData.shift || "",
-      payment_type: newLeadData.paymentType || "",
-      device: newLeadData.device || "",
-      previous_coding_experience: newLeadData.previousCodingExp || "",
-      workshop_batch: newLeadData.workshopBatch || "",
-      change_log: newLeadData.changeLog || [],
+      add_date: newLeadData.add_date || new Date().toISOString().split('T')[0],
+      last_call: newLeadData.last_call || null,
+      next_call: newLeadData.next_call || null
     };
+    
     const response = await fetch(`${BASE_URL}/leads/`, {
       method: "POST",
       headers: {
@@ -227,6 +230,7 @@ export const leadService = {
       },
       body: JSON.stringify(backendData),
     });
+
     return handleResponse(response);
   },
 
