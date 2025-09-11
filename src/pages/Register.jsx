@@ -1,10 +1,7 @@
-// C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/RegisterUser.jsx
-
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { BASE_URL } from "../config";
-
 import {
   DndContext,
   closestCenter,
@@ -21,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+const INITIAL_VISIBLE_USERS = 4;
 const canManage = (role) =>
   ["admin", "superadmin"].includes((role || "").toLowerCase());
 
@@ -49,68 +47,122 @@ const SortableRow = ({
       style={style}
       {...attributes}
       {...listeners}
-      className="border-t hover:bg-gray-50"
+      className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
     >
       {/* Checkbox */}
-      <td className="px-3 py-2 text-center">
+      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
         <input
           type="checkbox"
           checked={selectedUsers.includes(u.id)}
           onChange={() => toggleSelect(u.id)}
-          className="h-4 w-4"
+          className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
         />
       </td>
 
-      <td className="px-3 py-2">{u.id}</td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+        {u.id}
+      </td>
 
-      <td className="px-3 py-2">
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
         {editUserId === u.id ? (
           <input
+            type="text"
             value={editUsername}
             onChange={(e) => setEditUsername(e.target.value)}
-            className="border p-1 rounded w-full"
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 w-full"
           />
         ) : (
           u.username
         )}
       </td>
 
-      <td className="px-3 py-2">{u.role}</td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+        {u.role}
+      </td>
 
-      <td className="px-3 py-2 space-x-2 text-center">
+      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
         {editUserId === u.id ? (
-          <>
+          <div className="flex justify-end space-x-2">
             <button
               onClick={() => handleEditSave(u.id)}
-              className="px-2 py-1 bg-green-600 text-white rounded"
+              className="p-1.5 rounded-md text-green-600 hover:bg-green-100 transition-colors"
+              aria-label="Save"
             >
-              Save
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
             </button>
             <button
               onClick={() => setEditUserId(null)}
-              className="px-2 py-1 bg-gray-400 text-white rounded"
+              className="p-1.5 rounded-md text-gray-500 hover:bg-gray-200 transition-colors"
+              aria-label="Cancel"
             >
-              Cancel
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
             </button>
-          </>
+          </div>
         ) : (
-          <>
+          <div className="flex justify-end space-x-2">
             <button
               onClick={() => {
                 setEditUserId(u.id);
                 setEditUsername(u.username);
               }}
-              className="px-2 py-1 bg-blue-600 text-white rounded"
+              className="p-1.5 rounded-md text-yellow-500 hover:bg-yellow-100 transition-colors"
+              aria-label="Edit"
             >
-              Edit
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
             </button>
             <button
               onClick={() => handleDelete(u.id)}
-              className="px-2 py-1 bg-red-600 text-white rounded"
+              className="p-1.5 rounded-md text-red-600 hover:bg-red-100 transition-colors"
+              aria-label="Delete"
             >
-              Delete
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z"
+                  clipRule="evenodd"
+                />
+              </svg>
             </button>
-          </>
+          </div>
         )}
       </td>
     </tr>
@@ -139,6 +191,19 @@ const RegisterUser = () => {
 
   // selection
   const [selectedUsers, setSelectedUsers] = useState([]);
+
+  // for "show more" functionality
+  const [visibleUsers, setVisibleUsers] = useState(INITIAL_VISIBLE_USERS);
+  const hasMoreUsers = users.length > visibleUsers;
+  const isAllUsersVisible = users.length <= visibleUsers;
+
+  const handleShowMore = () => {
+    setVisibleUsers(users.length);
+  };
+
+  const handleShowLess = () => {
+    setVisibleUsers(INITIAL_VISIBLE_USERS);
+  };
 
   // Force-blank on mount
   useEffect(() => {
@@ -237,7 +302,7 @@ const RegisterUser = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Delete this user?")) return;
+    if (!window.confirm("Are you sure you want to delete this user?")) return;
     try {
       const res = await fetch(`${BASE_URL}/users/${id}/`, {
         method: "DELETE",
@@ -245,13 +310,19 @@ const RegisterUser = () => {
       });
       if (!res.ok) throw new Error("Failed to delete user.");
       setUsers((prev) => prev.filter((u) => u.id !== id));
+      setSelectedUsers((prev) => prev.filter((uid) => uid !== id));
     } catch (err) {
       alert(err.message);
     }
   };
 
   const handleBulkDelete = async () => {
-    if (!window.confirm(`Delete ${selectedUsers.length} users?`)) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedUsers.length} users?`
+      )
+    )
+      return;
     try {
       await Promise.all(
         selectedUsers.map((id) =>
@@ -303,10 +374,10 @@ const RegisterUser = () => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedUsers.length === users.length) {
+    if (selectedUsers.length === users.slice(0, visibleUsers).length) {
       setSelectedUsers([]);
     } else {
-      setSelectedUsers(users.map((u) => u.id));
+      setSelectedUsers(users.slice(0, visibleUsers).map((u) => u.id));
     }
   };
 
@@ -328,11 +399,13 @@ const RegisterUser = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 bg-white rounded-lg shadow-md mt-8">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900">Create User</h2>
+    <div className="max-w-4xl mx-auto p-8 bg-white rounded-xl shadow-lg mt-8">
+      <h2 className="text-3xl font-bold mb-6 text-gray-900 border-b pb-2">
+        Create New User
+      </h2>
       {msg.text && (
         <div
-          className={`mb-4 p-3 rounded ${
+          className={`mb-6 p-4 rounded-lg ${
             msg.type === "error"
               ? "bg-red-50 text-red-700 border border-red-200"
               : "bg-green-50 text-green-700 border border-green-200"
@@ -343,9 +416,13 @@ const RegisterUser = () => {
       )}
 
       {/* Create Form */}
-      <form onSubmit={handleSubmit} autoComplete="off">
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-medium mb-2">
+      <form
+        onSubmit={handleSubmit}
+        autoComplete="off"
+        className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end"
+      >
+        <div>
+          <label className="block text-gray-700 text-sm font-medium mb-1">
             Username
           </label>
           <input
@@ -354,63 +431,110 @@ const RegisterUser = () => {
             value={form.username}
             onChange={handleChange}
             placeholder="Enter username"
-            className="w-full p-2 border border-gray-300 rounded-md"
+            autocomplete="off"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-medium mb-2">
+        <div>
+          <label className="block text-gray-700 text-sm font-medium mb-1">
             Role
           </label>
           <select
             name="role"
             value={form.role}
             onChange={handleChange}
-            className="w-full p-2 border border-gray-300 rounded-md bg-white"
+            className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="sales_rep">sales_rep</option>
-            <option value="admin">admin</option>
+            <option value="sales_rep">Sales Rep</option>
+            <option value="admin">Admin</option>
           </select>
         </div>
 
-        <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-medium mb-2">
+        <div>
+          <label className="block text-gray-700 text-sm font-medium mb-1">
             Password
           </label>
-          <input
-            name="password"
-            type={showPw ? "text" : "password"}
-            value={form.password}
-            onChange={handleChange}
-            placeholder="Set a password"
-            className="w-full p-2 border border-gray-300 rounded-md"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPw((s) => !s)}
-            className="mt-1 text-sm text-blue-600 hover:underline"
-          >
-            {showPw ? "Hide" : "Show"} password
-          </button>
+          <div className="relative">
+            <input
+              name="password"
+              type={showPw ? "text" : "password"}
+              value={form.password}
+              onChange={handleChange}
+              placeholder="Set a password"
+              autocomplete="new-password"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((s) => !s)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              aria-label={showPw ? "Hide password" : "Show password"}
+            >
+              {showPw ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                  <path
+                    fillRule="evenodd"
+                    d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0010 15c-4.321 0-8.243-2.922-9.542-7c.277-.962.748-1.84 1.396-2.613l-1.636-1.636zM10 11a2 2 0 100-4 2 2 0 000 4z"
+                    clipRule="evenodd"
+                  />
+                  <path d="M14.99 12.162l-3.34-3.34a2 2 0 01-2.828 0l-1.765 1.765A10.009 10.009 0 0010 15c-1.396 0-2.731-.475-3.903-1.35l2.253-2.253a4 4 0 015.657 0l2.253-2.253A10.01 10.01 0 0014.99 12.162z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="col-span-1 md:col-span-3 mt-4 w-full md:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Creating…" : "Create User"}
         </button>
       </form>
 
       {/* Users List */}
-      <h3 className="text-xl font-bold mt-8 mb-3">All Users</h3>
+      <h3 className="text-2xl font-bold mt-12 mb-4 text-gray-900 border-b pb-2">
+        All Users
+      </h3>
 
       {selectedUsers.length > 0 && (
         <button
           onClick={handleBulkDelete}
-          className="mb-3 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          className="mb-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors font-semibold flex items-center"
         >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5 mr-2"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z"
+              clipRule="evenodd"
+            />
+          </svg>
           Delete Selected ({selectedUsers.length})
         </button>
       )}
@@ -420,49 +544,81 @@ const RegisterUser = () => {
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <table className="w-full border border-gray-200 text-sm rounded-lg overflow-hidden shadow-sm">
-          <thead className="bg-gray-100 text-gray-700">
-            <tr>
-              <th className="px-3 py-2 text-center">
-                <input
-                  type="checkbox"
-                  checked={
-                    selectedUsers.length === users.length && users.length > 0
-                  }
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4"
-                />
-              </th>
-              <th className="px-3 py-2 text-left">ID</th>
-              <th className="px-3 py-2 text-left">Username</th>
-              <th className="px-3 py-2 text-left">Role</th>
-              <th className="px-3 py-2 text-center">Actions</th>
-            </tr>
-          </thead>
+        <div className="overflow-x-auto rounded-lg shadow-lg">
+          <table className="min-w-full divide-y divide-gray-200 bg-white">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <input
+                    type="checkbox"
+                    onChange={toggleSelectAll}
+                    checked={
+                      selectedUsers.length > 0 &&
+                      selectedUsers.length ===
+                        users.slice(0, visibleUsers).length
+                    }
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Username
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
 
-          <SortableContext
-            items={users.map((u) => u.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <tbody>
-              {users.map((u) => (
-                <SortableRow
-                  key={u.id}
-                  u={u}
-                  editUserId={editUserId}
-                  editUsername={editUsername}
-                  setEditUsername={setEditUsername}
-                  setEditUserId={setEditUserId}
-                  handleEditSave={handleEditSave}
-                  handleDelete={handleDelete}
-                  selectedUsers={selectedUsers}
-                  toggleSelect={toggleSelect}
-                />
-              ))}
-            </tbody>
-          </SortableContext>
-        </table>
+            <SortableContext
+              items={users.slice(0, visibleUsers).map((u) => u.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody className="bg-white divide-y divide-gray-200">
+                {users.slice(0, visibleUsers).map((u) => (
+                  <SortableRow
+                    key={u.id}
+                    u={u}
+                    editUserId={editUserId}
+                    editUsername={editUsername}
+                    setEditUsername={setEditUsername}
+                    setEditUserId={setEditUserId}
+                    handleEditSave={handleEditSave}
+                    handleDelete={handleDelete}
+                    selectedUsers={selectedUsers}
+                    toggleSelect={toggleSelect}
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </div>
       </DndContext>
+
+      {/* Show more/less buttons */}
+      <div className="flex justify-center mt-6 space-x-4">
+        {users.length > INITIAL_VISIBLE_USERS && !isAllUsersVisible && (
+          <button
+            onClick={handleShowMore}
+            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+          >
+            Show All Users ({users.length})
+          </button>
+        )}
+        {visibleUsers > INITIAL_VISIBLE_USERS && (
+          <button
+            onClick={handleShowLess}
+            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+          >
+            Show Less
+          </button>
+        )}
+      </div>
     </div>
   );
 };
