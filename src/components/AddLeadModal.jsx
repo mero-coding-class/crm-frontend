@@ -10,37 +10,35 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
+const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   const [formData, setFormData] = useState({
-    _id: `new-${Date.now()}`,
-    studentName: "",
-    parentsName: "",
+    student_name: "",
+    parents_name: "",
     email: "",
-    phone: "",
+    phone_number: "",
+    whatsapp_number: "",
     age: "",
     grade: "",
-    contactWhatsapp: "",
-    course: "",
     source: "",
-    recentCall: "",
-    nextCall: "",
+    course_name: "", // Changed from course to course_name
+    class_type: "",
+    shift: "",
     status: "New",
-    permanentAddress: "",
-    temporaryAddress: "",
+    previous_coding_experience: "",
+    last_call: "",
+    next_call: "",
+    value: "",
+    adset_name: "",
+    remarks: "",
+    payment_type: "",
+    device: "",
+    workshop_batch: "",
+    address_line_1: "",
+    address_line_2: "",
     city: "",
     county: "",
-    postCode: "",
-    classType: "",
-    value: "",
-    adsetName: "",
-    remarks: "",
-    shift: "",
-    paymentType: "",
-    device: "",
-    invoice: [],
-    previousCodingExp: "",
-    workshopBatch: "",
-    addDate: getTodayDate(),
+    post_code: "",
+    add_date: getTodayDate(),
   });
 
   const modalContentRef = useRef(null);
@@ -62,22 +60,149 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Create a new object to send, converting empty strings to null for date fields
-    const sanitizedFormData = {
+    // --- 1️⃣ Required Fields Validation ---
+    const requiredFields = ["student_name", "parents_name", "phone_number"];
+    const missingFields = requiredFields.filter(
+      (field) => !formData[field]?.trim()
+    );
+    if (missingFields.length > 0) {
+      alert(`Please fill in required fields: ${missingFields.join(", ")}`);
+      return;
+    }
+
+    // --- 2️⃣ Prepare Payload ---
+    const payload = {
       ...formData,
-      recentCall: formData.recentCall === "" ? null : formData.recentCall,
-      nextCall: formData.nextCall === "" ? null : formData.nextCall,
+      last_call: formData.last_call === "" ? null : formData.last_call,
+      next_call: formData.next_call === "" ? null : formData.next_call,
+      source: formData.source === "Select" ? "" : formData.source,
+      class_type: formData.class_type === "Select" ? "" : formData.class_type,
+      shift: formData.shift === "Select" ? "" : formData.shift,
+      payment_type:
+        formData.payment_type === "Select" ? "" : formData.payment_type,
+      previous_coding_experience:
+        formData.previous_coding_experience === "Select"
+          ? ""
+          : formData.previous_coding_experience,
+      device: formData.device === "Select" ? "" : formData.device,
     };
 
-    onSave(sanitizedFormData);
+    // Remove frontend-only fields
+    delete payload._id;
+    delete payload.invoice;
+
+    // --- 3️⃣ Log Payload and Token ---
+    console.log("Auth Token:", authToken);
+    console.log("Payload to send:", payload);
+
+    if (!authToken) {
+      alert("Authentication token is missing! Please log in.");
+      return;
+    }
+
+    // --- 4️⃣ API Call ---
+    try {
+      // Create a temporary ID for optimistic updates
+      const tempId = `new-${Date.now()}`;
+
+      // Transform the data to match backend's format and create the final lead object
+      const backendPayload = {
+        _id: tempId,
+        student_name: formData.student_name.trim(),
+        parents_name: formData.parents_name.trim(),
+        email: formData.email,
+        phone_number: formData.phone_number.trim(),
+        whatsapp_number: formData.whatsapp_number.trim(),
+        age: formData.age,
+        grade: formData.grade,
+        source: formData.source === "Select" ? "" : formData.source,
+        class_type: formData.class_type === "Select" ? "" : formData.class_type,
+        shift: formData.shift === "Select" ? "" : formData.shift,
+        status: formData.status || "New",
+        device: formData.device === "Select" ? "" : formData.device,
+        previous_coding_experience:
+          formData.previous_coding_experience === "Select"
+            ? ""
+            : formData.previous_coding_experience,
+        address_line_1: formData.address_line_1,
+        address_line_2: formData.address_line_2,
+        city: formData.city,
+        county: formData.county,
+        post_code: formData.post_code,
+        value: formData.value,
+        adset_name: formData.adset_name,
+        remarks: formData.remarks,
+        payment_type:
+          formData.payment_type === "Select" ? "" : formData.payment_type,
+        workshop_batch: formData.workshop_batch,
+        course_name: formData.course_name,
+        last_call: formData.last_call || null,
+        next_call: formData.next_call || null,
+        add_date: formData.add_date,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // Call onSave with the optimistic data first
+      onSave(backendPayload);
+
+      // Close the modal immediately
+      onClose();
+
+      const response = await fetch(
+        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Token ${authToken}`,
+          },
+          body: JSON.stringify(backendPayload),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API Error:", errorData);
+        alert(
+          `Failed to add lead. Status ${response.status}: ${
+            errorData.detail || "Unknown error"
+          }`
+        );
+        return;
+      }
+
+      const result = await response.json();
+      console.log("Lead added successfully:", result);
+
+      // Update the lead data with the server response
+      const serverLead = {
+        ...backendPayload,
+        _id: result.id.toString(),
+        id: result.id,
+        created_at: result.created_at,
+        updated_at: result.updated_at,
+      };
+
+      // Update the lead in the parent component with the server data
+      onSave({
+        ...serverLead,
+        logs_url: `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/${result.id}/logs`,
+      });
+
+      console.log("Lead saved successfully:", serverLead);
+    } catch (error) {
+      console.error("Network Error:", error);
+      alert(
+        "An error occurred while connecting to the server. Please try again later."
+      );
+    }
   };
 
   // Dropdown options
-  const courseDurationOptions = ["Select", "12", "20", "40"];
-
   const statusOptions = [
     "New",
     "Open",
@@ -185,56 +310,74 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Add Date - New Field */}
           <div>
             <label
-              htmlFor="addDate"
+              htmlFor="add_date"
               className="block text-sm font-medium text-gray-700"
             >
               Add Date
             </label>
             <input
               type="date"
-              id="addDate"
-              name="addDate"
-              value={formData.addDate}
+              id="add_date"
+              name="add_date"
+              value={formData.add_date}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="created_by"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Assigned To
+            </label>
+            <input
+              type="text"
+              id="created_by"
+              name="created_by"
+              value={formData.created_by || ""}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              placeholder="Optional"
             />
           </div>
 
           {/* Parents Name */}
           <div className="md:col-span-2">
             <label
-              htmlFor="parentsName"
+              htmlFor="parents_name"
               className="block text-sm font-medium text-gray-700"
             >
               Parents' Name
             </label>
             <input
               type="text"
-              id="parentsName"
-              name="parentsName"
-              value={formData.parentsName}
+              id="parents_name"
+              name="parents_name"
+              value={formData.parents_name}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="e.g., John & Jane Doe"
+              required // Added 'required' attribute
             />
           </div>
 
           {/* Student Name */}
           <div>
             <label
-              htmlFor="studentName"
+              htmlFor="student_name"
               className="block text-sm font-medium text-gray-700"
             >
               Student Name
             </label>
             <input
               type="text"
-              id="studentName"
-              name="studentName"
-              value={formData.studentName}
+              id="student_name"
+              name="student_name"
+              value={formData.student_name}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
+              required // Added 'required' attribute
             />
           </div>
 
@@ -253,43 +396,45 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
               value={formData.email}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
+              required // Added 'required' attribute
             />
           </div>
 
           {/* Phone Number */}
           <div>
             <label
-              htmlFor="phone"
+              htmlFor="phone_number"
               className="block text-sm font-medium text-gray-700"
             >
               Phone Number
             </label>
             <input
               type="tel"
-              id="phone"
-              name="phone"
-              value={formData.phone}
+              id="phone_number"
+              name="phone_number"
+              value={formData.phone_number}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              required // Added 'required' attribute
             />
           </div>
 
           {/* WhatsApp Number */}
           <div>
             <label
-              htmlFor="contactWhatsapp"
+              htmlFor="whatsapp_number"
               className="block text-sm font-medium text-gray-700"
             >
               WhatsApp Number
             </label>
             <input
               type="tel"
-              id="contactWhatsapp"
-              name="contactWhatsapp"
-              value={formData.contactWhatsapp}
+              id="whatsapp_number"
+              name="whatsapp_number"
+              value={formData.whatsapp_number}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              required // Added 'required' attribute
             />
           </div>
 
@@ -329,18 +474,18 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
             />
           </div>
 
-          {/* Course - Now dynamically loaded from courses prop */}
+          {/* Course Name - Dynamically loaded from courses prop */}
           <div>
             <label
-              htmlFor="course"
+              htmlFor="course_name"
               className="block text-sm font-medium text-gray-700"
             >
               Course
             </label>
             <select
-              id="course"
-              name="course"
-              value={formData.course}
+              id="course_name"
+              name="course_name"
+              value={formData.course_name}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
@@ -352,27 +497,22 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
               ))}
             </select>
           </div>
-          {/* Course Duration */}
+          {/* Course Duration - Now a text field */}
           <div>
             <label
-              htmlFor="courseDuration"
+              htmlFor="course_duration"
               className="block text-sm font-medium text-gray-700"
             >
               Course Duration (hours)
             </label>
-            <select
-              id="courseDuration"
-              name="courseDuration"
-              value={formData.courseDuration}
+            <input
+              type="text"
+              id="course_duration"
+              name="course_duration"
+              value={formData.course_duration}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {courseDurationOptions.map((option) => (
-                <option key={option} value={option === "Select" ? "" : option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Source */}
@@ -401,16 +541,16 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Last Call */}
           <div>
             <label
-              htmlFor="recentCall"
+              htmlFor="last_call"
               className="block text-sm font-medium text-gray-700"
             >
               Last Call
             </label>
             <input
               type="date"
-              id="recentCall"
-              name="recentCall"
-              value={formData.recentCall}
+              id="last_call"
+              name="last_call"
+              value={formData.last_call || ""}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -419,16 +559,16 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Next Call */}
           <div>
             <label
-              htmlFor="nextCall"
+              htmlFor="next_call"
               className="block text-sm font-medium text-gray-700"
             >
               Next Call
             </label>
             <input
               type="date"
-              id="nextCall"
-              name="nextCall"
-              value={formData.nextCall}
+              id="next_call"
+              name="next_call"
+              value={formData.next_call || ""}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -437,15 +577,15 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Class Type */}
           <div>
             <label
-              htmlFor="classType"
+              htmlFor="class_type"
               className="block text-sm font-medium text-gray-700"
             >
               Class Type
             </label>
             <select
-              id="classType"
-              name="classType"
-              value={formData.classType}
+              id="class_type"
+              name="class_type"
+              value={formData.class_type}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
@@ -478,16 +618,16 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Adset Name */}
           <div>
             <label
-              htmlFor="adsetName"
+              htmlFor="adset_name"
               className="block text-sm font-medium text-gray-700"
             >
               Adset Name
             </label>
             <input
               type="text"
-              id="adsetName"
-              name="adsetName"
-              value={formData.adsetName}
+              id="adset_name"
+              name="adset_name"
+              value={formData.adset_name}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -519,15 +659,15 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Payment Type */}
           <div>
             <label
-              htmlFor="paymentType"
+              htmlFor="payment_type"
               className="block text-sm font-medium text-gray-700"
             >
               Payment Type
             </label>
             <select
-              id="paymentType"
-              name="paymentType"
-              value={formData.paymentType}
+              id="payment_type"
+              name="payment_type"
+              value={formData.payment_type}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
@@ -564,15 +704,15 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Previous Coding Experience */}
           <div>
             <label
-              htmlFor="previousCodingExp"
+              htmlFor="previous_coding_experience"
               className="block text-sm font-medium text-gray-700"
             >
               Previous Coding Experience
             </label>
             <select
-              id="previousCodingExp"
-              name="previousCodingExp"
-              value={formData.previousCodingExp}
+              id="previous_coding_experience"
+              name="previous_coding_experience"
+              value={formData.previous_coding_experience}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
@@ -587,16 +727,16 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           {/* Workshop Batch (if applicable) */}
           <div>
             <label
-              htmlFor="workshopBatch"
+              htmlFor="workshop_batch"
               className="block text-sm font-medium text-gray-700"
             >
               School/College
             </label>
             <input
               type="text"
-              id="workshopBatch"
-              name="workshopBatch"
-              value={formData.workshopBatch}
+              id="workshop_batch"
+              name="workshop_batch"
+              value={formData.workshop_batch}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -620,38 +760,38 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
             ></textarea>
           </div>
 
-          {/* Address Fields (as provided, can be grouped or simplified) */}
+          {/* Address Fields */}
           <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
             Main Address
           </div>
           <div>
             <label
-              htmlFor="permanentAddress"
+              htmlFor="address_line_1"
               className="block text-sm font-medium text-gray-700"
             >
               Address Line 1 (Permanent)
             </label>
             <input
               type="text"
-              id="permanentAddress"
-              name="permanentAddress"
-              value={formData.permanentAddress}
+              id="address_line_1"
+              name="address_line_1"
+              value={formData.address_line_1}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
           <div>
             <label
-              htmlFor="temporaryAddress"
+              htmlFor="address_line_2"
               className="block text-sm font-medium text-gray-700"
             >
               Address Line 2 (Temporary)
             </label>
             <input
               type="text"
-              id="temporaryAddress"
-              name="temporaryAddress"
-              value={formData.temporaryAddress}
+              id="address_line_2"
+              name="address_line_2"
+              value={formData.address_line_2}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -690,16 +830,16 @@ const AddLeadModal = ({ onClose, onSave, courses = [] }) => {
           </div>
           <div>
             <label
-              htmlFor="postCode"
+              htmlFor="post_code"
               className="block text-sm font-medium text-gray-700"
             >
               Post Code
             </label>
             <input
               type="text"
-              id="postCode"
-              name="postCode"
-              value={formData.postCode}
+              id="post_code"
+              name="post_code"
+              value={formData.post_code}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />

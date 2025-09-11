@@ -1,5 +1,23 @@
 // client/src/services/leadService.js
-import { API_BASE, apiJson } from "./api";
+import { BASE_URL } from "../config";
+
+const apiJson = async (url, { method = 'GET', authToken, body } = {}) => {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      'Authorization': `Token ${authToken}`,
+      'Content-Type': 'application/json',
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+  
+  return response.json();
+};
 
 /** Normalize a string header to snake_case */
 const norm = (s = "") =>
@@ -55,38 +73,56 @@ function csvRowToBackend(row, courses) {
 }
 
 export const leadService = {
+  async addLead(leadData, authToken) {
+    return apiJson(`${BASE_URL}/leads/`, {
+      method: 'POST',
+      authToken,
+      body: leadData,
+    });
+  },
+
   async getLeads(authToken) {
-    const list = await apiJson(`${API_BASE}/api/leads/`, { authToken });
+    const response = await fetch(`${BASE_URL}/leads/`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    const list = await response.json();
+    console.log('API Response:', list);
+    
     return list.map((lead) => ({
       _id: lead.id.toString(),
-      studentName: lead.student_name || "",
-      parentsName: lead.parents_name || "",
+      student_name: lead.student_name || "",
+      parents_name: lead.parents_name || "",
       email: lead.email || "",
-      phone: lead.phone_number || "",
-      contactWhatsapp: lead.whatsapp_number || "",
+      phone_number: lead.phone_number || "",
+      whatsapp_number: lead.whatsapp_number || "",
       age: lead.age || "",
       grade: lead.grade || "",
-      course: lead.course_name || "",
+      course_name: lead.course_name || "",
+      course: lead.course || null,
       source: lead.source || "",
-      addDate: lead.add_date || "",
-      recentCall: lead.last_call || "",
-      nextCall: lead.next_call || "",
+      add_date: lead.add_date || "",
+      last_call: lead.last_call || "",
+      next_call: lead.next_call || "",
       status: lead.status || "New",
-      permanentAddress: lead.address_line_1 || "",
-      temporaryAddress: lead.address_line_2 || "",
+      address_line_1: lead.address_line_1 || "",
+      address_line_2: lead.address_line_2 || "",
       city: lead.city || "",
       county: lead.county || "",
-      postCode: lead.post_code || "",
-      classType: lead.class_type || "",
+      post_code: lead.post_code || "",
+      class_type: lead.class_type || "",
       value: lead.value || "",
-      adsetName: lead.adset_name || "",
+      adset_name: lead.adset_name || "",
       remarks: lead.remarks || "",
       shift: lead.shift || "",
-      paymentType: lead.payment_type || "",
+      payment_type: lead.payment_type || "",
       device: lead.device || "",
-      previousCodingExp: lead.previous_coding_experience || "",
-      workshopBatch: lead.workshop_batch || "",
-      changeLog: lead.change_log || [],
+      previous_coding_experience: lead.previous_coding_experience || "",
+      workshop_batch: lead.workshop_batch || "",
+      change_log: lead.change_log || []
     }));
   },
 
@@ -121,7 +157,7 @@ export const leadService = {
     if (u.workshopBatch !== undefined) backend.workshop_batch = u.workshopBatch;
     if (u.changeLog !== undefined) backend.change_log = u.changeLog;
 
-    return apiJson(`${API_BASE}/api/leads/${id}/`, {
+    return apiJson(`${BASE_URL}/leads/${id}/`, {
       method: "PATCH",
       authToken,
       body: backend,
@@ -132,7 +168,7 @@ export const leadService = {
   async importLeadFromCsvRow(row, courses, authToken) {
     const payload = csvRowToBackend(row, courses);
     // NOTE: uses the special "from" endpoint as requested
-    return apiJson(`${API_BASE}/api/leads/from/`, {
+    return apiJson(`${BASE_URL}/leads/from/`, {
       method: "POST",
       authToken,
       body: payload,
