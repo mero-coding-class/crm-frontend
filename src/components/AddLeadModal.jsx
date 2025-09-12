@@ -10,6 +10,17 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`;
 };
 
+// Format date from 'YYYY-MM-DD' to 'YYYY|DD|MM' for backend compatibility
+const formatDateForBackend = (d) => {
+  if (!d) return null;
+  // already in expected shape? accept if contains '|'
+  if (String(d).includes("|")) return d;
+  const parts = String(d).split("-");
+  if (parts.length !== 3) return d; // return as-is if unexpected format
+  const [yyyy, mm, dd] = parts;
+  return `${yyyy}|${dd}|${mm}`;
+};
+
 const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   const [formData, setFormData] = useState({
     student_name: "",
@@ -109,6 +120,12 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       const tempId = `new-${Date.now()}`;
 
       // Transform the data to match backend's format and create the final lead object
+      // Find selected course by name so we can send the course id to backend
+      const selectedCourse = courses.find(
+        (c) => String(c.course_name) === String(formData.course_name)
+      );
+      const selectedCourseId = selectedCourse ? selectedCourse.id : null;
+
       const backendPayload = {
         _id: tempId,
         student_name: formData.student_name.trim(),
@@ -138,9 +155,12 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         payment_type:
           formData.payment_type === "Select" ? "" : formData.payment_type,
         workshop_batch: formData.workshop_batch,
+        // Important: send course id under `course` so backend links correctly
+        course: selectedCourseId,
+        // Keep course_name for optimistic UI only
         course_name: formData.course_name,
-        last_call: formData.last_call || null,
-        next_call: formData.next_call || null,
+  last_call: formatDateForBackend(formData.last_call),
+  next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -178,19 +198,25 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       const result = await response.json();
       console.log("Lead added successfully:", result);
 
-      // Update the lead data with the server response
+      // Build server-side lead object using server response where possible
       const serverLead = {
         ...backendPayload,
         _id: result.id.toString(),
         id: result.id,
-        created_at: result.created_at,
-        updated_at: result.updated_at,
+        created_at: result.created_at || backendPayload.created_at,
+        updated_at: result.updated_at || backendPayload.updated_at,
+        // Prefer server-provided names/ids; fall back to selectedCourse or form value
+        course_name:
+          result.course_name ??
+          selectedCourse?.course_name ??
+          formData.course_name,
+        course: result.course ?? selectedCourseId ?? null,
       };
 
       // Update the lead in the parent component with the server data
       onSave({
         ...serverLead,
-        logs_url: `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/${result.id}/logs`,
+        logs_url: `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${result.id}/logs/`,
       });
 
       console.log("Lead saved successfully:", serverLead);

@@ -146,6 +146,11 @@ const TrashTableDisplay = ({
   const tableContainerRef = useRef(null);
   const scrollIntervalRef = useRef(null);
 
+  const smoothScroll = (distance) => {
+    if (!tableContainerRef.current) return;
+    tableContainerRef.current.scrollBy({ left: distance, behavior: "smooth" });
+  };
+
   const handleMouseMove = useCallback((e) => {
     const container = tableContainerRef.current;
     if (!container) return;
@@ -297,64 +302,85 @@ const TrashTableDisplay = ({
         <ColumnToggler columns={columns} setColumns={setColumns} />
       </div>
 
-      <div className="overflow-x-auto" ref={tableContainerRef}>
-        <DndContext
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
+      <div className="relative">
+        <button
+          onClick={() => smoothScroll(-400)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 p-2 bg-white rounded-full shadow hover:bg-gray-100"
+          aria-label="Scroll left"
         >
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-3 w-10">
-                  <span className="sr-only">Drag</span>
-                </th>
-                <th className="px-3 py-3 w-10">
-                  <input
-                    type="checkbox"
-                    onChange={handleSelectAll}
-                    checked={
-                      currentLeads.length > 0 &&
-                      currentLeads.every((lead) => selectedLeads.has(lead.id))
-                    }
-                    indeterminate={
-                      currentLeads.some((lead) => selectedLeads.has(lead.id)) &&
-                      !currentLeads.every((lead) => selectedLeads.has(lead.id))
-                    }
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                </th>
-                {Object.entries(columns).map(([key, { label, visible }]) =>
-                  visible ? (
-                    <th
-                      key={key}
-                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      {label}
-                    </th>
-                  ) : null
-                )}
-              </tr>
-            </thead>
-            <SortableContext
-              items={orderedLeads.map((l) => l.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <tbody className="bg-white divide-y divide-gray-200">
-                {currentLeads.map((lead) => (
-                  <SortableTrashRow
-                    key={lead.id}
-                    lead={lead}
-                    columns={columns}
-                    isSelected={selectedLeads.has(lead.id)}
-                    onSelectRow={handleSelectRow}
-                    onPermanentDelete={onPermanentDelete}
-                    onRestoreLead={onRestoreLead}
-                  />
-                ))}
-              </tbody>
-            </SortableContext>
-          </table>
-        </DndContext>
+          <ChevronLeftIcon className="h-5 w-5 text-gray-600" />
+        </button>
+        <button
+          onClick={() => smoothScroll(400)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 bg-white rounded-full shadow hover:bg-gray-100"
+          aria-label="Scroll right"
+        >
+          <ChevronRightIcon className="h-5 w-5 text-gray-600" />
+        </button>
+
+        <div className="overflow-x-auto" ref={tableContainerRef}>
+          <DndContext
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-3 w-10">
+                    <span className="sr-only">Drag</span>
+                  </th>
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      onChange={handleSelectAll}
+                      checked={
+                        currentLeads.length > 0 &&
+                        currentLeads.every((lead) => selectedLeads.has(lead.id))
+                      }
+                      indeterminate={
+                        currentLeads.some((lead) =>
+                          selectedLeads.has(lead.id)
+                        ) &&
+                        !currentLeads.every((lead) =>
+                          selectedLeads.has(lead.id)
+                        )
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </th>
+                  {Object.entries(columns).map(([key, { label, visible }]) =>
+                    visible ? (
+                      <th
+                        key={key}
+                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        {label}
+                      </th>
+                    ) : null
+                  )}
+                </tr>
+              </thead>
+              <SortableContext
+                items={orderedLeads.map((l) => l.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {currentLeads.map((lead) => (
+                    <SortableTrashRow
+                      key={lead.id}
+                      lead={lead}
+                      columns={columns}
+                      isSelected={selectedLeads.has(lead.id)}
+                      onSelectRow={handleSelectRow}
+                      onPermanentDelete={onPermanentDelete}
+                      onRestoreLead={onRestoreLead}
+                    />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </table>
+          </DndContext>
+        </div>
       </div>
 
       {/* Pagination */}
@@ -409,6 +435,21 @@ const SortableTrashRow = ({
   const displayedLogs = showAllLogs
     ? lead.changeLog
     : (lead.changeLog || []).slice(0, 2);
+
+  // Detect common deletion metadata fields (backend may use different keys)
+  const deletionBy =
+    lead.deleted_by_name ||
+    lead.deleted_by ||
+    lead.deleted_by_user ||
+    lead.deleter_name ||
+    null;
+  const deletionAtRaw =
+    lead.deleted_at ||
+    lead.deleted_on ||
+    lead.deleted_timestamp ||
+    lead.deleted ||
+    null;
+  const deletionAt = deletionAtRaw ? formatLogTimestamp(deletionAtRaw) : null;
 
   return (
     <tr
@@ -486,6 +527,18 @@ const SortableTrashRow = ({
             className="max-h-20 overflow-y-auto text-xs"
             style={{ minWidth: "200px" }}
           >
+            {deletionBy || deletionAt ? (
+              <div className="p-2 mb-2 rounded-md bg-yellow-50 border-l-4 border-yellow-300 text-xs">
+                <div className="font-semibold text-gray-900">Deleted</div>
+                <div className="text-gray-700 text-xs flex items-center">
+                  <ClockIcon className="h-3 w-3 mr-1 text-gray-500" />
+                  {deletionAt ? deletionAt : "Unknown time"}
+                  <span className="mx-1">by</span>
+                  <span className="font-medium">{deletionBy || "Unknown"}</span>
+                </div>
+              </div>
+            ) : null}
+
             {displayedLogs.length > 0
               ? displayedLogs.map((log, index) => (
                   <div

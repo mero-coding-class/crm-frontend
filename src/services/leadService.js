@@ -12,8 +12,10 @@ const apiJson = async (url, { method = 'GET', authToken, body } = {}) => {
   });
   
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error);
+    const text = await response.text();
+    const message = `HTTP ${response.status} ${response.statusText}: ${text}`;
+    console.error("API error", { url, method, status: response.status, body: text });
+    throw new Error(message);
   }
   
   return response.json();
@@ -131,11 +133,32 @@ export const leadService = {
     const backend = {};
     if (u.status !== undefined) backend.status = u.status;
     if (u.remarks !== undefined) backend.remarks = u.remarks;
-    if (u.recentCall !== undefined) backend.last_call = u.recentCall;
-    if (u.nextCall !== undefined) backend.next_call = u.nextCall;
+    // Format dates to backend expected format yyyy|dd|mm
+    const formatForBackend = (d) => {
+      if (!d && d !== 0) return null;
+      if (typeof d === "string" && d.includes("|")) return d;
+      if (d instanceof Date) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}|${dd}|${mm}`;
+      }
+      const parts = String(d).split("-");
+      if (parts.length === 3) {
+        const [yyyy, mm, dd] = parts;
+        return `${yyyy}|${dd}|${mm}`;
+      }
+      return d;
+    };
+
+    if (u.recentCall !== undefined) backend.last_call = formatForBackend(u.recentCall);
+    if (u.nextCall !== undefined) backend.next_call = formatForBackend(u.nextCall);
     if (u.device !== undefined) backend.device = u.device;
-    if (u.age !== undefined) backend.age = u.age;
-    if (u.grade !== undefined) backend.grade = u.grade;
+  // Avoid sending null for age/grade because backend rejects null for these fields.
+  // Send empty string when user clears the input so the backend treats it as blank
+  // (or accepts the empty value) rather than an explicit null.
+  if (u.age !== undefined) backend.age = u.age === "" ? "" : u.age;
+  if (u.grade !== undefined) backend.grade = u.grade === "" ? "" : u.grade;
     if (u.permanentAddress !== undefined) backend.address_line_1 = u.permanentAddress;
     if (u.temporaryAddress !== undefined) backend.address_line_2 = u.temporaryAddress;
     if (u.city !== undefined) backend.city = u.city;

@@ -74,11 +74,38 @@ const _csvRowToLeadPayload = (row, courses) => {
     shift: nrow.shift || "",
     payment_type: nrow.payment_type || "",
     device: nrow.device || "",
+    // Format date from 'YYYY-MM-DD' or Date to 'YYYY|DD|MM' is handled by helper below
     previous_coding_experience:
       nrow.previous_coding_experience || nrow.prev_coding || "",
     workshop_batch: nrow.workshop_batch || "",
     // change_log intentionally omitted on import
   };
+};
+
+// Format date from 'YYYY-MM-DD' or Date to 'YYYY|DD|MM'
+const formatDateForBackend = (d) => {
+  if (!d && d !== 0) return null;
+  // If already in backend format, return as-is
+  if (typeof d === "string" && d.includes("|")) return d;
+
+  // Date object
+  if (d instanceof Date) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}|${dd}|${mm}`;
+  }
+
+  // String in YYYY-MM-DD
+  const s = String(d);
+  const parts = s.split("-");
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts;
+    return `${yyyy}|${dd}|${mm}`;
+  }
+
+  // Fallback: return original string
+  return s;
 };
 
 export const leadService = {
@@ -94,13 +121,13 @@ export const leadService = {
     const backendLeads = await handleResponse(response);
     console.log('Backend Leads Response:', backendLeads);
     
-    // Log any leads with course information
-    backendLeads.forEach(lead => {
+    // Log any leads with course information (format dates for readability)
+    backendLeads.forEach((lead) => {
       if (lead.course || lead.course_name) {
-        console.log('Lead with course info:', {
-          id: lead.id,
-          course: lead.course,
-          course_name: lead.course_name
+        console.log("Lead with course info:", {
+          last_call: formatDateForBackend(lead.last_call) || null,
+          next_call: formatDateForBackend(lead.next_call) || null,
+          course_name: lead.course_name,
         });
       }
     });
@@ -114,11 +141,13 @@ export const leadService = {
       whatsapp_number: lead.whatsapp_number || "",
       // Directly use the course_name from the backend
       course_name: lead.course_name,
-      // Keep course reference as is
-      course: lead.course,
+  // Keep course reference as is
+  course: lead.course,
       email: lead.email || "",
-      age: lead.age || "",
-      grade: lead.grade || "",
+  age: lead.age || "",
+  grade: lead.grade || "",
+      // Preserve backend status (fall back to 'New' if not provided)
+      status: lead.status || "New",
 
       studentName: lead.student_name || "",
       parentsName: lead.parents_name || "",
@@ -128,10 +157,7 @@ export const leadService = {
       age: lead.age || "",
       grade: lead.grade || "",
       source: lead.source || "",
-      addDate: lead.add_date || "",
-      recentCall: lead.last_call || "",
-      nextCall: lead.next_call || "",
-      status: lead.status || "New",
+      // Note: last_call/next_call are available on lead as lead.last_call / lead.next_call
       permanentAddress: lead.address_line_1 || "",
       temporaryAddress: lead.address_line_2 || "",
       city: lead.city || "",
@@ -157,12 +183,17 @@ export const leadService = {
     if (updates.status !== undefined) backendUpdates.status = updates.status;
     if (updates.remarks !== undefined) backendUpdates.remarks = updates.remarks;
     if (updates.recentCall !== undefined)
-      backendUpdates.last_call = updates.recentCall;
+      backendUpdates.last_call = formatDateForBackend(updates.recentCall);
     if (updates.nextCall !== undefined)
-      backendUpdates.next_call = updates.nextCall;
+      backendUpdates.next_call = formatDateForBackend(updates.nextCall);
     if (updates.device !== undefined) backendUpdates.device = updates.device;
-    if (updates.age !== undefined) backendUpdates.age = updates.age;
-    if (updates.grade !== undefined) backendUpdates.grade = updates.grade;
+    // Avoid sending null for age/grade (backend rejects null). Send empty string
+    // when the user clears the field so server receives a blank value instead
+    // of an explicit null.
+    if (updates.age !== undefined)
+      backendUpdates.age = updates.age === "" ? "" : updates.age;
+    if (updates.grade !== undefined)
+      backendUpdates.grade = updates.grade === "" ? "" : updates.grade;
     if (updates.permanentAddress !== undefined)
       backendUpdates.address_line_1 = updates.permanentAddress;
     if (updates.temporaryAddress !== undefined)

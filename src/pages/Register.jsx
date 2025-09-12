@@ -618,7 +618,7 @@ const RegisterUser = () => {
             Show Less
           </button>
         )}
-      </div>
+      </div>  
     </div>
   );
 };

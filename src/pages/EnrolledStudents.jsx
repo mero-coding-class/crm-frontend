@@ -135,11 +135,61 @@ const EnrolledStudents = () => {
   // Instant field update (sends PATCH to backend immediately)
   const handleUpdateField = useCallback(
     async (studentId, field, value) => {
-      setAllStudents((prev) =>
-        prev.map((s) => (s.id === studentId ? { ...s, [field]: value } : s))
-      );
+      // If caller passed a full object (modal save), apply full merge
+      const paymentFields = new Set([
+        "total_payment",
+        "first_installment",
+        "second_installment",
+        "third_installment",
+      ]);
+
+      // Update local optimistic state
+      if (field === null && value && typeof value === "object") {
+        setAllStudents((prev) =>
+          prev.map((s) => (s.id === studentId ? { ...s, ...value } : s))
+        );
+      } else {
+        setAllStudents((prev) =>
+          prev.map((s) => (s.id === studentId ? { ...s, [field]: value } : s))
+        );
+      }
+
       try {
-        const payload = { [field]: value };
+        let payload = {};
+
+        if (field === null && value && typeof value === "object") {
+          // full object update from modal
+          payload = { ...value };
+        } else {
+          payload = { [field]: value };
+        }
+
+        // If a payment-related field changed or payment_completed is set to true,
+        // update last_pay_date to today (in YYYY-MM-DD) so the table reflects recent payment
+        const todayDate = new Date().toISOString().split("T")[0];
+        const paymentChanged =
+          field === "payment_completed" ||
+          paymentFields.has(field) ||
+          (field === null &&
+            value &&
+            (paymentFields.has("total_payment") ||
+              paymentFields.has("first_installment")));
+
+        if (paymentChanged) {
+          // If payment_completed explicitly true or any installment/total provided, set last_pay_date
+          if (
+            payload.payment_completed === true ||
+            paymentFields.has(field) ||
+            (field === null &&
+              (payload.total_payment ||
+                payload.first_installment ||
+                payload.second_installment ||
+                payload.third_installment))
+          ) {
+            payload.last_pay_date = payload.last_pay_date || todayDate;
+          }
+        }
+
         const response = await fetch(`${BASE_URL}/enrollments/${studentId}/`, {
           method: "PATCH",
           headers: {

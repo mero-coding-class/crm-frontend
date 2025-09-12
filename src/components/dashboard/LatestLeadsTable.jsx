@@ -41,6 +41,22 @@ const formatDate = (d) => {
   return dt.toLocaleDateString();
 };
 
+// Resolve registered/added date from common possible fields on lead
+const resolveRegisteredOn = (lead) => {
+  if (!lead) return null;
+  return (
+    lead.registeredOn ||
+    lead.registered_on ||
+    lead.addDate ||
+    lead.add_date ||
+    lead.createdAt ||
+    lead.created_at ||
+    lead.createdOn ||
+    lead.created_on ||
+    null
+  );
+};
+
 const LatestLeadsTable = ({ leads = [] }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
@@ -67,9 +83,7 @@ const LatestLeadsTable = ({ leads = [] }) => {
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Registered On
-                </th>
+               
               </tr>
             </thead>
 
@@ -105,9 +119,6 @@ const LatestLeadsTable = ({ leads = [] }) => {
                     </span>
                   </td>
 
-                  <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {formatDate(lead.registeredOn)}
-                  </td>
                 </tr>
               ))}
             </tbody>

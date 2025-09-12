@@ -37,6 +37,7 @@ import {
   CalendarDaysIcon,
   GlobeAltIcon,
 } from "@heroicons/react/24/outline";
+import LeadMap from "../components/dashboard/LeadMap";
 
 const ChartContainer = ({ title, description, children }) => (
   <div className="bg-white p-6 rounded-lg shadow-md flex flex-col h-full">
@@ -51,6 +52,10 @@ const Dashboard = () => {
   const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [coursesMap, setCoursesMap] = useState({});
+  const [enrollmentsTopCourses, setEnrollmentsTopCourses] = useState([]);
+  const [enrollmentsTrendData, setEnrollmentsTrendData] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
 
   // Pie segment colors
   const PIE_COLORS = [
@@ -82,6 +87,143 @@ const Dashboard = () => {
     fetchLeadsData();
   }, [authToken]);
 
+  // Fetch courses so we can resolve course names for dashboard tables
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const headers = {
+          "Content-Type": "application/json",
+        };
+        let usingAuth = false;
+        if (authToken) {
+          headers.Authorization = `Token ${authToken}`;
+          usingAuth = true;
+        }
+
+        // Attempt to fetch courses with or without Authorization depending on availability
+        const res = await fetch(
+          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/courses/",
+          {
+            method: "GET",
+            headers,
+            // only include credentials when auth token present to avoid CORS surprises
+            credentials: authToken ? "include" : "same-origin",
+          }
+        );
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch courses: ${res.status}`);
+        }
+
+        const data = await res.json();
+        // build a lookup map by common id keys and by name fallback (prefer course_name)
+        const map = {};
+        if (Array.isArray(data)) {
+          data.forEach((c) => {
+            const id = c.id ?? c.pk ?? c._id ?? c.course_id ?? null;
+            const name = c.course_name || c.name || c.title || c.course || "";
+            if (id != null) map[String(id)] = name;
+            if (name) map[String(name).toLowerCase()] = name;
+          });
+        }
+        setCoursesMap(map);
+        console.info(
+          `Fetched courses for dashboard (auth used: ${usingAuth}) - ${
+            Object.keys(map).length
+          } entries.`
+        );
+        // Also try to fetch enrollments to build fallback top-courses if needed
+        try {
+          const enrRes = await fetch(
+            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
+            {
+              method: "GET",
+              headers,
+              credentials: authToken ? "include" : "same-origin",
+            }
+          );
+          if (enrRes.ok) {
+            const enrData = await enrRes.json();
+            // keep the raw enrollments for dashboard aggregates (enrolled students, revenue)
+            setEnrollments(Array.isArray(enrData) ? enrData : []);
+            const map2 = new Map();
+            if (Array.isArray(enrData)) {
+              enrData.forEach((e) => {
+                const cname =
+                  e.course_name ||
+                  e.course?.course_name ||
+                  e.course ||
+                  "Unknown";
+                const rev = Number(e.value) || 0;
+                const prev = map2.get(cname) || { enrollments: 0, revenue: 0 };
+                map2.set(cname, {
+                  enrollments: prev.enrollments + 1,
+                  revenue: prev.revenue + rev,
+                });
+              });
+            }
+            const fallback = Array.from(map2.entries())
+              .map(([name, data]) => ({
+                name,
+                enrollments: data.enrollments,
+                revenue: `Rs ${data.revenue.toLocaleString()}`,
+              }))
+              .sort((a, b) => b.enrollments - a.enrollments)
+              .slice(0, 7);
+            setEnrollmentsTopCourses(fallback);
+
+            // Build enrollment trends fallback (monthly counts) from enrollment records
+            try {
+              const trendMap = new Map();
+              const parseDate = (d) => {
+                if (!d) return null;
+                const dt = new Date(d);
+                return isNaN(dt.getTime()) ? null : dt;
+              };
+              enrData.forEach((e) => {
+                const d =
+                  e.add_date ||
+                  e.addDate ||
+                  e.created_at ||
+                  e.created_on ||
+                  e.createdAt ||
+                  e.createdOn ||
+                  null;
+                const dt = parseDate(d);
+                if (!dt) return;
+                const key = `${dt.getFullYear()}-${String(
+                  dt.getMonth() + 1
+                ).padStart(2, "0")}`;
+                trendMap.set(key, (trendMap.get(key) || 0) + 1);
+              });
+              const trendArr = Array.from(trendMap.entries())
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([monthYear, cnt]) => ({
+                  month: monthYear.substring(5),
+                  students: cnt,
+                }));
+              setEnrollmentsTrendData(trendArr);
+            } catch (err) {
+              console.warn(
+                "Failed to build enrollment trends from enrollments:",
+                err
+              );
+            }
+          }
+        } catch (err) {
+          console.warn(
+            "Failed to fetch enrollments for fallback top courses:",
+            err
+          );
+        }
+      } catch (err) {
+        // non-fatal for dashboard; log for debugging
+        console.warn("Failed to fetch courses for dashboard:", err);
+      }
+    };
+    fetchCourses();
+  }, [authToken]);
+
   // Helper: parse date safely
   const toDate = (d) => {
     if (!d) return null;
@@ -89,9 +231,39 @@ const Dashboard = () => {
     return isNaN(t.getTime()) ? null : t;
   };
 
-  // Build all dashboard aggregates from real leads
+  // Helper: resolve possible add/created date fields from lead objects
+  const getLeadAddDate = (lead) => {
+    return (
+      lead.addDate ||
+      lead.add_date ||
+      lead.created_at ||
+      lead.created_on ||
+      lead.createdAt ||
+      lead.createdOn ||
+      lead.added_on ||
+      lead.addedAt ||
+      null
+    );
+  };
+
+  // Helper: resolve next call date from various possible fields
+  const getNextCallDate = (lead) => {
+    return (
+      lead.nextCall ||
+      lead.next_call ||
+      lead.next_call_date ||
+      lead.nextCallAt ||
+      null
+    );
+  };
+
+  // Build all dashboard aggregates from real leads + enrollments
   const dashboardData = useMemo(() => {
-    if (!allLeads || allLeads.length === 0) return null;
+    if (
+      (!allLeads || allLeads.length === 0) &&
+      (!enrollments || enrollments.length === 0)
+    )
+      return null;
 
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -100,33 +272,66 @@ const Dashboard = () => {
     const totalLeads = allLeads.length;
 
     // Define "enrolled" as status === Converted
+    // Prefer authoritative enrollments endpoint for enrolled students count
     const enrolledLeads = allLeads.filter(
       (l) => (l.status || "").toLowerCase() === "converted"
     );
-    const totalEnrolledStudents = enrolledLeads.length;
+    const totalEnrolledStudents =
+      enrollments && enrollments.length > 0
+        ? enrollments.length
+        : enrolledLeads.length;
 
     // New leads in current month (by addDate)
     const newLeadsThisMonth = allLeads.filter((lead) => {
-      const dt = toDate(lead.addDate);
+      const dt = toDate(getLeadAddDate(lead));
       return (
         dt && dt.getMonth() === currentMonth && dt.getFullYear() === currentYear
       );
     }).length;
 
-    // Revenue this month — if you track value per lead, sum value for Converted in current month
-    // Adjust this logic if your backend uses a different revenue field.
+    // Revenue this month — prefer to compute from enrollments (authoritative payments)
     let revenueThisMonth = 0;
-    enrolledLeads.forEach((lead) => {
-      const dt = toDate(lead.addDate);
-      const val = Number(lead.value) || 0;
-      if (
-        dt &&
-        dt.getMonth() === currentMonth &&
-        dt.getFullYear() === currentYear
-      ) {
-        revenueThisMonth += val;
-      }
-    });
+    if (enrollments && enrollments.length > 0) {
+      enrollments.forEach((e) => {
+        // parse a date to determine which month this enrollment/payment applies to
+        const dateStr =
+          e.starting_date ||
+          e.start_date ||
+          e.add_date ||
+          e.addDate ||
+          e.created_at ||
+          e.createdOn ||
+          e.createdAt ||
+          null;
+        const dt = toDate(dateStr);
+        if (!dt) return;
+        if (dt.getMonth() !== currentMonth || dt.getFullYear() !== currentYear)
+          return;
+
+        // Determine payment amount: prefer explicit total_payment, otherwise sum installments or fallback to value
+        const totalPayment =
+          Number(e.total_payment) ||
+          (Number(e.first_installment) || 0) +
+            (Number(e.second_installment) || 0) +
+            (Number(e.third_installment) || 0) ||
+          Number(e.value) ||
+          0;
+        revenueThisMonth += totalPayment;
+      });
+    } else {
+      // fallback: use converted leads' value
+      enrolledLeads.forEach((lead) => {
+        const dt = toDate(getLeadAddDate(lead));
+        const val = Number(lead.value) || 0;
+        if (
+          dt &&
+          dt.getMonth() === currentMonth &&
+          dt.getFullYear() === currentYear
+        ) {
+          revenueThisMonth += val;
+        }
+      });
+    }
 
     // Upcoming calls/classes in next 7 days (by nextCall)
     const today = new Date();
@@ -136,7 +341,7 @@ const Dashboard = () => {
     sevenDaysFromNow.setHours(23, 59, 59, 999);
 
     const upcomingClassesCalls = allLeads.filter((lead) => {
-      const dt = toDate(lead.nextCall);
+      const dt = toDate(getNextCallDate(lead));
       return dt && dt >= today && dt <= sevenDaysFromNow;
     }).length;
 
@@ -153,7 +358,7 @@ const Dashboard = () => {
     // Chart: enrollment trends by month (for Converted)
     const enrollByMonth = new Map(); // key "YYYY-MM" -> count
     enrolledLeads.forEach((lead) => {
-      const dt = toDate(lead.addDate);
+      const dt = toDate(getLeadAddDate(lead));
       if (!dt) return;
       const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(
         2,
@@ -161,12 +366,21 @@ const Dashboard = () => {
       )}`;
       enrollByMonth.set(key, (enrollByMonth.get(key) || 0) + 1);
     });
-    const enrollmentTrends = Array.from(enrollByMonth.entries())
+    let enrollmentTrends = Array.from(enrollByMonth.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([monthYear, students]) => ({
         month: monthYear.substring(5), // "MM"
         students,
       }));
+
+    // If no converted leads are present to build trends, fall back to enrollment records
+    if (
+      (!enrollmentTrends || enrollmentTrends.length === 0) &&
+      enrollmentsTrendData &&
+      enrollmentsTrendData.length > 0
+    ) {
+      enrollmentTrends = enrollmentsTrendData;
+    }
 
     // Chart: leads by source
     const bySource = new Map();
@@ -182,26 +396,87 @@ const Dashboard = () => {
     );
 
     // Tables
+    const resolveCourseName = (lead) => {
+      // prefer explicit backend-provided course_name on the lead
+      if (lead.course_name) return lead.course_name;
+
+      // Try to find a matching enrollment (the enrollments endpoint often stores course_name)
+      try {
+        if (enrollments && enrollments.length) {
+          const leadId = lead.id ?? lead._id ?? lead.pk ?? lead.lead ?? null;
+          if (leadId != null) {
+            const match = enrollments.find((e) => {
+              // enrollment may store the lead as `lead` numeric id or nested object
+              if (e.lead == null) return false;
+              return (
+                String(e.lead) === String(leadId) ||
+                String(e.lead?.id) === String(leadId)
+              );
+            });
+            if (match)
+              return (
+                match.course_name ||
+                match.course?.course_name ||
+                match.course ||
+                ""
+              );
+          }
+        }
+      } catch (err) {
+        // ignore and continue to other fallbacks
+      }
+
+      // lead.course may already be a name
+      if (lead.course && typeof lead.course === "string") {
+        const lc = lead.course.toLowerCase();
+        return coursesMap[lead.course] || coursesMap[lc] || lead.course;
+      }
+
+      // lead.course may be an id
+      if (
+        lead.course != null &&
+        (typeof lead.course === "number" || typeof lead.course === "string")
+      ) {
+        return coursesMap[String(lead.course)] || String(lead.course);
+      }
+
+      // nested object
+      if (lead.course && typeof lead.course === "object") {
+        return (
+          lead.course.course_name ||
+          lead.course.name ||
+          coursesMap[String(lead.course.id)] ||
+          ""
+        );
+      }
+      return "";
+    };
+
     const latestLeads = [...allLeads]
       .sort(
         (a, b) =>
-          (toDate(b.addDate)?.getTime() || 0) -
-          (toDate(a.addDate)?.getTime() || 0)
+          (toDate(getLeadAddDate(b))?.getTime() || 0) -
+          (toDate(getLeadAddDate(a))?.getTime() || 0)
       )
       .slice(0, 10)
       .map((lead) => ({
         _id: lead._id,
-        studentName: lead.studentName,
-        email: lead.email,
-        // Prefer course_name if your mapping provides it; fall back to course
-        course: lead.course_name || lead.course || "",
+        studentName: lead.studentName || lead.student_name || "",
+        email: lead.email || lead.email_address || "",
+        // Resolve course name using fetched courses when possible
+        course:
+          resolveCourseName(lead) || lead.course_name || lead.course || "",
         status: lead.status,
-        registeredOn: lead.addDate,
+        registeredOn: getLeadAddDate(lead),
       }));
 
     const topCoursesMap = new Map(); // course -> { enrollments, revenue }
     enrolledLeads.forEach((lead) => {
-      const courseName = lead.course_name || lead.course || "Unknown Course";
+      const courseName =
+        resolveCourseName(lead) ||
+        lead.course_name ||
+        lead.course ||
+        "Unknown Course";
       const prev = topCoursesMap.get(courseName) || {
         enrollments: 0,
         revenue: 0,
@@ -236,7 +511,7 @@ const Dashboard = () => {
       latestLeads,
       topCourses,
     };
-  }, [allLeads]);
+  }, [allLeads, coursesMap, enrollments, enrollmentsTrendData]);
 
   if (loading) return <Loader />;
 
@@ -384,18 +659,27 @@ const Dashboard = () => {
       {/* Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <LatestLeadsTable leads={dashboardData.latestLeads} />
-        <TopCoursesTable courses={dashboardData.topCourses} />
+        <TopCoursesTable
+          courses={
+            dashboardData.topCourses.length
+              ? dashboardData.topCourses
+              : enrollmentsTopCourses
+          }
+          coursesMap={coursesMap}
+          authToken={authToken}
+        />
       </div>
 
-      {/* Optional map placeholder */}
+      {/* Map: show leads on map (defaults to Nepal/Kathmandu) */}
       <ChartContainer
         title="Geographical Lead Distribution"
-        description="Visualizing where your leads are coming from globally."
+        description="Visualizing where your leads are coming from. Search by city or country."
       >
-        <div className="flex-grow flex items-center justify-center bg-gray-100 border border-dashed border-gray-300 rounded-md text-gray-400 text-center text-sm">
-          <GlobeAltIcon className="h-10 w-10 mr-2 text-gray-300" />
-          <p>Map component will go here</p>
-        </div>
+        <LeadMap
+          leads={dashboardData.latestLeads}
+          defaultCountry="Nepal"
+          defaultCity="Kathmandu"
+        />
       </ChartContainer>
     </div>
   );

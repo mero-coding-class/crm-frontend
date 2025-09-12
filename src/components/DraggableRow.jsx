@@ -107,24 +107,46 @@ const DraggableRow = ({
                   {lead.whatsapp_number || ""}
                 </td>
               );
+            // ... inside renderCell for "age":
             case "age":
               return (
                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                   <input
                     type="text"
-                    value={lead.age || ""}
-                    onChange={(e) => onAgeChange(lead._id, e.target.value)}
+                    value={lead.age ?? ""} // show "" if null
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") {
+                        // Inform user and prevent sending an empty value
+                        window.alert(
+                          "This field cannot be empty. Please enter an age or cancel."
+                        );
+                        return;
+                      }
+                      onAgeChange(lead._id, v);
+                    }}
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
                 </td>
               );
+
+            // ... same for "grade":
             case "grade":
               return (
                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                   <input
                     type="text"
-                    value={lead.grade || ""}
-                    onChange={(e) => onGradeChange(lead._id, e.target.value)}
+                    value={lead.grade ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") {
+                        window.alert(
+                          "This field cannot be empty. Please enter a grade or cancel."
+                        );
+                        return;
+                      }
+                      onGradeChange(lead._id, v);
+                    }}
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
                 </td>
@@ -137,7 +159,12 @@ const DraggableRow = ({
               );
             case "course_name":
               // Debug log to check course name value
-              console.log('Course name for lead:', lead._id, 'is:', lead.course_name);
+              console.log(
+                "Course name for lead:",
+                lead._id,
+                "is:",
+                lead.course_name
+              );
               return (
                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                   <span
@@ -146,7 +173,9 @@ const DraggableRow = ({
                     )}`}
                     title={lead.course_name}
                   >
-                    {lead.course_name && lead.course_name !== "null" ? lead.course_name : "N/A"}
+                    {lead.course_name && lead.course_name !== "null"
+                      ? lead.course_name
+                      : "N/A"}
                   </span>
                 </td>
               );
@@ -182,9 +211,7 @@ const DraggableRow = ({
                   <input
                     type="date"
                     value={lead.last_call ? lead.last_call.split("T")[0] : ""}
-                    onChange={(e) =>
-                      onLastCallChange(lead._id, e.target.value)
-                    }
+                    onChange={(e) => onLastCallChange(lead._id, e.target.value)}
                     className="block w-full p-1 border rounded-md shadow-sm text-xs font-semibold"
                   />
                 </td>
@@ -202,7 +229,7 @@ const DraggableRow = ({
               );
             case "status":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm">
+                <td className="px-3 py-4 whitespace-nowrap text-sm min-w-[140px]">
                   <select
                     value={lead.status}
                     onChange={(e) => onStatusChange(lead._id, e.target.value)}
@@ -233,15 +260,17 @@ const DraggableRow = ({
                   </select>
                 </td>
               );
+
             case "remarks":
               return (
-                <td className="px-3 py-4 text-sm text-gray-700">
+                <td className="px-3 py-4 text-sm text-gray-700 min-w-[300px]">
                   <textarea
                     value={localRemarks[lead._id] || ""}
                     onChange={(e) => handleLocalRemarkChange(e.target.value)}
                     onBlur={(e) => onRemarkChange(lead._id, e.target.value)}
-                    rows="2"
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs focus:ring-blue-500 focus:border-blue-500"
+                    rows="3"
+                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    placeholder="Add remarks..."
                   ></textarea>
                 </td>
               );
