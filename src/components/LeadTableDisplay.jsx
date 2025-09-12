@@ -63,6 +63,10 @@ const LeadTableDisplay = ({
   const [scrollDirection, setScrollDirection] = useState(null);
   const scrollSpeed = 15;
   const scrollInterval = useRef(null);
+  const smoothScroll = (distance) => {
+    if (!tableContainerRef.current) return;
+    tableContainerRef.current.scrollBy({ left: distance, behavior: "smooth" });
+  };
 
   // Handle mouse enter for scroll areas
   const handleMouseEnter = (direction) => {
@@ -254,69 +258,86 @@ const LeadTableDisplay = ({
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto" ref={tableContainerRef}>
-        <DndContext collisionDetection={closestCenter}>
-          <SortableContext
-            items={currentLeads.map((l) => l._id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-3 w-10">
-                    <span className="sr-only">Drag</span>
-                  </th>
-                  <th className="px-3 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={currentLeads.every((lead) =>
-                        selectedLeads.has(lead._id)
-                      )}
-                      onChange={handleSelectAll}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+      <div className="relative">
+        <button
+          onClick={() => smoothScroll(-500)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 p-2 bg-white rounded-full shadow hover:bg-gray-100"
+          aria-label="Scroll left"
+        >
+          <ChevronLeftIcon className="h-5 w-5 text-gray-600" />
+        </button>
+        <button
+          onClick={() => smoothScroll(500)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 p-2 bg-white rounded-full shadow hover:bg-gray-100"
+          aria-label="Scroll right"
+        >
+          <ChevronRightIcon className="h-5 w-5 text-gray-600" />
+        </button>
+
+        <div className="overflow-x-auto" ref={tableContainerRef}>
+          <DndContext collisionDetection={closestCenter}>
+            <SortableContext
+              items={currentLeads.map((l) => l._id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-3 w-10">
+                      <span className="sr-only">Drag</span>
+                    </th>
+                    <th className="px-3 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={currentLeads.every((lead) =>
+                          selectedLeads.has(lead._id)
+                        )}
+                        onChange={handleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </th>
+                    {Object.entries(columns).map(
+                      ([key, { label, visible }]) =>
+                        visible && (
+                          <th
+                            key={key}
+                            className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          >
+                            {label}
+                          </th>
+                        )
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {currentLeads.map((lead) => (
+                    <DraggableRow
+                      key={lead._id}
+                      lead={lead}
+                      columns={columns}
+                      selected={selectedLeads.has(lead._id)}
+                      onSelect={handleSelectRow}
+                      localRemarks={localRemarks}
+                      setLocalRemarks={setLocalRemarks}
+                      handleEdit={handleEdit}
+                      handleDelete={handleDelete}
+                      onStatusChange={onStatusChange}
+                      onRemarkChange={onRemarkChange}
+                      onRecentCallChange={onLastCallChange}
+                      onNextCallChange={onNextCallChange}
+                      onAgeChange={onAgeChange}
+                      onGradeChange={onGradeChange}
+                      onCourseDurationChange={onCourseDurationChange}
+                      onAssignedToChange={onAssignedToChange}
+                      authToken={authToken}
+                      changeLogService={changeLogService}
                     />
-                  </th>
-                  {Object.entries(columns).map(
-                    ([key, { label, visible }]) =>
-                      visible && (
-                        <th
-                          key={key}
-                          className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                        >
-                          {label}
-                        </th>
-                      )
-                  )}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {currentLeads.map((lead) => (
-                  <DraggableRow
-                    key={lead._id}
-                    lead={lead}
-                    columns={columns}
-                    selected={selectedLeads.has(lead._id)}
-                    onSelect={handleSelectRow}
-                    localRemarks={localRemarks}
-                    setLocalRemarks={setLocalRemarks}
-                    handleEdit={handleEdit}
-                    handleDelete={handleDelete}
-                    onStatusChange={onStatusChange}
-                    onRemarkChange={onRemarkChange}
-                    onRecentCallChange={onLastCallChange}
-                    onNextCallChange={onNextCallChange}
-                    onAgeChange={onAgeChange}
-                    onGradeChange={onGradeChange}
-                    onCourseDurationChange={onCourseDurationChange}
-                    onAssignedToChange={onAssignedToChange}
-                    authToken={authToken}
-                    changeLogService={changeLogService}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </SortableContext>
-        </DndContext>
+                  ))}
+                </tbody>
+              </table>
+            </SortableContext>
+          </DndContext>
+        </div>
       </div>
 
       {/* Pagination */}

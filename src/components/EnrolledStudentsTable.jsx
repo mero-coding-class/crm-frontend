@@ -290,17 +290,17 @@ const EnrolledStudentsTable = ({
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
                 </th>
-                {Object.entries(columns).map(
-                  ([key, { label, visible }]) =>
-                    visible && (
-                      <th
-                        key={key}
-                        className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {label}
-                      </th>
-                    )
-                )}
+                {/* Render headers in a stable order so cells align correctly */}
+                {Object.keys(columns)
+                  .filter((k) => columns[k].visible)
+                  .map((key) => (
+                    <th
+                      key={key}
+                      className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
+                      {columns[key].label}
+                    </th>
+                  ))}
               </tr>
             </thead>
             <SortableContext
@@ -313,6 +313,9 @@ const EnrolledStudentsTable = ({
                     key={student.id}
                     student={student}
                     columns={columns}
+                    visibleKeys={Object.keys(columns).filter(
+                      (k) => columns[k].visible
+                    )}
                     isSelected={selectedStudents.has(student.id)}
                     onSelectRow={handleSelectRow}
                     handleEdit={handleEdit}
@@ -356,6 +359,7 @@ const EnrolledStudentsTable = ({
 const SortableStudentRow = ({
   student,
   columns,
+  visibleKeys = [],
   isSelected,
   onSelectRow,
   handleEdit,
@@ -403,116 +407,149 @@ const SortableStudentRow = ({
         />
       </td>
 
-      {columns.student_name.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-          {student.student_name}
-        </td>
-      )}
-      {columns.parents_name.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.parents_name || "N/A"}
-        </td>
-      )}
-      {columns.email.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.email}
-        </td>
-      )}
-      {columns.phone_number.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.phone_number}
-        </td>
-      )}
-      {columns.course_name.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.course_name}
-        </td>
-      )}
-
-      {/* Editable text fields */}
-      {columns.batch_name.visible && (
-        <EditableTextCell
-          field="batch_name"
-          value={student.batch_name}
-          onSave={(v) => onUpdateField(student.id, "batch_name", v)}
-        />
-      )}
-      {columns.assigned_teacher.visible && (
-        <EditableTextCell
-          field="assigned_teacher"
-          value={student.assigned_teacher}
-          onSave={(v) => onUpdateField(student.id, "assigned_teacher", v)}
-        />
-      )}
-      {columns.course_duration.visible && (
-        <EditableTextCell
-          field="course_duration"
-          value={student.course_duration}
-          onSave={(v) => onUpdateField(student.id, "course_duration", v)}
-        />
-      )}
-
-      {/* Starting Date */}
-      {columns.starting_date.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          <input
-            type="date"
-            value={student.starting_date || ""}
-            onChange={(e) =>
-              onUpdateField(student.id, "starting_date", e.target.value)
-            }
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
-          />
-        </td>
-      )}
-
-      {columns.total_payment.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {student.total_payment
-            ? `Rs ${parseFloat(student.total_payment).toFixed(2)}`
-            : "N/A"}
-        </td>
-      )}
-
-      {columns.last_pay_date.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {formatDisplayDate(student.last_pay_date)}
-        </td>
-      )}
-
-      {columns.payment_completed.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm">
-          <select
-            value={student.payment_completed ? "Yes" : "No"}
-            onChange={(e) => {
-              const newValue = e.target.value === "Yes";
-              handlePaymentStatusChange(student.id, newValue);
-              onUpdateField(student.id, "payment_completed", newValue);
-            }}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
-          >
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        </td>
-      )}
-
-      {columns.actions.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
-          <button
-            onClick={() => handleEdit(student)}
-            className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 rounded-md hover:bg-indigo-50 transition-colors"
-          >
-            <PencilIcon className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => handleDelete(student.id)}
-            className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
-          >
-            <TrashIcon className="h-5 w-5" />
-          </button>
-        </td>
-      )}
+      {/* Render cells in the same stable order as headers */}
+      {visibleKeys.map((key) => {
+        switch (key) {
+          case "student_name":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+              >
+                {student.student_name}
+              </td>
+            );
+          case "parents_name":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {student.parents_name || "N/A"}
+              </td>
+            );
+          case "email":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {student.email}
+              </td>
+            );
+          case "phone_number":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {student.phone_number}
+              </td>
+            );
+          case "course_name":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {student.course_name}
+              </td>
+            );
+          case "batch_name":
+          case "assigned_teacher":
+          case "course_duration":
+            return (
+              <EditableTextCell
+                key={key}
+                field={key}
+                value={student[key]}
+                onSave={(v) => onUpdateField(student.id, key, v)}
+              />
+            );
+          case "starting_date":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <input
+                  type="date"
+                  value={student.starting_date || ""}
+                  onChange={(e) =>
+                    onUpdateField(student.id, "starting_date", e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                />
+              </td>
+            );
+          case "total_payment":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {student.total_payment
+                  ? `Rs ${parseFloat(student.total_payment).toFixed(2)}`
+                  : "N/A"}
+              </td>
+            );
+          case "last_pay_date":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {formatDisplayDate(student.last_pay_date)}
+              </td>
+            );
+          case "payment_completed":
+            return (
+              <td key={key} className="px-3 py-4 whitespace-nowrap text-sm">
+                <select
+                  value={student.payment_completed ? "Yes" : "No"}
+                  onChange={(e) => {
+                    const newValue = e.target.value === "Yes";
+                    handlePaymentStatusChange(student.id, newValue);
+                    onUpdateField(student.id, "payment_completed", newValue);
+                  }}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </td>
+            );
+          case "actions":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium"
+              >
+                <button
+                  onClick={() => handleEdit(student)}
+                  className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 rounded-md hover:bg-indigo-50 transition-colors"
+                >
+                  <PencilIcon className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(student.id)}
+                  className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
+                >
+                  <TrashIcon className="h-5 w-5" />
+                </button>
+              </td>
+            );
+          default:
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {String(student[key] ?? "")}
+              </td>
+            );
+        }
+      })}
     </tr>
   );
 };

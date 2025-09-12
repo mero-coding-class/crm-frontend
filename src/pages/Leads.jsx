@@ -365,7 +365,12 @@ const Leads = () => {
 
         handleCloseEditModal();
       } catch (err) {
-        setError(err.message || "Failed to update lead");
+        console.error("Failed to save edit:", err);
+        setToast({
+          show: true,
+          message: err.message || "Failed to update lead",
+          type: "error",
+        });
       }
     },
     [authToken, courses, handleCloseEditModal]
@@ -412,7 +417,12 @@ const Leads = () => {
         );
         console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
       } catch (err) {
-        setError(err.message || `Failed to update ${fieldName}`);
+        console.error(`Failed to update ${fieldName}:`, err);
+        setToast({
+          show: true,
+          message: err.message || `Failed to update ${fieldName}`,
+          type: "error",
+        });
       }
     },
     [authToken, courses]
