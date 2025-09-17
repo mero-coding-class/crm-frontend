@@ -420,6 +420,19 @@ export const trashService = {
     return handleResponse(response);
   },
 
+  restoreTrashedLead: async (id, authToken) => {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const response = await fetch(`${BASE_URL}/trash/${id}/`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ status: "Active" }),
+    });
+    return handleResponse(response);
+  },
+
   deleteTrashedLead: async (id, authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
     const response = await fetch(`${BASE_URL}/trash/${id}/`, {

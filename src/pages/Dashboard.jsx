@@ -138,74 +138,82 @@ const Dashboard = () => {
             headers,
             credentials: authToken ? "include" : "same-origin",
           });
-          if (enrRes.ok) {
-            const enrData = await enrRes.json();
-            // keep the raw enrollments for dashboard aggregates (enrolled students, revenue)
-            setEnrollments(Array.isArray(enrData) ? enrData : []);
-            const map2 = new Map();
-            if (Array.isArray(enrData)) {
-              enrData.forEach((e) => {
-                const cname =
-                  e.course_name ||
-                  e.course?.course_name ||
-                  e.course ||
-                  "Unknown";
-                const rev = Number(e.value) || 0;
-                const prev = map2.get(cname) || { enrollments: 0, revenue: 0 };
-                map2.set(cname, {
-                  enrollments: prev.enrollments + 1,
-                  revenue: prev.revenue + rev,
+            if (enrRes.ok) {
+              let enrData = await enrRes.json();
+              // normalize common envelope shapes: {results: [...]}, {data: [...]}
+              if (!Array.isArray(enrData)) {
+                if (Array.isArray(enrData.results)) enrData = enrData.results;
+                else if (Array.isArray(enrData.data)) enrData = enrData.data;
+              }
+              // keep the raw enrollments for dashboard aggregates (enrolled students, revenue)
+              setEnrollments(Array.isArray(enrData) ? enrData : []);
+              const map2 = new Map();
+              if (Array.isArray(enrData)) {
+                enrData.forEach((e) => {
+                  const cname =
+                    e.course_name ||
+                    e.course?.course_name ||
+                    e.course ||
+                    "Unknown";
+                  const rev = Number(e.value) || 0;
+                  const prev = map2.get(cname) || {
+                    enrollments: 0,
+                    revenue: 0,
+                  };
+                  map2.set(cname, {
+                    enrollments: prev.enrollments + 1,
+                    revenue: prev.revenue + rev,
+                  });
                 });
-              });
-            }
-            const fallback = Array.from(map2.entries())
-              .map(([name, data]) => ({
-                name,
-                enrollments: data.enrollments,
-                revenue: `Rs ${data.revenue.toLocaleString()}`,
-              }))
-              .sort((a, b) => b.enrollments - a.enrollments)
-              .slice(0, 7);
-            setEnrollmentsTopCourses(fallback);
+              }
+              const fallback = Array.from(map2.entries())
+                .map(([name, data]) => ({
+                  name,
+                  enrollments: data.enrollments,
+                  revenue: `Rs ${data.revenue.toLocaleString()}`,
+                }))
+                .sort((a, b) => b.enrollments - a.enrollments)
+                .slice(0, 7);
+              setEnrollmentsTopCourses(fallback);
 
-            // Build enrollment trends fallback (monthly counts) from enrollment records
-            try {
-              const trendMap = new Map();
-              const parseDate = (d) => {
-                if (!d) return null;
-                const dt = new Date(d);
-                return isNaN(dt.getTime()) ? null : dt;
-              };
-              enrData.forEach((e) => {
-                const d =
-                  e.add_date ||
-                  e.addDate ||
-                  e.created_at ||
-                  e.created_on ||
-                  e.createdAt ||
-                  e.createdOn ||
-                  null;
-                const dt = parseDate(d);
-                if (!dt) return;
-                const key = `${dt.getFullYear()}-${String(
-                  dt.getMonth() + 1
-                ).padStart(2, "0")}`;
-                trendMap.set(key, (trendMap.get(key) || 0) + 1);
-              });
-              const trendArr = Array.from(trendMap.entries())
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([monthYear, cnt]) => ({
-                  month: monthYear.substring(5),
-                  students: cnt,
-                }));
-              setEnrollmentsTrendData(trendArr);
-            } catch (err) {
-              console.warn(
-                "Failed to build enrollment trends from enrollments:",
-                err
-              );
+              // Build enrollment trends fallback (monthly counts) from enrollment records
+              try {
+                const trendMap = new Map();
+                const parseDate = (d) => {
+                  if (!d) return null;
+                  const dt = new Date(d);
+                  return isNaN(dt.getTime()) ? null : dt;
+                };
+                enrData.forEach((e) => {
+                  const d =
+                    e.add_date ||
+                    e.addDate ||
+                    e.created_at ||
+                    e.created_on ||
+                    e.createdAt ||
+                    e.createdOn ||
+                    null;
+                  const dt = parseDate(d);
+                  if (!dt) return;
+                  const key = `${dt.getFullYear()}-${String(
+                    dt.getMonth() + 1
+                  ).padStart(2, "0")}`;
+                  trendMap.set(key, (trendMap.get(key) || 0) + 1);
+                });
+                const trendArr = Array.from(trendMap.entries())
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([monthYear, cnt]) => ({
+                    month: monthYear.substring(5),
+                    students: cnt,
+                  }));
+                setEnrollmentsTrendData(trendArr);
+              } catch (err) {
+                console.warn(
+                  "Failed to build enrollment trends from enrollments:",
+                  err
+                );
+              }
             }
-          }
         } catch (err) {
           console.warn(
             "Failed to fetch enrollments for fallback top courses:",

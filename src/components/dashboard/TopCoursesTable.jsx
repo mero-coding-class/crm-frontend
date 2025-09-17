@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { BASE_URL } from "../../config";
 
 // Helper to build a courses lookup map from fetched course objects
 const buildCoursesMap = (data = []) => {

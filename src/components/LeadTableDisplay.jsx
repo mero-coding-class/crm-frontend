@@ -55,13 +55,23 @@ const LeadTableDisplay = ({
   onAssignedToChange,
   authToken,
   changeLogService,
+  users,
+  usersLoading,
+  currentUserRole,
+  // pagination control (optional): parent may drive pagination
+  currentPage: parentCurrentPage,
+  totalPages: parentTotalPages,
+  onPageChange: parentOnPageChange,
+  leadsPerPage: parentLeadsPerPage,
 }) => {
   const [selectedLeads, setSelectedLeads] = useState(new Set());
   const [localRemarks, setLocalRemarks] = useState({});
   const [savedRemarks, setSavedRemarks] = useState({});
   const [columns, setColumns] = useState(initialColumns);
-  const [currentPage, setCurrentPage] = useState(1);
-  const leadsPerPage = 20;
+  const [internalPage, setInternalPage] = useState(1);
+  const leadsPerPage = parentLeadsPerPage || 20;
+  // Controlled pagination props: if parent passes currentPage/totalPages/onPageChange
+  // use them; otherwise fall back to internal pagination state
 
   const tableContainerRef = useRef(null);
   const [scrollDirection, setScrollDirection] = useState(null);
@@ -161,7 +171,19 @@ const LeadTableDisplay = ({
     setLocalRemarks(initialRemarks);
     setSavedRemarks(initialRemarks);
     setSelectedLeads(new Set());
-    setCurrentPage(1);
+    // Reset to first page when data changes.
+    // If the parent controls pagination, notify it; otherwise reset internal
+    // pagination state to page 1. IMPORTANT: only reset internal page when
+    // the PARENT does NOT control pagination. If the parent controls
+    // pagination (it passed numeric `currentPage` and a handler), do not
+    // call the parent's handler here — that would force the app back to
+    // page 1 whenever `leads` changes (breaking server-driven pagination).
+    if (parentControlsPagination) {
+      // Parent is authoritative; don't change parent's page here.
+    } else {
+      // Reset internal page to 1 for client-side pagination updates.
+      setInternalPage(1);
+    }
   }, [leads]);
 
   // Keep localRemarks in sync when a remark is updated elsewhere (or from server)
@@ -246,12 +268,29 @@ const LeadTableDisplay = ({
     };
   }, []);
 
-  // Pagination
-  const totalPages = Math.ceil(normalizedLeads.length / leadsPerPage);
-  const currentLeads = normalizedLeads.slice(
-    (currentPage - 1) * leadsPerPage,
-    currentPage * leadsPerPage
-  );
+  // Pagination (support parent-controlled pagination)
+  const computedTotalPages = Math.ceil(normalizedLeads.length / leadsPerPage);
+  const totalPages = parentTotalPages || computedTotalPages;
+  // Consider pagination controlled by parent only when parent provides a
+  // numeric `currentPage` and a handler. This avoids treating null/undefined
+  // as a signal that parent is in control.
+  const parentControlsPagination =
+    typeof parentCurrentPage === "number" &&
+    typeof parentOnPageChange === "function";
+
+  const currentPage = parentControlsPagination
+    ? parentCurrentPage
+    : internalPage;
+
+  // If parent controls pagination we assume it has already supplied the
+  // appropriate subset of `leads` (or wants the full list). Otherwise slice
+  // the normalized leads by internal pagination state.
+  const currentLeads = parentControlsPagination
+    ? normalizedLeads
+    : normalizedLeads.slice(
+        (currentPage - 1) * leadsPerPage,
+        currentPage * leadsPerPage
+      );
 
   // Scroll table container to top when currentPage changes
   useEffect(() => {
@@ -286,7 +325,33 @@ const LeadTableDisplay = ({
   };
 
   const handlePageChange = (pageNumber) => {
-    if (pageNumber >= 1 && pageNumber <= totalPages) setCurrentPage(pageNumber);
+    console.log(
+      "LeadTableDisplay: handlePageChange called with pageNumber:",
+      pageNumber,
+      "currentPage:",
+      currentPage,
+      "totalPages:",
+      totalPages
+    );
+    // If parent controls the page (it passed parentCurrentPage), delegate
+    // page changes to the parent's handler. Otherwise update internal state.
+    if (typeof parentCurrentPage !== "undefined" && parentOnPageChange) {
+      console.log("LeadTableDisplay: Delegating to parent onPageChange");
+      parentOnPageChange(pageNumber);
+      return;
+    }
+
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      console.log("LeadTableDisplay: Updating internal page to:", pageNumber);
+      setInternalPage(pageNumber);
+    } else {
+      console.log(
+        "LeadTableDisplay: Invalid page number:",
+        pageNumber,
+        "totalPages:",
+        totalPages
+      );
+    }
   };
 
   const onBulkDeleteClick = () => {
@@ -387,7 +452,12 @@ const LeadTableDisplay = ({
                     return currentLeads.map((lead) => (
                       <DraggableRow
                         key={lead._id}
-                        lead={lead}
+                        lead={{
+                          ...lead,
+                          _users: users || [],
+                          _usersLoading: usersLoading,
+                          _currentUserRole: currentUserRole,
+                        }}
                         columns={columns}
                         columnOrder={visibleKeys}
                         savedRemarks={savedRemarks}

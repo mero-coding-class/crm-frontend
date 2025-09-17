@@ -10,6 +10,77 @@ import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal";
 import { courseService } from "../services/courseService";
 import { BASE_URL } from "../config";
 
+// A small in-memory map to deduplicate identical outgoing requests
+// (helps avoid duplicate fetches triggered by StrictMode double-invoke
+// or concurrent callers). Each entry holds the Promise for the request
+// and is removed when finished.
+const _ongoingRequests = new Map();
+
+// Robust safe fetch with retries, exponential backoff and timeout support.
+// Returns the Fetch Response or null if all retries fail. Uses an
+// internal dedupe map so multiple callers to the same URL reuse the
+// same in-flight request (reduces repeated logging and backend load).
+async function safeFetchWithRetries(url, opts = {}, retries = 3, backoff = 300, timeoutMs = 8000) {
+  // Reuse in-flight request if present
+  if (_ongoingRequests.has(url)) {
+    try {
+      return await _ongoingRequests.get(url);
+    } catch (e) {
+      // previous request failed; fall through to new attempt
+    }
+  }
+
+  const controller = new AbortController();
+  const mergedOpts = { ...opts, signal: controller.signal };
+
+  const attemptFetch = async () => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      let timeoutHandle;
+      try {
+        // apply a per-attempt timeout
+        const p = fetch(url, mergedOpts);
+        const race = new Promise((_, rej) => {
+          timeoutHandle = setTimeout(() => {
+            try {
+              controller.abort();
+            } catch (e) {}
+            rej(new Error('timeout'));
+          }, timeoutMs);
+        });
+        const resp = await Promise.race([p, race]);
+        clearTimeout(timeoutHandle);
+        return resp;
+      } catch (e) {
+        clearTimeout(timeoutHandle);
+        const isLast = attempt === retries;
+        // Only warn on the final failure to avoid noisy repeated logs.
+        if (isLast) {
+          console.warn(`safeFetch: network error when fetching ${url} (attempt ${attempt + 1}/${retries + 1})`, e && e.message ? e.message : e);
+          console.error(`safeFetch: exhausted retries for ${url}`);
+        } else {
+          // debug-level message for intermediate attempts (keeps console cleaner)
+          if (typeof console.debug === 'function') {
+            console.debug(`safeFetch: retrying ${url} (attempt ${attempt + 1}/${retries + 1})`);
+          }
+        }
+        if (isLast) return null;
+        // exponential backoff
+        await new Promise((res) => setTimeout(res, backoff * Math.pow(2, attempt)));
+      }
+    }
+    return null;
+  };
+
+  const prom = attemptFetch().finally(() => {
+    // ensure we don't keep the promise around after completion
+    try {
+      _ongoingRequests.delete(url);
+    } catch (e) {}
+  });
+  _ongoingRequests.set(url, prom);
+  return prom;
+}
+
 const EnrolledStudents = () => {
   const { authToken } = useAuth();
   const [allStudents, setAllStudents] = useState([]);
@@ -31,44 +102,50 @@ const EnrolledStudents = () => {
     setLoading(true);
     setError(null);
     const baseUrl = `${BASE_URL}/enrollments/`;
-    // safeFetch wraps fetch to return null on network failure so background
-    // pagination doesn't throw uncaught TypeErrors.
-    const safeFetch = async (url, opts = {}) => {
-      try {
-        return await fetch(url, opts);
-      } catch (e) {
-        console.warn(
-          "safeFetch: network error when fetching",
-          url,
-          e && e.message ? e.message : e
-        );
-        return null;
-      }
-    };
     try {
       const pageUrl = `${baseUrl}?page=1&page_size=${ITEMS_PER_PAGE}`;
-      const resp = await safeFetch(pageUrl, {
+      const resp = await safeFetchWithRetries(pageUrl, {
         headers: { Authorization: `Token ${authToken}` },
         credentials: "include",
       });
 
       if (resp && resp.ok) {
-        const json = await resp.json();
+        // Use clone() because safeFetchWithRetries may return the same
+        // Response object to multiple callers; reading the body twice will
+        // throw "body stream already read". Clone before parsing.
+        const json = await resp.clone().json();
         if (Array.isArray(json.results)) {
           setAllStudents(json.results);
           (async () => {
             try {
               if (json.next) {
                 let accumulated = [...json.results];
-                let nextUrl = json.next;
                 const MAX_ACCUMULATE = 2000;
+                // Instead of fetching the `next` absolute URL directly (which can
+                // trigger CORS/mixed-protocol issues if the backend returns a
+                // host/protocol that differs), parse the `page` query param from
+                // the `next` link and request pages via our canonical `baseUrl`.
+                let nextUrl = json.next;
                 while (nextUrl) {
-                  const r = await safeFetch(nextUrl, {
+                  // extract page number from nextUrl
+                  let pageNum = null;
+                  try {
+                    const m = String(nextUrl).match(/[?&]page=(\d+)/);
+                    if (m) pageNum = Number(m[1]);
+                  } catch (e) {
+                    // ignore
+                  }
+
+                  const fetchUrl = pageNum
+                    ? `${baseUrl}?page=${pageNum}&page_size=${ITEMS_PER_PAGE}`
+                    : nextUrl; // fallback if we couldn't parse
+
+                    const r = await safeFetchWithRetries(fetchUrl, {
                     headers: { Authorization: `Token ${authToken}` },
                     credentials: "include",
                   });
-                  if (!r || !r.ok) break;
-                  const j = await r.json();
+                    if (!r || !r.ok) break;
+                    const j = await r.clone().json();
                   accumulated = accumulated.concat(j.results || []);
                   if (accumulated.length >= MAX_ACCUMULATE) {
                     console.warn(
@@ -89,12 +166,12 @@ const EnrolledStudents = () => {
                   })
                 );
               } else {
-                const full = await safeFetch(baseUrl, {
+                const full = await safeFetchWithRetries(baseUrl, {
                   headers: { Authorization: `Token ${authToken}` },
                   credentials: "include",
                 });
                 if (full && full.ok) {
-                  const all = await full.json();
+                  const all = await full.clone().json();
                   setAllStudents(Array.isArray(all) ? all : all.results || []);
                 } else {
                   console.warn(
@@ -125,7 +202,7 @@ const EnrolledStudents = () => {
           );
           (async () => {
             try {
-              const full = await safeFetch(baseUrl, {
+              const full = await safeFetchWithRetries(baseUrl, {
                 headers: { Authorization: `Token ${authToken}` },
                 credentials: "include",
               });
@@ -158,12 +235,12 @@ const EnrolledStudents = () => {
           return;
         }
       }
-      const fallback = await safeFetch(baseUrl, {
+      const fallback = await safeFetchWithRetries(baseUrl, {
         headers: { Authorization: `Token ${authToken}` },
         credentials: "include",
       });
       if (fallback && fallback.ok) {
-        const data = await fallback.json();
+        const data = await fallback.clone().json();
         setAllStudents(
           ((Array.isArray(data) ? data : data.results || []) || []).sort(
             (a, b) => {
@@ -177,15 +254,24 @@ const EnrolledStudents = () => {
           )
         );
       } else {
-        throw new Error(
-          `Failed to fetch enrollments: no response or ${
-            fallback && fallback.status
-          }`
-        );
+        // No usable response from fallback request. Try to extract status/text
+        let status = fallback && fallback.status;
+        let text = null;
+        try {
+          if (fallback) text = await fallback.clone().text();
+        } catch (e) {
+          // ignore parse errors
+        }
+        const msg = `Failed to fetch enrollments: status=${status} text=${String(
+          text
+        ).slice(0, 800)}`;
+        console.error(msg, { fallback });
+        throw new Error(msg);
       }
     } catch (err) {
-      console.error(err);
-      setError("Failed to load enrolled students");
+      // Log full error for debugging and surface HTTP detail in UI when present
+      console.error("fetchEnrolledStudents error:", err);
+      setError(err && err.message ? `Failed to load enrolled students: ${err.message}` : "Failed to load enrolled students");
     } finally {
       setLoading(false);
     }
