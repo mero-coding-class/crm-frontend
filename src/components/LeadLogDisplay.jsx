@@ -12,6 +12,7 @@ const LeadLogDisplay = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const syntheticRef = React.useRef([]);
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -25,7 +26,26 @@ const LeadLogDisplay = ({
         const sorted = (
           Array.isArray(fetchedLogs) ? fetchedLogs : fetchedLogs?.results || []
         ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setLogs(sorted);
+        // If we have optimistic synthetic logs (recent, client-created) then
+        // merge them on top unless the server now contains the same entry.
+        const synths = syntheticRef.current || [];
+        if (synths.length === 0) {
+          setLogs(sorted);
+        } else {
+          // If the top server log matches any synthetic (by new_value), drop synths
+          const topServer = sorted[0];
+          const matched =
+            topServer &&
+            synths.some((s) => s.new_value === topServer.new_value);
+          if (matched) {
+            // Server has persisted the change — clear synthetic cache and show server logs
+            syntheticRef.current = [];
+            setLogs(sorted);
+          } else {
+            // Keep synths at the top followed by server logs
+            setLogs([...synths, ...sorted]);
+          }
+        }
       } catch (err) {
         setError(err.message || "Failed to fetch logs.");
       } finally {
@@ -34,6 +54,43 @@ const LeadLogDisplay = ({
     };
     if (leadId && authToken && changeLogService) fetchLogs();
   }, [leadId, authToken, changeLogService, refreshKey]);
+
+  // Listen for optimistic remark updates so we can show the new log entry immediately
+  useEffect(() => {
+    const onRemarkUpdated = (e) => {
+      try {
+        const { id, remarks } = e?.detail || {};
+        // match by backend id or fallback to provided leadId
+        if (!id || String(id) !== String(leadId)) return;
+
+        const now = new Date().toISOString();
+        const synthetic = {
+          id: `local-${Date.now()}`,
+          timestamp: now,
+          changed_by_name: "You",
+          field_changed: "remarks",
+          old_value: null,
+          new_value: remarks,
+          description: `Remarks updated.`,
+          // mark it so we can filter/replace later
+          __synthetic: true,
+        };
+
+        // Keep a short-lived cache of synthetic entries to reconcile with server logs
+        syntheticRef.current = [
+          synthetic,
+          ...(syntheticRef.current || []),
+        ].slice(0, 3);
+        setLogs((prev) => [synthetic, ...(prev || [])]);
+      } catch (err) {
+        console.warn("LeadLogDisplay: failed to handle crm:remarkUpdated", err);
+      }
+    };
+
+    window.addEventListener("crm:remarkUpdated", onRemarkUpdated);
+    return () =>
+      window.removeEventListener("crm:remarkUpdated", onRemarkUpdated);
+  }, [leadId]);
 
   const toggleExpansion = useCallback(() => setIsExpanded((p) => !p), []);
 

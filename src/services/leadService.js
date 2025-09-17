@@ -196,6 +196,23 @@ export const leadService = {
     });
   },
 
+  /**
+   * Ensure we also broadcast a crm:leadUpdated event for consumers that
+   * call this legacy service file. This mirrors the behavior in
+   * src/services/api.js so all updates notify the app.
+   */
+  async updateLeadAndBroadcast(id, frontendUpdates, authToken) {
+    const updated = await this.updateLead(id, frontendUpdates, authToken);
+    try {
+      window.dispatchEvent(
+        new CustomEvent("crm:leadUpdated", { detail: { lead: updated } })
+      );
+    } catch (e) {
+      console.warn("Could not dispatch crm:leadUpdated from leadService.js", e);
+    }
+    return updated;
+  },
+
   /** Import one CSV row by posting to /api/leads/from/ (backend handles enrollments/trash routing) */
   async importLeadFromCsvRow(row, courses, authToken) {
     const payload = csvRowToBackend(row, courses);

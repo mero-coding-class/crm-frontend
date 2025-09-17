@@ -53,6 +53,22 @@ const Leads = () => {
 
   const statusOptions = ["All", "Active", "Converted", "Lost"];
 
+  // Ensure any leads array we store locally contains a stable `_id` field that
+  // the UI expects (some backends return `id`, others `_id`). This helper
+  // guarantees consistent identity so per-row updates (remarks/status/etc.)
+  // can find and update the right lead.
+  const ensureLeadIds = (arr) =>
+    (Array.isArray(arr) ? arr : []).map((lead, i) => ({
+      ...lead,
+      _id:
+        lead._id || lead.id || lead.email || lead.phone_number || `lead-${i}`,
+      // normalize common variants
+      sub_status: lead.sub_status || lead.substatus || "New",
+      assigned_to:
+        lead.assigned_to || lead.assigned_to_username || lead.assigned_to || "",
+      assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
+    }));
+
   const classTypeOptions = ["Class", "Online", "Physical"];
   const subStatusOptions = [
     "SubStatus",
@@ -137,8 +153,29 @@ const Leads = () => {
         course_name: lead.course_name || "N/A", // Ensure course_name is always set
       }));
 
-      setAllLeads(processedLeads);
-      setCourses(coursesData);
+      // Sort leads newest-first so newly created/converted items remain at top
+      const processedLeadsSorted = (processedLeads || [])
+        .slice()
+        .sort((a, b) => {
+          const ta = a.created_at || a.updated_at || a.add_date || null;
+          const tb = b.created_at || b.updated_at || b.add_date || null;
+          if (ta && tb) return new Date(tb) - new Date(ta);
+          if (a.id !== undefined && b.id !== undefined)
+            return Number(b.id) - Number(a.id);
+          return 0;
+        });
+
+      setAllLeads(processedLeadsSorted);
+      // Normalize coursesData to an array (support paginated { results: [] })
+      if (
+        coursesData &&
+        !Array.isArray(coursesData) &&
+        Array.isArray(coursesData.results)
+      ) {
+        setCourses(coursesData.results);
+      } else {
+        setCourses(Array.isArray(coursesData) ? coursesData : []);
+      }
     } catch (err) {
       setError(err.message || "Failed to refresh leads");
     } finally {
@@ -161,9 +198,17 @@ const Leads = () => {
       setLoading(true);
       setError(null);
       try {
-        // fetch courses first
-        const coursesData = await courseService.getCourses(authToken);
-        if (!cancelled) setCourses(coursesData);
+        // fetch courses first and normalize to array
+        let coursesData = await courseService.getCourses(authToken);
+        if (
+          coursesData &&
+          !Array.isArray(coursesData) &&
+          Array.isArray(coursesData.results)
+        ) {
+          coursesData = coursesData.results;
+        }
+        if (!cancelled)
+          setCourses(Array.isArray(coursesData) ? coursesData : []);
 
         const fastUrl = `${baseUrl}?page=1&page_size=20`;
         const resp = await fetch(fastUrl, {
@@ -174,7 +219,7 @@ const Leads = () => {
         if (resp.ok) {
           const json = await resp.json();
           if (Array.isArray(json.results)) {
-            if (!cancelled) setAllLeads(json.results);
+            if (!cancelled) setAllLeads(ensureLeadIds(json.results));
             // background fetch remaining pages
             (async () => {
               try {
@@ -199,7 +244,8 @@ const Leads = () => {
                     }
                     next = j.next;
                   }
-                  if (!cancelled) setAllLeads(acc.slice(0, MAX_ACCUMULATE));
+                  if (!cancelled)
+                    setAllLeads(ensureLeadIds(acc.slice(0, MAX_ACCUMULATE)));
                 } else {
                   const full = await fetch(baseUrl, {
                     headers: { Authorization: `Token ${authToken}` },
@@ -208,7 +254,11 @@ const Leads = () => {
                   if (full.ok) {
                     const all = await full.json();
                     if (!cancelled)
-                      setAllLeads(Array.isArray(all) ? all : all.results || []);
+                      setAllLeads(
+                        ensureLeadIds(
+                          Array.isArray(all) ? all : all.results || []
+                        )
+                      );
                   }
                 }
               } catch (e) {
@@ -219,7 +269,7 @@ const Leads = () => {
           }
 
           if (Array.isArray(json)) {
-            if (!cancelled) setAllLeads(json.slice(0, 20));
+            if (!cancelled) setAllLeads(ensureLeadIds(json.slice(0, 20)));
             (async () => {
               try {
                 const full = await fetch(baseUrl, {
@@ -229,7 +279,11 @@ const Leads = () => {
                 if (full.ok) {
                   const all = await full.json();
                   if (!cancelled)
-                    setAllLeads(Array.isArray(all) ? all : all.results || []);
+                    setAllLeads(
+                      ensureLeadIds(
+                        Array.isArray(all) ? all : all.results || []
+                      )
+                    );
                 }
               } catch (e) {
                 console.warn("Background full leads fetch failed", e);
@@ -247,7 +301,9 @@ const Leads = () => {
         if (fallback.ok) {
           const data = await fallback.json();
           if (!cancelled)
-            setAllLeads(Array.isArray(data) ? data : data.results || []);
+            setAllLeads(
+              ensureLeadIds(Array.isArray(data) ? data : data.results || [])
+            );
         }
       } catch (err) {
         console.error(err);
@@ -272,9 +328,34 @@ const Leads = () => {
     };
     window.addEventListener("crm:imported", onImported);
 
+    // Listen for lead updates broadcast by the API layer so edits reflect instantly
+    const onLeadUpdated = (e) => {
+      try {
+        const updated = e?.detail?.lead;
+        if (!updated) return;
+        setAllLeads((prev) => {
+          const matchIndex = prev.findIndex(
+            (l) =>
+              l.id === updated.id ||
+              String(l._id) === String(updated.id) ||
+              l.email === updated.email ||
+              l.phone_number === updated.phone_number
+          );
+          if (matchIndex === -1) return prev;
+          const next = [...prev];
+          next[matchIndex] = { ...next[matchIndex], ...updated };
+          return next;
+        });
+      } catch (err) {
+        console.warn("Leads.jsx could not apply crm:leadUpdated event", err);
+      }
+    };
+    window.addEventListener("crm:leadUpdated", onLeadUpdated);
+
     return () => {
       cancelled = true;
       window.removeEventListener("crm:imported", onImported);
+      window.removeEventListener("crm:leadUpdated", onLeadUpdated);
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
     };
   }, [authToken]);
@@ -408,12 +489,23 @@ const Leads = () => {
           const selected = courses.find(
             (c) =>
               c.course_name === updatedLead.course ||
-              c.id === updatedLead.course
+              String(c.id) === String(updatedLead.course)
           );
           payload.course = selected ? selected.id : updatedLead.course;
         }
 
-        await leadService.updateLead(updatedLead._id, payload, authToken);
+        // If payload.course is a numeric string, coerce to number (backend expects pk)
+        if (
+          payload.course !== undefined &&
+          typeof payload.course === "string" &&
+          /^\d+$/.test(payload.course)
+        ) {
+          payload.course = parseInt(payload.course, 10);
+        }
+
+        // Use backend id when available for the PATCH endpoint
+        const serverId = updatedLead.id || updatedLead._id;
+        await leadService.updateLead(serverId, payload, authToken);
 
         // Update local copy
         setAllLeads((prev) =>
@@ -441,9 +533,14 @@ const Leads = () => {
       try {
         // Special behavior for status transitions
         if (fieldName === "status") {
+          // Determine server id (backend primary key) when available.
+          // UI uses `_id` as the stable key; backend may use `id`.
+          const leadObj = allLeads.find((l) => l._id === leadId) || {};
+          const serverId = leadObj.id || leadId;
+
           // Update the lead status first
           await leadService.updateLead(
-            leadId,
+            serverId,
             { [fieldName]: newValue },
             authToken
           );
@@ -461,9 +558,24 @@ const Leads = () => {
               // Try to find the lead object either in local state or by fetching
               const leadObj = allLeads.find((l) => l._id === leadId) || {};
               // Build enrollment payload expected by backend
+              const resolvedCourseId =
+                leadObj.course &&
+                (typeof leadObj.course === "number" ||
+                  /^\d+$/.test(String(leadObj.course)))
+                  ? leadObj.course
+                  : leadObj.course_name
+                  ? (
+                      courses.find(
+                        (c) =>
+                          (c.course_name || c.name || "").toString().trim() ===
+                          String(leadObj.course_name).trim()
+                      ) || {}
+                    ).id
+                  : null;
+
               const enrollmentPayload = {
                 lead: leadObj.id || leadId,
-                course: leadObj.course || leadObj.course_name || null,
+                course: resolvedCourseId || null,
                 total_payment: leadObj.value || null,
                 first_installment: null,
                 second_installment: null,
@@ -476,17 +588,41 @@ const Leads = () => {
                 // allow backend to infer created_by from auth
               };
 
-              await enrollmentService.createEnrollment(
-                enrollmentPayload,
-                authToken
-              );
-              console.log("Enrollment created for lead", leadId);
+              // Create the enrollment and dispatch the created object so other
+              // pages (EnrolledStudents) can update UI without refresh.
+              try {
+                const created = await enrollmentService.createEnrollment(
+                  enrollmentPayload,
+                  authToken
+                );
+                console.log("Enrollment created for lead", leadId, created);
+                const ev = new CustomEvent("crm:enrollmentCreated", {
+                  detail: { enrollment: created },
+                });
+                window.dispatchEvent(ev);
+                // Also broadcast that this lead was converted so other pages
+                // (e.g., Leads, Trash) can position it appropriately.
+                window.dispatchEvent(
+                  new CustomEvent("crm:leadConverted", {
+                    detail: { leadId: leadId, enrollment: created },
+                  })
+                );
+              } catch (e) {
+                console.error("Failed to create enrollment:", e);
+              }
             } catch (enrollErr) {
               console.error(
                 "Failed to create enrollment for converted lead:",
                 enrollErr
               );
             }
+          }
+
+          // If marked lost, broadcast event so Trash page can update immediately
+          if (newValue === "Lost") {
+            window.dispatchEvent(
+              new CustomEvent("crm:leadMovedToTrash", { detail: { leadId } })
+            );
           }
 
           return;
@@ -496,12 +632,23 @@ const Leads = () => {
         const updatesToSend = { [fieldName]: newValue };
         if (fieldName === "course") {
           const selectedCourse = courses.find(
-            (c) => c.course_name === newValue || c.id === newValue
+            (c) =>
+              c.course_name === newValue || String(c.id) === String(newValue)
           );
           updatesToSend.course = selectedCourse ? selectedCourse.id : newValue;
+          if (
+            typeof updatesToSend.course === "string" &&
+            /^\d+$/.test(updatesToSend.course)
+          ) {
+            updatesToSend.course = parseInt(updatesToSend.course, 10);
+          }
         }
 
-        await leadService.updateLead(leadId, updatesToSend, authToken);
+        // Use backend id when available so PATCH targets the right resource
+        const leadObj = allLeads.find((l) => l._id === leadId) || {};
+        const serverId = leadObj.id || leadId;
+
+        await leadService.updateLead(serverId, updatesToSend, authToken);
 
         // Local update
         setAllLeads((prevLeads) =>

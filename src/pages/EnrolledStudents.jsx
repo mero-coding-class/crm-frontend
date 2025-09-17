@@ -31,14 +31,28 @@ const EnrolledStudents = () => {
     setLoading(true);
     setError(null);
     const baseUrl = `${BASE_URL}/enrollments/`;
+    // safeFetch wraps fetch to return null on network failure so background
+    // pagination doesn't throw uncaught TypeErrors.
+    const safeFetch = async (url, opts = {}) => {
+      try {
+        return await fetch(url, opts);
+      } catch (e) {
+        console.warn(
+          "safeFetch: network error when fetching",
+          url,
+          e && e.message ? e.message : e
+        );
+        return null;
+      }
+    };
     try {
       const pageUrl = `${baseUrl}?page=1&page_size=${ITEMS_PER_PAGE}`;
-      const resp = await fetch(pageUrl, {
+      const resp = await safeFetch(pageUrl, {
         headers: { Authorization: `Token ${authToken}` },
         credentials: "include",
       });
 
-      if (resp.ok) {
+      if (resp && resp.ok) {
         const json = await resp.json();
         if (Array.isArray(json.results)) {
           setAllStudents(json.results);
@@ -49,11 +63,11 @@ const EnrolledStudents = () => {
                 let nextUrl = json.next;
                 const MAX_ACCUMULATE = 2000;
                 while (nextUrl) {
-                  const r = await fetch(nextUrl, {
+                  const r = await safeFetch(nextUrl, {
                     headers: { Authorization: `Token ${authToken}` },
                     credentials: "include",
                   });
-                  if (!r.ok) break;
+                  if (!r || !r.ok) break;
                   const j = await r.json();
                   accumulated = accumulated.concat(j.results || []);
                   if (accumulated.length >= MAX_ACCUMULATE) {
@@ -64,53 +78,110 @@ const EnrolledStudents = () => {
                   }
                   nextUrl = j.next;
                 }
-                setAllStudents(accumulated.slice(0, MAX_ACCUMULATE));
+                setAllStudents(
+                  (accumulated || []).slice(0, MAX_ACCUMULATE).sort((a, b) => {
+                    const ta = a.created_at || a.updated_at || null;
+                    const tb = b.created_at || b.updated_at || null;
+                    if (ta && tb) return new Date(tb) - new Date(ta);
+                    if (a.id !== undefined && b.id !== undefined)
+                      return Number(b.id) - Number(a.id);
+                    return 0;
+                  })
+                );
               } else {
-                const full = await fetch(baseUrl, {
+                const full = await safeFetch(baseUrl, {
                   headers: { Authorization: `Token ${authToken}` },
                   credentials: "include",
                 });
-                if (full.ok) {
+                if (full && full.ok) {
                   const all = await full.json();
                   setAllStudents(Array.isArray(all) ? all : all.results || []);
+                } else {
+                  console.warn(
+                    "Background full enrollments fetch failed or returned no response"
+                  );
                 }
               }
             } catch (e) {
-              console.warn("Background enrollments fetch failed", e);
+              console.warn(
+                "Background enrollments fetch failed",
+                e && e.message ? e.message : e
+              );
             }
           })();
           return;
         }
 
         if (Array.isArray(json)) {
-          setAllStudents(json.slice(0, ITEMS_PER_PAGE));
+          setAllStudents(
+            (json.slice(0, ITEMS_PER_PAGE) || []).sort((a, b) => {
+              const ta = a.created_at || a.updated_at || null;
+              const tb = b.created_at || b.updated_at || null;
+              if (ta && tb) return new Date(tb) - new Date(ta);
+              if (a.id !== undefined && b.id !== undefined)
+                return Number(b.id) - Number(a.id);
+              return 0;
+            })
+          );
           (async () => {
             try {
-              const full = await fetch(baseUrl, {
+              const full = await safeFetch(baseUrl, {
                 headers: { Authorization: `Token ${authToken}` },
                 credentials: "include",
               });
-              if (full.ok) {
+              if (full && full.ok) {
                 const all = await full.json();
-                setAllStudents(Array.isArray(all) ? all : all.results || []);
+                setAllStudents(
+                  ((Array.isArray(all) ? all : all.results || []) || []).sort(
+                    (a, b) => {
+                      const ta = a.created_at || a.updated_at || null;
+                      const tb = b.created_at || b.updated_at || null;
+                      if (ta && tb) return new Date(tb) - new Date(ta);
+                      if (a.id !== undefined && b.id !== undefined)
+                        return Number(b.id) - Number(a.id);
+                      return 0;
+                    }
+                  )
+                );
+              } else {
+                console.warn(
+                  "Background enrollments full fetch failed or returned no response"
+                );
               }
             } catch (e) {
-              console.warn("Background enrollments full fetch failed", e);
+              console.warn(
+                "Background enrollments full fetch failed",
+                e && e.message ? e.message : e
+              );
             }
           })();
           return;
         }
       }
-
-      const fallback = await fetch(baseUrl, {
+      const fallback = await safeFetch(baseUrl, {
         headers: { Authorization: `Token ${authToken}` },
         credentials: "include",
       });
-      if (fallback.ok) {
+      if (fallback && fallback.ok) {
         const data = await fallback.json();
-        setAllStudents(Array.isArray(data) ? data : data.results || []);
+        setAllStudents(
+          ((Array.isArray(data) ? data : data.results || []) || []).sort(
+            (a, b) => {
+              const ta = a.created_at || a.updated_at || null;
+              const tb = b.created_at || b.updated_at || null;
+              if (ta && tb) return new Date(tb) - new Date(ta);
+              if (a.id !== undefined && b.id !== undefined)
+                return Number(b.id) - Number(a.id);
+              return 0;
+            }
+          )
+        );
       } else {
-        throw new Error(`Failed to fetch enrollments: ${fallback.status}`);
+        throw new Error(
+          `Failed to fetch enrollments: no response or ${
+            fallback && fallback.status
+          }`
+        );
       }
     } catch (err) {
       console.error(err);
@@ -141,6 +212,71 @@ const EnrolledStudents = () => {
       if (importDebounce.timeoutId) clearTimeout(importDebounce.timeoutId);
     };
   }, [authToken, fetchEnrolledStudents]);
+
+  // Respond to lead updates: if backend returns enrollment info or updates a
+  // student's fields, merge them into enrolled students list.
+  useEffect(() => {
+    const onLeadUpdated = (e) => {
+      try {
+        const updated = e?.detail?.lead;
+        if (!updated) return;
+
+        // If the updated lead includes an enrollment id or resembles an enrollment
+        // object, try to merge by id or insert if new.
+        const enrollmentCandidate = updated.enrollment || null;
+
+        if (enrollmentCandidate && enrollmentCandidate.id) {
+          setAllStudents((prev) => {
+            const idx = prev.findIndex((s) => s.id === enrollmentCandidate.id);
+            if (idx === -1) return [enrollmentCandidate, ...prev];
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...enrollmentCandidate };
+            return next;
+          });
+          return;
+        }
+
+        // Otherwise attempt to match by email/phone if the lead became an enrolled
+        // student and the backend returned student-like fields (best-effort).
+        setAllStudents((prev) => {
+          let changed = false;
+          const next = prev.map((s) => {
+            if (
+              (updated.email && s.email === updated.email) ||
+              (updated.phone_number && s.phone_number === updated.phone_number)
+            ) {
+              changed = true;
+              return { ...s, ...updated };
+            }
+            return s;
+          });
+          return changed ? next : prev;
+        });
+      } catch (err) {
+        console.warn("EnrolledStudents: failed to apply crm:leadUpdated", err);
+      }
+    };
+
+    window.addEventListener("crm:leadUpdated", onLeadUpdated);
+    return () => window.removeEventListener("crm:leadUpdated", onLeadUpdated);
+  }, []);
+
+  // Listen for enrollment created events so we can insert new enrollments
+  // without requiring a page refresh.
+  useEffect(() => {
+    const onEnrollmentCreated = (e) => {
+      try {
+        const enrollment = e?.detail?.enrollment;
+        if (!enrollment) return;
+        setAllStudents((prev) => [enrollment, ...prev]);
+      } catch (err) {
+        console.warn("Failed to handle crm:enrollmentCreated event", err);
+      }
+    };
+    window.addEventListener("crm:enrollmentCreated", onEnrollmentCreated);
+    return () =>
+      window.removeEventListener("crm:enrollmentCreated", onEnrollmentCreated);
+  }, []);
 
   // Fetch course list so we can display friendly course names in the table
   useEffect(() => {

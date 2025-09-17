@@ -27,7 +27,9 @@ const SortableRow = ({
   u,
   editUserId,
   editUsername,
+  editPassword,
   setEditUsername,
+  setEditPassword,
   setEditUserId,
   handleEditSave,
   handleDelete,
@@ -63,16 +65,30 @@ const SortableRow = ({
         {u.id}
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+      <td className="px-6 py-4 align-top text-sm text-gray-600 max-w-[360px]">
         {editUserId === u.id ? (
-          <input
-            type="text"
-            value={editUsername}
-            onChange={(e) => setEditUsername(e.target.value)}
-            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 w-full"
-          />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 space-y-2 sm:space-y-0">
+            <input
+              type="text"
+              value={editUsername}
+              onChange={(e) => setEditUsername(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 w-full max-w-[220px] truncate"
+            />
+            <input
+              type="password"
+              placeholder="New password (leave blank to keep)"
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              autoComplete="new-password"
+              className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 w-full max-w-[220px] text-sm"
+            />
+          </div>
         ) : (
-          u.username
+          <div className="truncate max-w-[220px]">{u.username}</div>
         )}
       </td>
 
@@ -85,6 +101,8 @@ const SortableRow = ({
           <div className="flex justify-end space-x-2">
             <button
               onClick={() => handleEditSave(u.id)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 rounded-md text-green-600 hover:bg-green-100 transition-colors"
               aria-label="Save"
             >
@@ -102,7 +120,14 @@ const SortableRow = ({
               </svg>
             </button>
             <button
-              onClick={() => setEditUserId(null)}
+              onClick={() => {
+                setEditUserId(null);
+                try {
+                  setEditPassword("");
+                } catch (e) {}
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 rounded-md text-gray-500 hover:bg-gray-200 transition-colors"
               aria-label="Cancel"
             >
@@ -126,7 +151,12 @@ const SortableRow = ({
               onClick={() => {
                 setEditUserId(u.id);
                 setEditUsername(u.username);
+                try {
+                  setEditPassword("");
+                } catch (e) {}
               }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 rounded-md text-yellow-500 hover:bg-yellow-100 transition-colors"
               aria-label="Edit"
             >
@@ -146,6 +176,8 @@ const SortableRow = ({
             </button>
             <button
               onClick={() => handleDelete(u.id)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               className="p-1.5 rounded-md text-red-600 hover:bg-red-100 transition-colors"
               aria-label="Delete"
             >
@@ -188,6 +220,7 @@ const RegisterUser = () => {
   const [users, setUsers] = useState([]);
   const [editUserId, setEditUserId] = useState(null);
   const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
 
   // selection
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -224,7 +257,25 @@ const RegisterUser = () => {
       });
       if (!res.ok) throw new Error("Failed to fetch users.");
       const data = await res.json();
-      setUsers(data);
+      // Normalize response to always be an array. Backends may return:
+      // - an array directly
+      // - a paginated object { results: [...] }
+      // - an object with users: [...] or data: [...]
+      let usersData = [];
+      if (Array.isArray(data)) {
+        usersData = data;
+      } else if (data && Array.isArray(data.results)) {
+        usersData = data.results;
+      } else if (data && Array.isArray(data.users)) {
+        usersData = data.users;
+      } else if (data && Array.isArray(data.data)) {
+        usersData = data.data;
+      } else {
+        // Unexpected shape — keep users empty but log for debugging
+        console.warn("Unexpected users response shape:", data);
+        usersData = [];
+      }
+      setUsers(usersData);
     } catch (err) {
       console.error(err);
       setMsg({ type: "error", text: "Could not load users." });
@@ -342,6 +393,9 @@ const RegisterUser = () => {
   const handleEditSave = async (id) => {
     try {
       const payload = { username: editUsername };
+      if (editPassword && String(editPassword).trim().length > 0) {
+        payload.password = editPassword;
+      }
 
       const res = await fetch(`${BASE_URL}/users/${id}/`, {
         method: "PATCH",
@@ -353,14 +407,23 @@ const RegisterUser = () => {
       });
 
       if (!res.ok) throw new Error("Failed to update user.");
-      const updated = await res.json();
+      // Some backends respond with 204 No Content. Handle both JSON and empty responses.
+      let updated = null;
+      try {
+        // only attempt to parse JSON if there is content
+        const text = await res.text();
+        updated = text ? JSON.parse(text) : null;
+      } catch (e) {
+        // if parsing fails, ignore and fall back to local username
+        updated = null;
+      }
 
+      const newName = (updated && updated.username) || editUsername;
       setUsers((prev) =>
-        prev.map((u) =>
-          u.id === id ? { ...u, username: updated.username } : u
-        )
+        prev.map((u) => (u.id === id ? { ...u, username: newName } : u))
       );
       setEditUserId(null);
+      setEditPassword("");
     } catch (err) {
       alert(err.message);
     }
@@ -431,7 +494,7 @@ const RegisterUser = () => {
             value={form.username}
             onChange={handleChange}
             placeholder="Enter username"
-            autocomplete="off"
+            autoComplete="off"
             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
@@ -462,7 +525,7 @@ const RegisterUser = () => {
               value={form.password}
               onChange={handleChange}
               placeholder="Set a password"
-              autocomplete="new-password"
+              autoComplete="new-password"
               className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
             />
             <button
@@ -586,7 +649,9 @@ const RegisterUser = () => {
                     u={u}
                     editUserId={editUserId}
                     editUsername={editUsername}
+                    editPassword={editPassword}
                     setEditUsername={setEditUsername}
+                    setEditPassword={setEditPassword}
                     setEditUserId={setEditUserId}
                     handleEditSave={handleEditSave}
                     handleDelete={handleDelete}
@@ -618,7 +683,7 @@ const RegisterUser = () => {
             Show Less
           </button>
         )}
-      </div>  
+      </div>
     </div>
   );
 };

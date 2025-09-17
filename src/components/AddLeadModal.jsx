@@ -351,6 +351,17 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       user.role === "superadmin" ||
       user.role === "super-admin");
 
+  // Defensive: ensure `courses` is an array before using .map
+  const warnedCoursesShape = useRef(false);
+  const coursesList = Array.isArray(courses) ? courses : [];
+  if (!Array.isArray(courses) && !warnedCoursesShape.current) {
+    console.warn(
+      "AddLeadModal expected `courses` to be an array but received:",
+      courses
+    );
+    warnedCoursesShape.current = true;
+  }
+
   return (
     <div
       className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 p-4 animate-fade-in"
@@ -665,7 +676,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               <option value="">Select a course</option>
-              {courses.map((course) => (
+              {coursesList.map((course) => (
                 <option key={course.id} value={course.course_name}>
                   {course.course_name}
                 </option>

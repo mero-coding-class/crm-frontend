@@ -119,10 +119,15 @@ export const leadService = {
       },
     });
     const backendLeads = await handleResponse(response);
+    // Normalize backend response to an array. Some backends return
+    // a paginated object like { results: [...] } while others return []
+    const leadsList = Array.isArray(backendLeads)
+      ? backendLeads
+      : backendLeads?.results || [];
     console.log('Backend Leads Response:', backendLeads);
-    
+
     // Log any leads with course information (format dates for readability)
-    backendLeads.forEach((lead) => {
+    leadsList.forEach((lead) => {
       if (lead.course || lead.course_name) {
         console.log("Lead with course info:", {
           last_call: formatDateForBackend(lead.last_call) || null,
@@ -132,7 +137,7 @@ export const leadService = {
       }
     });
 
-    return backendLeads.map((lead) => ({
+    return leadsList.map((lead) => ({
       // Use just 'id' since that's what backend uses
       id: lead.id,
       student_name: lead.student_name || "",
@@ -237,6 +242,11 @@ export const leadService = {
     if (updates.addDate !== undefined) backendUpdates.add_date = updates.addDate;
     if (updates.changeLog !== undefined)
       backendUpdates.change_log = updates.changeLog;
+    // Support updating assigned user (username) or assigned_to field
+    if (updates.assigned_to !== undefined)
+      backendUpdates.assigned_to = updates.assigned_to;
+    if (updates.assigned_to_username !== undefined)
+      backendUpdates.assigned_to_username = updates.assigned_to_username;
 
     const response = await fetch(`${BASE_URL}/leads/${id}/`, {
       method: "PATCH",
@@ -247,7 +257,34 @@ export const leadService = {
       body: JSON.stringify(backendUpdates),
     });
 
-    return handleResponse(response);
+    // Wait for the parsed JSON so we can broadcast the updated lead to the app
+    const data = await handleResponse(response);
+
+    try {
+      // Broadcast a global event so other pages/components can update optimistically
+      window.dispatchEvent(
+        new CustomEvent("crm:leadUpdated", { detail: { lead: data } })
+      );
+
+      // If the update included remarks, send a targeted event so the table
+      // can update the per-row textarea (localRemarks) immediately.
+      if (backendUpdates && backendUpdates.remarks !== undefined) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("crm:remarkUpdated", {
+              detail: { id: data.id || data._id || null, remarks: backendUpdates.remarks },
+            })
+          );
+        } catch (e) {
+          // ignore
+        }
+      }
+    } catch (e) {
+      // If window or CustomEvent is not available (e.g., SSR), ignore silently
+      console.warn("Could not dispatch crm:leadUpdated event", e);
+    }
+
+    return data;
   },
 
   addLead: async (newLeadData, authToken) => {
@@ -335,8 +372,9 @@ export const trashService = {
     const response = await fetch(`${BASE_URL}/trash/`, {
       headers: { Authorization: `Token ${authToken}` },
     });
-    const backendLeads = await handleResponse(response);
-    return backendLeads.map((lead) => ({
+  const backendLeads = await handleResponse(response);
+  const list = Array.isArray(backendLeads) ? backendLeads : backendLeads?.results || [];
+  return list.map((lead) => ({
       id: lead.id,
       student_name: lead.student_name || "",
       parents_name: lead.parents_name || "",
@@ -436,7 +474,8 @@ export const changeLogService = {
     const response = await fetch(`${BASE_URL}/leads/${leadId}/logs/`, {
       headers: { Authorization: `Token ${authToken}` },
     });
-    const logs = await handleResponse(response);
+    const payload = await handleResponse(response);
+    const logs = Array.isArray(payload) ? payload : payload?.results || [];
     return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   },
 };
