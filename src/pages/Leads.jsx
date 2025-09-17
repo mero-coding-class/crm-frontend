@@ -24,9 +24,15 @@ import {
 
 const Leads = () => {
   const { authToken, user } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // core state
   const [allLeads, setAllLeads] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(null);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -114,59 +120,30 @@ const Leads = () => {
     setLoading(true);
     setError(null);
     try {
-      // Get leads and courses data
       const [leadsData, coursesData] = await Promise.all([
         leadService.getLeads(authToken),
         courseService.getCourses(authToken),
       ]);
 
-      // Process leads to ensure course_name is set
-      const processedLeads = leadsData.map((lead) => ({
-        ...lead,
-        // backend may use `substatus` (no underscore) or `sub_status` — normalize to `sub_status` for UI
-        sub_status: lead.sub_status || lead.substatus || "New",
-        // normalize assigned username and assigned_to
-        assigned_to:
-          lead.assigned_to ||
-          lead.assigned_to_username ||
-          lead.assigned_to ||
-          "",
-        assigned_to_username:
-          lead.assigned_to_username || lead.assigned_to || "",
-        // normalized variants for reliable comparisons
-        assigned_to_normalized: (
-          lead.assigned_to ||
-          lead.assigned_to_username ||
-          ""
-        )
-          .toString()
-          .trim()
-          .toLowerCase(),
-        assigned_to_username_normalized: (
-          lead.assigned_to_username ||
-          lead.assigned_to ||
-          ""
-        )
-          .toString()
-          .trim()
-          .toLowerCase(),
-        course_name: lead.course_name || "N/A", // Ensure course_name is always set
-      }));
+      const processedLeads = (
+        Array.isArray(leadsData) ? leadsData : leadsData.results || []
+      )
+        .map((lead) => ({
+          ...lead,
+          sub_status: lead.sub_status || lead.substatus || "New",
+          assigned_to:
+            lead.assigned_to ||
+            lead.assigned_to_username ||
+            lead.assigned_to ||
+            "",
+          assigned_to_username:
+            lead.assigned_to_username || lead.assigned_to || "",
+          course_name: lead.course_name || "N/A",
+        }))
+        .slice(0, pageSize);
 
-      // Sort leads newest-first so newly created/converted items remain at top
-      const processedLeadsSorted = (processedLeads || [])
-        .slice()
-        .sort((a, b) => {
-          const ta = a.created_at || a.updated_at || a.add_date || null;
-          const tb = b.created_at || b.updated_at || b.add_date || null;
-          if (ta && tb) return new Date(tb) - new Date(ta);
-          if (a.id !== undefined && b.id !== undefined)
-            return Number(b.id) - Number(a.id);
-          return 0;
-        });
-
-      setAllLeads(processedLeadsSorted);
-      // Normalize coursesData to an array (support paginated { results: [] })
+      setAllLeads(processedLeads);
+      // Normalize coursesData
       if (
         coursesData &&
         !Array.isArray(coursesData) &&
@@ -181,145 +158,74 @@ const Leads = () => {
     } finally {
       setLoading(false);
     }
-  }, [authToken]);
+  }, [authToken, pageSize]);
 
-  // Load leads & courses when component mounts: fetch first page quickly then load rest in background
+  // Server-driven pagination: fetch page when currentPage changes
   useEffect(() => {
-    if (!authToken) {
-      setError("You are not logged in. Please log in to view leads.");
-      setLoading(false);
-      return;
-    }
-
+    if (!authToken) return;
     let cancelled = false;
     const baseUrl = `${BASE_URL}/leads/`;
 
-    const fetchFastThenFull = async () => {
+    const fetchPage = async (page = 1) => {
       setLoading(true);
       setError(null);
       try {
-        // fetch courses first and normalize to array
-        let coursesData = await courseService.getCourses(authToken);
-        if (
-          coursesData &&
-          !Array.isArray(coursesData) &&
-          Array.isArray(coursesData.results)
-        ) {
-          coursesData = coursesData.results;
-        }
-        if (!cancelled)
-          setCourses(Array.isArray(coursesData) ? coursesData : []);
-
-        const fastUrl = `${baseUrl}?page=1&page_size=20`;
-        const resp = await fetch(fastUrl, {
+        const url = `${baseUrl}?page=${page}&page_size=${pageSize}`;
+        const resp = await fetch(url, {
           headers: { Authorization: `Token ${authToken}` },
           credentials: "include",
         });
-
-        if (resp.ok) {
-          const json = await resp.json();
-          if (Array.isArray(json.results)) {
-            if (!cancelled) setAllLeads(ensureLeadIds(json.results));
-            // background fetch remaining pages
-            (async () => {
-              try {
-                if (json.next) {
-                  let acc = [...json.results];
-                  let next = json.next;
-                  const MAX_ACCUMULATE = 2000; // protect the client from huge loads
-                  while (next) {
-                    const r = await fetch(next, {
-                      headers: { Authorization: `Token ${authToken}` },
-                      credentials: "include",
-                    });
-                    if (!r.ok) break;
-                    const j = await r.json();
-                    acc = acc.concat(j.results || []);
-                    // stop accumulating very large datasets to avoid freezing the UI
-                    if (acc.length >= MAX_ACCUMULATE) {
-                      console.warn(
-                        "Leads background fetch: reached accumulate cap, stopping further background fetch to avoid UI freeze"
-                      );
-                      break;
-                    }
-                    next = j.next;
-                  }
-                  if (!cancelled)
-                    setAllLeads(ensureLeadIds(acc.slice(0, MAX_ACCUMULATE)));
-                } else {
-                  const full = await fetch(baseUrl, {
-                    headers: { Authorization: `Token ${authToken}` },
-                    credentials: "include",
-                  });
-                  if (full.ok) {
-                    const all = await full.json();
-                    if (!cancelled)
-                      setAllLeads(
-                        ensureLeadIds(
-                          Array.isArray(all) ? all : all.results || []
-                        )
-                      );
-                  }
-                }
-              } catch (e) {
-                console.warn("Background leads fetch failed", e);
-              }
-            })();
-            return;
-          }
-
-          if (Array.isArray(json)) {
-            if (!cancelled) setAllLeads(ensureLeadIds(json.slice(0, 20)));
-            (async () => {
-              try {
-                const full = await fetch(baseUrl, {
-                  headers: { Authorization: `Token ${authToken}` },
-                  credentials: "include",
-                });
-                if (full.ok) {
-                  const all = await full.json();
-                  if (!cancelled)
-                    setAllLeads(
-                      ensureLeadIds(
-                        Array.isArray(all) ? all : all.results || []
-                      )
-                    );
-                }
-              } catch (e) {
-                console.warn("Background full leads fetch failed", e);
-              }
-            })();
-            return;
-          }
+        if (!resp.ok) throw new Error(`Failed to fetch leads: ${resp.status}`);
+        const json = await resp.json();
+        let list = [];
+        let count = null;
+        if (Array.isArray(json)) {
+          list = json;
+          count = json.length;
+        } else if (Array.isArray(json.results)) {
+          list = json.results;
+          count = json.count ?? null;
+        } else {
+          list = json.data || [];
+          count = json.count ?? null;
         }
-
-        // fallback full fetch
-        const fallback = await fetch(baseUrl, {
-          headers: { Authorization: `Token ${authToken}` },
-          credentials: "include",
-        });
-        if (fallback.ok) {
-          const data = await fallback.json();
-          if (!cancelled)
-            setAllLeads(
-              ensureLeadIds(Array.isArray(data) ? data : data.results || [])
-            );
+      if (!cancelled) {
+          setAllLeads(ensureLeadIds(list));
+          setTotalCount(count);
+          if (count != null) {
+            const pages = Math.max(1, Math.ceil(count / pageSize));
+            console.log("Setting totalPages from count:", count, "=>", pages);
+            setTotalPages(pages);
+          } else {
+            const pages = Math.max(1, Math.ceil(list.length / pageSize));
+            console.log("Setting totalPages from list length:", list.length, "=>", pages);
+            setTotalPages(pages);
+          }
         }
       } catch (err) {
-        console.error(err);
         if (!cancelled) setError(err.message || "Failed to load leads");
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
 
-    fetchFastThenFull();
+    fetchPage(currentPage);
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, currentPage, pageSize]);
 
-    // listen for global import events to refresh leads automatically
+  useEffect(() => {
+    console.log("Current page:", currentPage, "Total pages:", totalPages);
+  }, [currentPage, totalPages]);
+
+  // listen for global import events and other runtime events (in their own effect)
+
+  useEffect(() => {
+    if (!authToken) return;
     const importDebounceRef = { current: null };
     const onImported = (e) => {
       console.info("Leads.jsx detected crm:imported event, scheduling refresh");
-      // debounce to prevent overlapping fetches when multiple events fire
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
       importDebounceRef.current = setTimeout(() => {
         handleRefresh();
@@ -328,7 +234,6 @@ const Leads = () => {
     };
     window.addEventListener("crm:imported", onImported);
 
-    // Listen for lead updates broadcast by the API layer so edits reflect instantly
     const onLeadUpdated = (e) => {
       try {
         const updated = e?.detail?.lead;
@@ -352,13 +257,58 @@ const Leads = () => {
     };
     window.addEventListener("crm:leadUpdated", onLeadUpdated);
 
+    const onLeadRestored = (e) => {
+      try {
+        const restored = e?.detail?.lead;
+        if (!restored) return;
+        setAllLeads((prev) => {
+          const filtered = (prev || []).filter(
+            (l) =>
+              !(l.id === restored.id || String(l._id) === String(restored.id))
+          );
+          const withId = {
+            ...restored,
+            _id: restored._id || restored.id || `lead-${Date.now()}`,
+          };
+          return [withId, ...filtered];
+        });
+      } catch (err) {
+        console.warn("Failed to apply crm:leadRestored event", err);
+      }
+    };
+    window.addEventListener("crm:leadRestored", onLeadRestored);
+
+    const onEnrollmentCreated = (e) => {
+      try {
+        const enrollment = e?.detail?.enrollment;
+        if (!enrollment) return;
+        const leadId =
+          enrollment.lead?.id || enrollment.lead || enrollment.student || null;
+        if (leadId) {
+          setAllLeads((prev) => {
+            const foundIndex = (prev || []).findIndex(
+              (l) => l.id === leadId || String(l._id) === String(leadId)
+            );
+            if (foundIndex === -1) return prev;
+            const next = [...prev];
+            const [item] = next.splice(foundIndex, 1);
+            return [item, ...next];
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to handle crm:enrollmentCreated event", err);
+      }
+    };
+    window.addEventListener("crm:enrollmentCreated", onEnrollmentCreated);
+
     return () => {
-      cancelled = true;
       window.removeEventListener("crm:imported", onImported);
       window.removeEventListener("crm:leadUpdated", onLeadUpdated);
+      window.removeEventListener("crm:leadRestored", onLeadRestored);
+      window.removeEventListener("crm:enrollmentCreated", onEnrollmentCreated);
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
     };
-  }, [authToken]);
+  }, [authToken, handleRefresh]);
 
   const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
   const handleCloseAddModal = useCallback(() => setIsAddModalOpen(false), []);
@@ -434,22 +384,52 @@ const Leads = () => {
 
         // Handle special cases after UI update
         if (newLeadData.status === "Converted") {
-          await fetch(`${BASE_URL}/enrollments/`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Token ${authToken}`,
-            },
-            body: JSON.stringify(newLeadData),
-          });
+          // Backend expects PATCH to enrollments endpoint (no POST).
+          // Use backend id when available.
+          const serverId = newLeadData.id || newLeadData._id;
+          try {
+            const resp = await fetch(`${BASE_URL}/enrollments/${serverId}/`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+              },
+              body: JSON.stringify(newLeadData),
+            });
+            if (!resp.ok) {
+              console.warn(
+                "Enrollment PATCH failed for new lead:",
+                await resp.text()
+              );
+            }
+          } catch (e) {
+            console.warn("Enrollment PATCH request failed:", e);
+          }
         } else if (newLeadData.status === "Lost") {
           // Backend accepts updating a lead to 'Lost' via updateLead.
           try {
-            await leadService.updateLead(
-              newLeadData._id || newLeadData.id,
-              { status: "Lost" },
-              authToken
-            );
+            // Try PATCHing the trash endpoint for this lead (backend accepts PATCH)
+            const serverId = newLeadData.id || newLeadData._id;
+            const resp = await fetch(`${BASE_URL}/trash/${serverId}/`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+              },
+              body: JSON.stringify({ status: "Lost" }),
+            });
+            if (!resp.ok) {
+              // Fallback to updating the lead status if trash endpoint rejects
+              console.warn(
+                "Trash PATCH failed for new lead, falling back to lead update:",
+                await resp.text()
+              );
+              await leadService.updateLead(
+                serverId,
+                { status: "Lost" },
+                authToken
+              );
+            }
           } catch (e) {
             console.warn("Failed to mark newly created lead as Lost:", e);
           }
@@ -552,12 +532,10 @@ const Leads = () => {
             );
           }
 
-          // If the lead was converted, create an enrollment record
+          // If the lead was converted, PATCH the enrollments endpoint (no POST)
           if (newValue === "Converted") {
             try {
-              // Try to find the lead object either in local state or by fetching
               const leadObj = allLeads.find((l) => l._id === leadId) || {};
-              // Build enrollment payload expected by backend
               const resolvedCourseId =
                 leadObj.course &&
                 (typeof leadObj.course === "number" ||
@@ -585,44 +563,89 @@ const Leads = () => {
                 payment_completed: false,
                 starting_date: null,
                 assigned_teacher: "",
-                // allow backend to infer created_by from auth
               };
 
-              // Create the enrollment and dispatch the created object so other
-              // pages (EnrolledStudents) can update UI without refresh.
+              const serverId = leadObj.id || leadId;
               try {
-                const created = await enrollmentService.createEnrollment(
-                  enrollmentPayload,
-                  authToken
+                const resp = await fetch(
+                  `${BASE_URL}/enrollments/${serverId}/`,
+                  {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Token ${authToken}`,
+                    },
+                    body: JSON.stringify(enrollmentPayload),
+                  }
                 );
-                console.log("Enrollment created for lead", leadId, created);
-                const ev = new CustomEvent("crm:enrollmentCreated", {
-                  detail: { enrollment: created },
-                });
-                window.dispatchEvent(ev);
-                // Also broadcast that this lead was converted so other pages
-                // (e.g., Leads, Trash) can position it appropriately.
-                window.dispatchEvent(
-                  new CustomEvent("crm:leadConverted", {
-                    detail: { leadId: leadId, enrollment: created },
-                  })
-                );
+                if (resp.ok) {
+                  const created = await resp.json();
+                  console.log(
+                    "Enrollment PATCH succeeded for lead",
+                    leadId,
+                    created
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("crm:enrollmentCreated", {
+                      detail: { enrollment: created },
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("crm:leadConverted", {
+                      detail: { leadId: leadId, enrollment: created },
+                    })
+                  );
+                } else {
+                  console.error("Enrollment PATCH failed:", await resp.text());
+                }
               } catch (e) {
-                console.error("Failed to create enrollment:", e);
+                console.error("Enrollment PATCH request failed:", e);
               }
             } catch (enrollErr) {
               console.error(
-                "Failed to create enrollment for converted lead:",
+                "Failed to prepare enrollment PATCH for converted lead:",
                 enrollErr
               );
             }
           }
 
-          // If marked lost, broadcast event so Trash page can update immediately
+          // If marked lost, PATCH the trash endpoint so the backend can move it
           if (newValue === "Lost") {
-            window.dispatchEvent(
-              new CustomEvent("crm:leadMovedToTrash", { detail: { leadId } })
-            );
+            try {
+              const leadObj = allLeads.find((l) => l._id === leadId) || {};
+              const serverId = leadObj.id || leadId;
+              const resp = await fetch(`${BASE_URL}/trash/${serverId}/`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify({ status: "Lost" }),
+              });
+              if (resp.ok) {
+                const trashed = await resp.json();
+                window.dispatchEvent(
+                  new CustomEvent("crm:leadMovedToTrash", {
+                    detail: { lead: trashed, leadId },
+                  })
+                );
+              } else {
+                console.warn(
+                  "Trash PATCH failed, dispatching basic moved event:",
+                  await resp.text()
+                );
+                window.dispatchEvent(
+                  new CustomEvent("crm:leadMovedToTrash", {
+                    detail: { leadId },
+                  })
+                );
+              }
+            } catch (e) {
+              console.error("Trash PATCH request failed:", e);
+              window.dispatchEvent(
+                new CustomEvent("crm:leadMovedToTrash", { detail: { leadId } })
+              );
+            }
           }
 
           return;
@@ -1309,6 +1332,13 @@ const Leads = () => {
             onAssignedToChange={handleAssignedToChange}
             authToken={authToken}
             changeLogService={changeLogService}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={(p) => setCurrentPage(p)}
+            leadsPerPage={pageSize}
+            users={users}
+            usersLoading={usersLoading}
+            currentUserRole={(user?.role || "").toString().toLowerCase()}
             handleFieldChange={handleFieldChange}
           />
         )}

@@ -311,26 +311,69 @@ const TrashPage = () => {
           const originalLead = allLeads.find((lead) => lead.id === id);
           if (!originalLead) return;
 
-          const newLogEntry = {
-            timestamp: new Date().toISOString(),
-            updaterName: currentUser?.username || "Unknown User",
-            updaterRole: currentUser?.role || "Guest",
-            message: `Restored from Trash.`,
-          };
+          // Call trashService.restoreTrashedLead which PATCHes /trash/{id}/ to status Active
+          try {
+            const restored = await trashService.restoreTrashedLead(
+              id,
+              authToken
+            );
 
-          const updatedChangeLog = originalLead.changeLog
-            ? [...originalLead.changeLog, newLogEntry]
-            : [newLogEntry];
+            // Broadcast restored lead so Leads page can insert it immediately
+            window.dispatchEvent(
+              new CustomEvent("crm:leadRestored", {
+                detail: { lead: restored },
+              })
+            );
 
-          await leadService.updateLead(
-            id,
-            { status: "New", changeLog: updatedChangeLog },
-            authToken
-          );
+            // Remove from local trash list optimistically
+            setAllLeads((prevLeads) =>
+              prevLeads.filter((lead) => lead.id !== id)
+            );
 
-          setAllLeads((prevLeads) =>
-            prevLeads.filter((lead) => lead.id !== id)
-          );
+            // Navigate to Leads page to show the restored lead (default status Active)
+            setTimeout(() => {
+              try {
+                window.location.href = "/leads";
+              } catch (e) {
+                // ignore navigation errors in embedded contexts
+              }
+            }, 300);
+          } catch (err) {
+            console.error(
+              "Failed to restore via trashService, falling back to leadService update:",
+              err
+            );
+            // fallback behavior: update lead status back to 'Active' via leadService
+            const newLogEntry = {
+              timestamp: new Date().toISOString(),
+              updaterName: currentUser?.username || "Unknown User",
+              updaterRole: currentUser?.role || "Guest",
+              message: `Restored from Trash.`,
+            };
+
+            const updatedChangeLog = originalLead.changeLog
+              ? [...originalLead.changeLog, newLogEntry]
+              : [newLogEntry];
+
+            await leadService.updateLead(
+              id,
+              { status: "Active", changeLog: updatedChangeLog },
+              authToken
+            );
+            setAllLeads((prevLeads) =>
+              prevLeads.filter((lead) => lead.id !== id)
+            );
+            window.dispatchEvent(
+              new CustomEvent("crm:leadRestored", {
+                detail: { lead: { ...originalLead, status: "Active" } },
+              })
+            );
+            setTimeout(() => {
+              try {
+                window.location.href = "/leads";
+              } catch (e) {}
+            }, 300);
+          }
         } catch (err) {
           setError("Failed to restore lead.");
           console.error("Error restoring lead:", err);
@@ -359,22 +402,52 @@ const TrashPage = () => {
             const originalLead = allLeads.find((lead) => lead.id === id);
             if (!originalLead) return;
 
-            const updatedChangeLog = originalLead.changeLog
-              ? [...originalLead.changeLog, newLogs]
-              : [newLogs];
-
-            await leadService.updateLead(
-              id,
-              { status: "New", changeLog: updatedChangeLog },
-              authToken
-            );
-            restoredIds.add(id);
+            try {
+              const restored = await trashService.restoreTrashedLead(
+                id,
+                authToken
+              );
+              restoredIds.add(id);
+              window.dispatchEvent(
+                new CustomEvent("crm:leadRestored", {
+                  detail: { lead: restored },
+                })
+              );
+            } catch (err) {
+              console.warn(
+                "Bulk restore: trashService.restoreTrashedLead failed for",
+                id,
+                ", falling back to leadService.updateLead",
+                err
+              );
+              const updatedChangeLog = originalLead.changeLog
+                ? [...originalLead.changeLog, newLogs]
+                : [newLogs];
+              await leadService.updateLead(
+                id,
+                { status: "Active", changeLog: updatedChangeLog },
+                authToken
+              );
+              restoredIds.add(id);
+              window.dispatchEvent(
+                new CustomEvent("crm:leadRestored", {
+                  detail: { lead: { ...originalLead, status: "Active" } },
+                })
+              );
+            }
           })
         );
         // Optimistically update the UI to remove restored leads
         setAllLeads((prevLeads) =>
           prevLeads.filter((lead) => !restoredIds.has(lead.id))
         );
+
+        // After bulk restore, navigate to leads page to show restored items
+        setTimeout(() => {
+          try {
+            window.location.href = "/leads";
+          } catch (e) {}
+        }, 300);
       } catch (err) {
         console.error("Error during bulk restore:", err);
         setError("Failed to restore some or all leads.");

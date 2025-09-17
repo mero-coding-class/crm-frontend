@@ -241,14 +241,61 @@ const DraggableRow = ({
             case "assigned_to":
               return (
                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  <input
-                    type="text"
-                    value={lead.assigned_to || lead.assigned_to_username || ""}
-                    onChange={(e) =>
-                      onAssignedToChange(lead._id, e.target.value)
-                    }
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  {/* Mirror AddLeadModal behavior: show loading, errors, and select for admins */}
+                  {lead._usersLoading ? (
+                    <div className="mt-1 p-1 text-sm">Loading users...</div>
+                  ) : Array.isArray(lead._users || []) &&
+                    (lead._users || []).length > 0 ? (
+                    <select
+                      value={
+                        lead.assigned_to || lead.assigned_to_username || ""
+                      }
+                      onChange={(e) =>
+                        onAssignedToChange(lead._id, e.target.value)
+                      }
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">(Unassigned)</option>
+                      {(lead._users || []).map((u) => {
+                        const label =
+                          u.username || u.name || u.email || String(u.id);
+                        const value = u.username || String(u.id);
+                        return (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  ) : (
+                    // Always render a select even if users list is empty so the UI
+                    // consistently shows a dropdown as requested.
+                    <select
+                      value={
+                        lead.assigned_to || lead.assigned_to_username || ""
+                      }
+                      onChange={(e) =>
+                        onAssignedToChange(lead._id, e.target.value)
+                      }
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">(Unassigned)</option>
+                      {(lead._users || []).map((u) => {
+                        const label =
+                          u.username || u.name || u.email || String(u.id);
+                        const value = u.username || String(u.id);
+                        return (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  )}
                 </td>
               );
             case "last_call":
