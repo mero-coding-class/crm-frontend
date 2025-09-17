@@ -58,6 +58,7 @@ const LeadTableDisplay = ({
 }) => {
   const [selectedLeads, setSelectedLeads] = useState(new Set());
   const [localRemarks, setLocalRemarks] = useState({});
+  const [savedRemarks, setSavedRemarks] = useState({});
   const [columns, setColumns] = useState(initialColumns);
   const [currentPage, setCurrentPage] = useState(1);
   const leadsPerPage = 20;
@@ -108,8 +109,14 @@ const LeadTableDisplay = ({
   }, [scrollDirection]);
 
   // Normalize lead data to avoid undefined and match backend field names
-  const normalizedLeads = leads.map((lead) => ({
+  // Ensure a stable, unique `_id` for each lead so per-row state (remarks,
+  // selection, change-log) doesn't collide when backend uses different id
+  // fields or omits them.
+  const normalizedLeads = leads.map((lead, _idx) => ({
     ...lead,
+    // guarantee a unique id: prefer _id, then id, then email/phone, then index
+    _id:
+      lead._id || lead.id || lead.email || lead.phone_number || `lead-${_idx}`,
     student_name: lead.student_name || "N/A",
     parents_name: lead.parents_name || "N/A",
     email: lead.email || "",
@@ -152,9 +159,38 @@ const LeadTableDisplay = ({
       initialRemarks[lead._id] = lead.remarks;
     });
     setLocalRemarks(initialRemarks);
+    setSavedRemarks(initialRemarks);
     setSelectedLeads(new Set());
     setCurrentPage(1);
   }, [leads]);
+
+  // Keep localRemarks in sync when a remark is updated elsewhere (or from server)
+  useEffect(() => {
+    const onRemarkUpdated = (e) => {
+      try {
+        const { id, remarks } = e?.detail || {};
+        if (!id) return;
+        // find matching row by backend id or by constructed _id
+        const match = normalizedLeads.find(
+          (l) => String(l.id) === String(id) || String(l._id) === String(id)
+        );
+        if (match) {
+          // update savedRemarks (server-confirmed) only; localRemarks remains
+          // the live editing buffer controlled by the textarea onChange.
+          setSavedRemarks((prev) => ({ ...prev, [match._id]: remarks }));
+        }
+      } catch (err) {
+        console.warn(
+          "LeadTableDisplay failed to handle crm:remarkUpdated",
+          err
+        );
+      }
+    };
+
+    window.addEventListener("crm:remarkUpdated", onRemarkUpdated);
+    return () =>
+      window.removeEventListener("crm:remarkUpdated", onRemarkUpdated);
+  }, [normalizedLeads]);
 
   // Mouse horizontal scroll
   // Smooth horizontal scroll on mouse move
@@ -324,44 +360,57 @@ const LeadTableDisplay = ({
                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
                     </th>
-                    {Object.entries(columns).map(
-                      ([key, { label, visible }]) =>
-                        visible && (
-                          <th
-                            key={key}
-                            className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                          >
-                            {label}
-                          </th>
-                        )
-                    )}
+                    {/** Compute visible column keys once so header and rows share the exact same order */}
+                    {(() => {
+                      const visibleEntries = Object.entries(columns).filter(
+                        ([, { visible }]) => visible
+                      );
+                      const visibleKeys = visibleEntries.map(([k]) => k);
+                      return visibleEntries.map(([key, { label }]) => (
+                        <th
+                          key={key}
+                          className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          {label}
+                        </th>
+                      ));
+                    })()}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {currentLeads.map((lead) => (
-                    <DraggableRow
-                      key={lead._id}
-                      lead={lead}
-                      columns={columns}
-                      selected={selectedLeads.has(lead._id)}
-                      onSelect={handleSelectRow}
-                      localRemarks={localRemarks}
-                      setLocalRemarks={setLocalRemarks}
-                      handleEdit={handleEdit}
-                      handleDelete={handleDelete}
-                      onStatusChange={onStatusChange}
-                      onSubStatusChange={onSubStatusChange}
-                      onRemarkChange={onRemarkChange}
-                      onRecentCallChange={onLastCallChange}
-                      onNextCallChange={onNextCallChange}
-                      onAgeChange={onAgeChange}
-                      onGradeChange={onGradeChange}
-                      onCourseDurationChange={onCourseDurationChange}
-                      onAssignedToChange={onAssignedToChange}
-                      authToken={authToken}
-                      changeLogService={changeLogService}
-                    />
-                  ))}
+                  {(() => {
+                    // Recompute the visible keys in the exact same order used above
+                    const visibleKeys = Object.entries(columns)
+                      .filter(([, { visible }]) => visible)
+                      .map(([k]) => k);
+
+                    return currentLeads.map((lead) => (
+                      <DraggableRow
+                        key={lead._id}
+                        lead={lead}
+                        columns={columns}
+                        columnOrder={visibleKeys}
+                        savedRemarks={savedRemarks}
+                        selected={selectedLeads.has(lead._id)}
+                        onSelect={handleSelectRow}
+                        localRemarks={localRemarks}
+                        setLocalRemarks={setLocalRemarks}
+                        handleEdit={handleEdit}
+                        handleDelete={handleDelete}
+                        onStatusChange={onStatusChange}
+                        onSubStatusChange={onSubStatusChange}
+                        onRemarkChange={onRemarkChange}
+                        onRecentCallChange={onLastCallChange}
+                        onNextCallChange={onNextCallChange}
+                        onAgeChange={onAgeChange}
+                        onGradeChange={onGradeChange}
+                        onCourseDurationChange={onCourseDurationChange}
+                        onAssignedToChange={onAssignedToChange}
+                        authToken={authToken}
+                        changeLogService={changeLogService}
+                      />
+                    ));
+                  })()}
                 </tbody>
               </table>
             </SortableContext>

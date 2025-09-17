@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
+import { BASE_URL } from "../config";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
 // Helper function to safely format a date string into YYYY-MM-DD format,
@@ -27,37 +29,112 @@ const getFormattedDate = (dateString) => {
 };
 
 const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
-  // Initialize formData with the lead data, ensuring all fields are present
-  const [formData, setFormData] = useState({
-    _id: lead._id,
-    studentName: lead.studentName || "",
-    parentsName: lead.parentsName || "",
-    email: lead.email || "",
-    phone: lead.phone || "",
-    contactWhatsapp: lead.contactWhatsapp || "",
-    age: lead.age || "",
-    grade: lead.grade || "",
-    course: lead.course || "", // Assuming course holds the course_name string
-    source: lead.source || "",
-    addDate: getFormattedDate(lead.addDate) || "", // Ensure addDate is formatted
-    recentCall: getFormattedDate(lead.recentCall) || "",
-    nextCall: getFormattedDate(lead.nextCall) || "",
-    status: lead.status || "New",
-    permanentAddress: lead.permanentAddress || "",
-    temporaryAddress: lead.temporaryAddress || "",
-    city: lead.city || "",
-    county: lead.county || "",
-    postCode: lead.postCode || "",
-    classType: lead.classType || "",
-    value: lead.value || "",
-    adsetName: lead.adsetName || "",
-    remarks: lead.remarks || "",
-    shift: lead.shift || "",
-    paymentType: lead.paymentType || "",
-    device: lead.device || "",
-    previousCodingExp: lead.previousCodingExp || "",
-    workshopBatch: lead.workshopBatch || "",
-  });
+  // Initialize formData as empty then normalize incoming `lead` prop into
+  // camelCase fields. This ensures the modal shows correct initial values
+  // whether `lead` uses snake_case (from API) or camelCase (internal).
+  const [formData, setFormData] = useState({});
+
+  const { user, authToken } = useAuth();
+
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  useEffect(() => {
+    if (!lead) return;
+
+    const normalized = {
+      // assigned fields (normalize both variants)
+      assigned_to: lead.assigned_to || lead.assigned_to_username || "",
+      assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
+      _id: lead._id || lead.id || String(lead.id || "") || `lead-${Date.now()}`,
+      studentName: lead.studentName || lead.student_name || lead.student || "",
+      parentsName:
+        lead.parentsName || lead.parents_name || lead.parent_name || "",
+      email: lead.email || lead.email || "",
+      phone: lead.phone || lead.phone_number || lead.phone_number || "",
+      contactWhatsapp:
+        lead.contactWhatsapp ||
+        lead.contact_whatsapp ||
+        lead.whatsapp_number ||
+        lead.whatsapp ||
+        "",
+      age: lead.age ?? "",
+      grade: lead.grade || "",
+      // Normalize course to the backend primary key (id) when possible.
+      // If lead.course is an object or numeric id, prefer that. Otherwise try to
+      // resolve from course_name using the supplied `courses` prop.
+      course: (() => {
+        if (lead.course && typeof lead.course === "object")
+          return lead.course.id || lead.course;
+        if (
+          lead.course &&
+          (typeof lead.course === "number" || /^\d+$/.test(String(lead.course)))
+        )
+          return lead.course;
+        if (lead.course_name && Array.isArray(courses)) {
+          const found = courses.find(
+            (c) =>
+              (c.course_name || c.name || "").toString().trim() ===
+              String(lead.course_name).trim()
+          );
+          return found ? found.id : "";
+        }
+        return "";
+      })(),
+      source: lead.source || "",
+      addDate:
+        getFormattedDate(lead.addDate || lead.add_date || lead.created_at) ||
+        "",
+      recentCall: getFormattedDate(lead.recentCall || lead.last_call) || "",
+      nextCall: getFormattedDate(lead.nextCall || lead.next_call) || "",
+      status: lead.status || lead.state || "New",
+      permanentAddress: lead.permanentAddress || lead.address_line_1 || "",
+      temporaryAddress: lead.temporaryAddress || lead.address_line_2 || "",
+      city: lead.city || "",
+      county: lead.county || "",
+      postCode: lead.postCode || lead.post_code || "",
+      classType: lead.classType || lead.class_type || "",
+      value: lead.value || "",
+      adsetName: lead.adsetName || lead.adset_name || "",
+      remarks: lead.remarks || lead.change_log || lead.changeLog || "",
+      shift: lead.shift || "",
+      paymentType: lead.paymentType || lead.payment_type || "",
+      device: lead.device || "",
+      previousCodingExp:
+        lead.previousCodingExp || lead.previous_coding_experience || "",
+      workshopBatch: lead.workshopBatch || lead.workshop_batch || "",
+    };
+
+    setFormData(normalized);
+  }, [lead]);
+
+  // Fetch users for the "Assigned To" dropdown if current user is admin/superadmin
+  useEffect(() => {
+    const role = (user?.role || "").toLowerCase();
+    if (!authToken || !["admin", "superadmin"].includes(role)) return;
+
+    let cancelled = false;
+    const fetchUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}/users/`, {
+          headers: { Authorization: `Token ${authToken}` },
+        });
+        if (!res.ok) throw new Error("Failed to fetch users");
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.results || [];
+        if (!cancelled) setUsers(list);
+      } catch (e) {
+        console.warn("LeadEditModal: could not fetch users", e);
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    fetchUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, user]);
 
   const modalRef = useRef(null);
 
@@ -342,12 +419,49 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
             >
               <option value="">Select a course</option>
               {courses.map((course) => (
-                <option key={course.id} value={course.course_name}>
+                <option key={course.id} value={String(course.id)}>
                   {course.course_name}
                 </option>
               ))}
             </select>
           </div>
+          {/* Assigned To (visible only to admin/superadmin) */}
+          {((user?.role || "").toString().toLowerCase() === "admin" ||
+            (user?.role || "").toString().toLowerCase() === "superadmin") && (
+            <div className="flex flex-col">
+              <label
+                htmlFor="assignedTo"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Assigned To
+              </label>
+              <select
+                id="assignedTo"
+                name="assigned_to"
+                value={
+                  formData.assigned_to || formData.assigned_to_username || ""
+                }
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    assigned_to: e.target.value,
+                    assigned_to_username: e.target.value,
+                  }))
+                }
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                <option value="">Unassigned</option>
+                {users.map((u) => (
+                  <option
+                    key={u.id || u.username}
+                    value={u.username || String(u.id)}
+                  >
+                    {u.username || u.email || String(u.id)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {/* Source */}
           <div className="flex flex-col">
             <label

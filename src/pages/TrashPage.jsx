@@ -77,7 +77,14 @@ const TrashPage = () => {
       if (resp.ok) {
         const json = await resp.json();
         if (Array.isArray(json.results)) {
-          const sortedData = json.results.sort((a, b) => b.id - a.id);
+          const sortedData = (json.results || []).slice().sort((a, b) => {
+            const ta = a.created_at || a.updated_at || null;
+            const tb = b.created_at || b.updated_at || null;
+            if (ta && tb) return new Date(tb) - new Date(ta);
+            if (a.id !== undefined && b.id !== undefined)
+              return Number(b.id) - Number(a.id);
+            return 0;
+          });
           setAllLeads(sortedData);
           // background fetch remaining pages
           (async () => {
@@ -103,7 +110,14 @@ const TrashPage = () => {
                   next = j.next;
                 }
                 setAllLeads(
-                  acc.slice(0, MAX_ACCUMULATE).sort((a, b) => b.id - a.id)
+                  (acc.slice(0, MAX_ACCUMULATE) || []).slice().sort((a, b) => {
+                    const ta = a.created_at || a.updated_at || null;
+                    const tb = b.created_at || b.updated_at || null;
+                    if (ta && tb) return new Date(tb) - new Date(ta);
+                    if (a.id !== undefined && b.id !== undefined)
+                      return Number(b.id) - Number(a.id);
+                    return 0;
+                  })
                 );
               } else {
                 const full = await fetch(baseUrl, {
@@ -138,9 +152,16 @@ const TrashPage = () => {
               if (full.ok) {
                 const all = await full.json();
                 setAllLeads(
-                  Array.isArray(all)
-                    ? all.sort((a, b) => b.id - a.id)
-                    : (all.results || []).sort((a, b) => b.id - a.id)
+                  ((Array.isArray(all) ? all : all.results || []) || [])
+                    .slice()
+                    .sort((a, b) => {
+                      const ta = a.created_at || a.updated_at || null;
+                      const tb = b.created_at || b.updated_at || null;
+                      if (ta && tb) return new Date(tb) - new Date(ta);
+                      if (a.id !== undefined && b.id !== undefined)
+                        return Number(b.id) - Number(a.id);
+                      return 0;
+                    })
                 );
               }
             } catch (e) {
@@ -170,6 +191,34 @@ const TrashPage = () => {
       fetchLeads();
     }
   }, [authToken, fetchLeads]);
+
+  // Listen for leads moved to trash elsewhere in the app and insert them at top
+  useEffect(() => {
+    const onLeadMoved = (e) => {
+      try {
+        const { leadId } = e?.detail || {};
+        if (!leadId || !authToken) return;
+        (async () => {
+          try {
+            const resp = await fetch(`${BASE_URL}/trash/${leadId}/`, {
+              headers: { Authorization: `Token ${authToken}` },
+            });
+            if (!resp.ok) return;
+            const lead = await resp.json();
+            setAllLeads((prev) => [lead, ...(prev || [])]);
+          } catch (err) {
+            console.warn("Failed to fetch moved-to-trash lead:", err);
+          }
+        })();
+      } catch (err) {
+        console.warn("TrashPage onLeadMoved error:", err);
+      }
+    };
+
+    window.addEventListener("crm:leadMovedToTrash", onLeadMoved);
+    return () =>
+      window.removeEventListener("crm:leadMovedToTrash", onLeadMoved);
+  }, [authToken]);
 
   const handleEditLead = useCallback((lead) => {
     setEditingLead(lead);

@@ -13,10 +13,12 @@ import {
 const DraggableRow = ({
   lead,
   columns,
+  columnOrder, // array of visible column keys in header order
   selected,
   onSelect,
   localRemarks,
   setLocalRemarks,
+  savedRemarks,
   handleEdit,
   handleDelete,
   onStatusChange,
@@ -81,8 +83,9 @@ const DraggableRow = ({
       </td>
 
       {/* Dynamic Column Rendering - no changes needed here */}
-      {Object.entries(columns).map(([key, column]) => {
-        if (!column.visible) return null;
+      {(columnOrder || Object.keys(columns)).map((key) => {
+        // support older prop shapes: if columnOrder not provided, skip invisible
+        if (!columnOrder && !columns[key].visible) return null;
 
         const renderCell = () => {
           switch (key) {
@@ -310,10 +313,18 @@ const DraggableRow = ({
               return (
                 <td className="px-3 py-4 text-sm text-gray-700">
                   <LeadLogDisplay
-                    leadId={lead._id}
+                    // Use backend id when available so the logs endpoint receives
+                    // the expected primary key. Fall back to _id otherwise.
+                    leadId={lead.id || lead._id}
                     authToken={authToken}
                     changeLogService={changeLogService}
-                    refreshKey={`${lead.status}|${lead.remarks}|${lead.last_call}|${lead.next_call}|${lead.age}|${lead.grade}`}
+                    // Use savedRemarks (server-confirmed) so logs refresh only
+                    // after the remark has been saved and acknowledged.
+                    refreshKey={`${lead.status}|${
+                      (savedRemarks && savedRemarks[lead._id]) || lead.remarks
+                    }|${lead.last_call}|${lead.next_call}|${lead.age}|${
+                      lead.grade
+                    }`}
                   />
                 </td>
               );

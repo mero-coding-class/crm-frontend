@@ -32,8 +32,12 @@ const CreateCourse = () => {
     const fetchCourses = async () => {
       setLoadingCourses(true);
       try {
-        const data = await courseService.getCourses(authToken);
-        setCourses(data || []);
+        let data = await courseService.getCourses(authToken);
+        // Some backends return a paginated object { results: [...] }
+        if (data && !Array.isArray(data) && Array.isArray(data.results)) {
+          data = data.results;
+        }
+        setCourses(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to fetch courses:", err);
       } finally {

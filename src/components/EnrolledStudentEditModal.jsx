@@ -98,7 +98,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         // keep full objects so we can resolve id -> name if needed
-        setCourseOptions(data || []);
+        // Normalize paginated responses: support { results: [] }
+        const list = Array.isArray(data) ? data : data?.results || [];
+        setCourseOptions(list);
       } catch (err) {
         console.error("Failed to fetch courses:", err);
       }

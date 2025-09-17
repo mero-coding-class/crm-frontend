@@ -11,6 +11,7 @@ import TopCoursesTable from "../components/dashboard/TopCoursesTable";
 
 // 👉 use your real API service
 import { leadService } from "../services/api";
+import { BASE_URL } from "../config";
 
 // Recharts
 import {
