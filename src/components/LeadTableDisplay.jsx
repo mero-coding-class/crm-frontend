@@ -25,14 +25,16 @@ const initialColumns = {
   course_name: { label: "Course", visible: true },
   course_duration: { label: "Course Duration", visible: true },
   assigned_to: { label: "Assigned To", visible: true },
+  lead_type: { label: "Lead Type", visible: false },
   class_type: { label: "Class Type", visible: false },
   shift: { label: "Shift", visible: false },
   previous_coding_experience: { label: "Previous Coding", visible: false },
   last_call: { label: "Last Call", visible: true },
   next_call: { label: "Next Call", visible: true },
   device: { label: "Device", visible: false },
-  status: { label: "Status", visible: true },
   remarks: { label: "Remarks", visible: true },
+  sub_status: { label: "Sub Status", visible: true },
+  status: { label: "Status", visible: true },
   change_log: { label: "Change Log", visible: true },
   actions: { label: "Actions", visible: true },
 };
@@ -43,6 +45,7 @@ const LeadTableDisplay = ({
   handleDelete,
   handleBulkDelete,
   onStatusChange,
+  onSubStatusChange,
   onRemarkChange,
   onRecentCallChange: onLastCallChange,
   onNextCallChange,
@@ -117,15 +120,29 @@ const LeadTableDisplay = ({
     source: lead.source || "",
     course_name: lead.course_name || "N/A",
     class_type: lead.class_type || "",
+    lead_type: lead.lead_type || lead.leadType || "",
     shift: lead.shift || "",
     last_call: lead.last_call || "",
     next_call: lead.next_call || "",
-    status: lead.status || "New",
+    status: lead.status || lead.status || "New",
+    // backend may use `substatus` or `sub_status`
+    sub_status: lead.sub_status || lead.substatus || "New",
     remarks: lead.remarks || "",
     previous_coding_experience: lead.previous_coding_experience || "",
     value: lead.value || "",
     device: lead.device || "",
     payment_type: lead.payment_type || "",
+    // school/college name normalize
+    school_college_name:
+      lead.school_college_name || lead.school_college_name || "",
+    // assigned username
+    assigned_to_username:
+      lead.assigned_to_username ||
+      lead.assigned_to ||
+      lead.assigned_to_username ||
+      "",
+    // ensure assigned_to is present for the editable input (prefer assigned_to, fallback to username)
+    assigned_to: lead.assigned_to || lead.assigned_to_username || "",
   }));
 
   // Initialize remarks and selection on lead changes
@@ -199,6 +216,17 @@ const LeadTableDisplay = ({
     (currentPage - 1) * leadsPerPage,
     currentPage * leadsPerPage
   );
+
+  // Scroll table container to top when currentPage changes
+  useEffect(() => {
+    try {
+      if (tableContainerRef.current) {
+        tableContainerRef.current.scrollTop = 0;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [currentPage]);
 
   const handleSelectRow = (leadId) => {
     setSelectedLeads((prev) => {
@@ -322,6 +350,7 @@ const LeadTableDisplay = ({
                       handleEdit={handleEdit}
                       handleDelete={handleDelete}
                       onStatusChange={onStatusChange}
+                      onSubStatusChange={onSubStatusChange}
                       onRemarkChange={onRemarkChange}
                       onRecentCallChange={onLastCallChange}
                       onNextCallChange={onNextCallChange}

@@ -110,6 +110,15 @@ export const leadService = {
       last_call: lead.last_call || "",
       next_call: lead.next_call || "",
       status: lead.status || "New",
+      // Ensure assigned fields from backend are passed through so the UI can show
+      // the username of the assigned user. Backend sometimes uses `assigned_to`
+      // or `assigned_to_username` — include both for safety.
+      assigned_to: lead.assigned_to || lead.assigned_to_username || "",
+      assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
+      // Pass through substatus and lead_type/school_college_name if backend provides them
+      substatus: lead.substatus || lead.sub_status || "New",
+      lead_type: lead.lead_type || lead.leadType || "",
+      school_college_name: lead.school_college_name || "",
       address_line_1: lead.address_line_1 || "",
       address_line_2: lead.address_line_2 || "",
       city: lead.city || "",

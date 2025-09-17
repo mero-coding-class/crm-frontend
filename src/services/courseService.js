@@ -1,33 +1,79 @@
-import { API_BASE, apiJson } from "./api";
+import { BASE_URL } from "../config";
+
+const handleJsonResponse = async (response) => {
+  if (!response.ok) {
+    let msg = `HTTP ${response.status} ${response.statusText}`;
+    try {
+      const d = await response.json();
+      msg = d.detail || JSON.stringify(d);
+    } catch (e) {
+      try {
+        msg = await response.text();
+      } catch {}
+    }
+    throw new Error(msg);
+  }
+  return response.json();
+};
 
 export const courseService = {
   async getCourses(authToken) {
-    console.log("Fetching courses from:", `${API_BASE}/api/courses/`);
-    const courses = await apiJson(`${API_BASE}/api/courses/`, { authToken });
-    console.log("Course data received:", courses);
-    return courses;
+    if (!authToken) throw new Error("Authentication token not found.");
+    const url = `${BASE_URL}/courses/`;
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+    });
+    return handleJsonResponse(res);
   },
 
   async createCourse(name, authToken) {
-    return apiJson(`${API_BASE}/api/courses/`, {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const url = `${BASE_URL}/courses/`;
+    const res = await fetch(url, {
       method: "POST",
-      authToken,
-      body: { course_name: name },
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ course_name: name }),
+      credentials: "include",
     });
+    return handleJsonResponse(res);
   },
 
   async updateCourse(id, name, authToken) {
-    return apiJson(`${API_BASE}/api/courses/${id}/`, {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const url = `${BASE_URL}/courses/${id}/`;
+    const res = await fetch(url, {
       method: "PUT",
-      authToken,
-      body: { course_name: name },
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ course_name: name }),
+      credentials: "include",
     });
+    return handleJsonResponse(res);
   },
 
   async deleteCourse(id, authToken) {
-    return apiJson(`${API_BASE}/api/courses/${id}/`, {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const url = `${BASE_URL}/courses/${id}/`;
+    const res = await fetch(url, {
       method: "DELETE",
-      authToken,
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
     });
+    // Some delete endpoints return 204 No Content
+    if (res.status === 204) return { ok: true };
+    return handleJsonResponse(res);
   },
 };

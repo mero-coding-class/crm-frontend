@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Loader from "../components/common/Loader";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import ReportDocument from "../components/ReportDocument";
+import DelayedLoader from "../components/common/DelayedLoader";
 import { useAuth } from "../context/AuthContext.jsx";
 import { leadService } from "../services/api";
 
@@ -165,7 +166,8 @@ const Reports = () => {
     }
   }, [allLeads, filteredReportData]);
 
-  if (loading) return <Loader />;
+  if (loading)
+    return <DelayedLoader message="Loading reports..." minMs={2000} />;
   if (error)
     return (
       <div className="text-red-500 p-4 bg-red-100 rounded-md">

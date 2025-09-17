@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import Loader from "../components/common/Loader";
+import DelayedLoader from "../components/common/DelayedLoader";
 
 import StatCard from "../components/dashboard/StatCard";
 import LatestLeadsTable from "../components/dashboard/LatestLeadsTable";
@@ -101,15 +102,12 @@ const Dashboard = () => {
         }
 
         // Attempt to fetch courses with or without Authorization depending on availability
-        const res = await fetch(
-          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/courses/",
-          {
-            method: "GET",
-            headers,
-            // only include credentials when auth token present to avoid CORS surprises
-            credentials: authToken ? "include" : "same-origin",
-          }
-        );
+        const res = await fetch(`${BASE_URL}/courses/`, {
+          method: "GET",
+          headers,
+          // only include credentials when auth token present to avoid CORS surprises
+          credentials: authToken ? "include" : "same-origin",
+        });
 
         if (!res.ok) {
           throw new Error(`Failed to fetch courses: ${res.status}`);
@@ -134,14 +132,11 @@ const Dashboard = () => {
         );
         // Also try to fetch enrollments to build fallback top-courses if needed
         try {
-          const enrRes = await fetch(
-            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
-            {
-              method: "GET",
-              headers,
-              credentials: authToken ? "include" : "same-origin",
-            }
-          );
+          const enrRes = await fetch(`${BASE_URL}/enrollments/`, {
+            method: "GET",
+            headers,
+            credentials: authToken ? "include" : "same-origin",
+          });
           if (enrRes.ok) {
             const enrData = await enrRes.json();
             // keep the raw enrollments for dashboard aggregates (enrolled students, revenue)
@@ -513,7 +508,8 @@ const Dashboard = () => {
     };
   }, [allLeads, coursesMap, enrollments, enrollmentsTrendData]);
 
-  if (loading) return <Loader />;
+  if (loading)
+    return <DelayedLoader message="Loading dashboard..." minMs={2000} />;
 
   if (error) {
     return (

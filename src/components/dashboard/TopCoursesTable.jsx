@@ -33,14 +33,11 @@ const TopCoursesTable = ({
       if (authToken) headers.Authorization = `Token ${authToken}`;
 
       try {
-        const res = await fetch(
-          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/courses/",
-          {
-            method: "GET",
-            headers,
-            credentials: authToken ? "include" : "same-origin",
-          }
-        );
+        const res = await fetch(`${BASE_URL}/courses/`, {
+          method: "GET",
+          headers,
+          credentials: authToken ? "include" : "same-origin",
+        });
         if (!res.ok) throw new Error(`Failed to fetch courses: ${res.status}`);
         const data = await res.json();
         if (!mounted) return;
@@ -57,14 +54,11 @@ const TopCoursesTable = ({
 
       // Fallback: try enrollments endpoint to extract course_name fields
       try {
-        const enrRes = await fetch(
-          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
-          {
-            method: "GET",
-            headers,
-            credentials: authToken ? "include" : "same-origin",
-          }
-        );
+        const enrRes = await fetch(`${BASE_URL}/enrollments/`, {
+          method: "GET",
+          headers,
+          credentials: authToken ? "include" : "same-origin",
+        });
         if (!enrRes.ok)
           throw new Error(`Failed to fetch enrollments: ${enrRes.status}`);
         const enrData = await enrRes.json();

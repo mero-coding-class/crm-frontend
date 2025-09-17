@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import Papa from "papaparse";
 import { leadService } from "../services/api";
+import { BASE_URL } from "../config";
 
 // ✅ Header mapping dictionary
 const headerMapping = {
@@ -19,6 +20,15 @@ const headerMapping = {
   Source: "source",
   "Lead Source": "source",
   "Class Type": "class_type",
+  // New fields
+  "Assigned To": "assigned_to",
+  "Assigned To Username": "assigned_to_username",
+  Status: "status",
+  "Sub Status": "substatus",
+  SubStatus: "substatus",
+  "Lead Type": "lead_type",
+  "School/College Name": "school_college_name",
+  "School College": "school_college_name",
 };
 
 // ✅ Backend → Frontend key normalization
@@ -53,50 +63,260 @@ const mapRowToLead = (row) => {
   });
 
   // ✅ Provide defaults for required fields
-  if (!leadBackend.source) {
-    leadBackend.source = "Other"; // must match allowed backend choice
-    leadFrontend.source = "Other";
+  // Validate required fields. Backend expects these fields; skip rows that
+  // are missing required data and continue with others. Default status to
+  // 'Active' if not provided (backend allows Active/Converted/Lost).
+  const required = [
+    "student_name",
+    "parents_name",
+    "email",
+    "phone_number",
+    "whatsapp_number",
+    "age",
+    "grade",
+    "source",
+    "class_type",
+    "lead_type",
+  ];
+
+  const missing = required.filter((k) => !leadBackend[k]);
+  if (missing.length > 0) {
+    // Mark this row as invalid by returning an object with an `error` key
+    return {
+      leadBackend,
+      leadFrontend,
+      error: `Missing required fields: ${missing.join(", ")}`,
+    };
   }
-  if (!leadBackend.class_type) {
-    leadBackend.class_type = "General"; // must match allowed backend choice
-    leadFrontend.classType = "General";
-  }
+
+  // Default status to Active if absent
+  if (!leadBackend.status) leadBackend.status = "Active";
 
   return { leadBackend, leadFrontend };
 };
 
 const ImportCsvButton = ({ authToken, onImported }) => {
-  const handleFileChange = (e) => {
+  const [importing, setImporting] = useState(false);
+  // progress percent removed per user request; keep counts
+  const [progress, setProgress] = useState(0); // retained internally for some flows but UI bar will be removed
+  const [statusMessage, setStatusMessage] = useState("");
+  const [importedCount, setImportedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const abortControllerRef = useRef(null);
+  const isCancelledRef = useRef(false);
+
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // initialize progress UI
+    setImporting(true);
+    setProgress(0);
+    setStatusMessage("Attempting backend import...");
 
+    // First preference: upload the CSV file to the backend import endpoint
+    const backendImportUrl = `${BASE_URL}/leads/import-csv/`;
+
+    // create an AbortController to allow cancelling the backend request
+    abortControllerRef.current = new AbortController();
+    isCancelledRef.current = false;
+
+    if (authToken) {
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const resp = await fetch(backendImportUrl, {
+          method: "POST",
+          headers: { Authorization: `Token ${authToken}` },
+          body: formData,
+          signal: abortControllerRef.current.signal,
+        });
+
+        if (resp.ok) {
+          // Expect backend to return created leads or a summary
+          let body = null;
+          try {
+            body = await resp.json();
+          } catch (e) {
+            console.warn("Backend returned non-JSON response for import");
+          }
+
+          console.log("✅ Backend CSV import succeeded", body);
+          const createdCount =
+            (body && Array.isArray(body.created) && body.created.length) || 0;
+          setImportedCount(createdCount);
+          setTotalCount(createdCount);
+          setProgress(100);
+          setStatusMessage("Import successful (server-side)");
+          setImporting(false);
+
+          // If backend returns created leads, normalize them and call onImported
+          if (body && Array.isArray(body.created)) {
+            const created = body.created.map((c) => ({
+              ...c,
+              _id: c.id || c._id,
+            }));
+            if (onImported) onImported(created);
+            // Dispatch a global event so other parts of the app can listen and refresh
+            try {
+              window.dispatchEvent(
+                new CustomEvent("crm:imported", { detail: { created } })
+              );
+            } catch (e) {
+              console.warn("Failed to dispatch crm:imported event", e);
+            }
+          }
+          return;
+        }
+
+        // If backend returns non-OK, read the response body and log it
+        try {
+          const errBody = await resp.json();
+          console.error("Backend CSV import error body:", errBody);
+        } catch (e) {
+          try {
+            const txt = await resp.text();
+            console.error("Backend CSV import error text:", txt);
+          } catch (e2) {
+            console.error("Backend CSV import failed with status", resp.status);
+          }
+        }
+
+        console.warn(
+          "Backend CSV import failed, falling back to client-side import",
+          resp.status
+        );
+        setStatusMessage(
+          "Backend import failed; falling back to client-side import..."
+        );
+        setProgress(10);
+      } catch (err) {
+        console.warn("Backend import attempt failed:", err);
+        setStatusMessage(
+          "Backend import attempt failed; using client-side fallback"
+        );
+        setProgress(10);
+      }
+    }
+
+    // Fallback: parse and create each row client-side (existing behavior)
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         const mappedRows = results.data.map(mapRowToLead);
 
+        // initialize counts
+        const total = mappedRows.length;
+        setTotalCount(total);
+        setImportedCount(0);
+
         const createdLeads = [];
-        for (const { leadBackend, leadFrontend } of mappedRows) {
+        const skippedRows = [];
+        // const total initialized above
+        for (let i = 0; i < mappedRows.length; i++) {
+          if (isCancelledRef.current) break;
+          const row = mappedRows[i];
+          // update progress per-row (based on current index)
+          setProgress(Math.round(((i + 1) / Math.max(1, total)) * 100));
+
+          if (row.error) {
+            console.warn(`Skipping row ${i + 1}: ${row.error}`);
+            skippedRows.push({ row: i + 1, reason: row.error });
+            continue;
+          }
+
+          const { leadBackend, leadFrontend } = row;
           try {
-            const created = await leadService.addLead(leadBackend, authToken);
-            // ✅ merge backend id into frontend object
+            // Prefer using leadService which wraps BASE_URL, but fall back to
+            // the explicit leads endpoint you supplied if needed.
+            let created = null;
+            try {
+              created = await leadService.addLead(leadBackend, authToken);
+            } catch (svcErr) {
+              console.warn(
+                "leadService.addLead failed, trying direct POST:",
+                svcErr
+              );
+              if (authToken) {
+                const resp = await fetch(`${BASE_URL}/leads/`, {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Token ${authToken}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(leadBackend),
+                });
+                if (!resp.ok) {
+                  const txt = await resp.text();
+                  throw new Error(`Direct POST failed: ${resp.status} ${txt}`);
+                }
+                created = await resp.json();
+              } else {
+                throw svcErr;
+              }
+            }
+
+            // merge backend id into frontend object
             createdLeads.push({
               ...leadFrontend,
               _id: created.id || created._id,
             });
+            setImportedCount((c) => c + 1);
           } catch (err) {
-            console.error("❌ Failed to create lead:", err);
+            console.error(`❌ Failed to create row ${i + 1}:`, err);
+            skippedRows.push({
+              row: i + 1,
+              reason: err.message || String(err),
+            });
           }
         }
+
+        // final progress and state
+        if (isCancelledRef.current) {
+          setStatusMessage(
+            `Import cancelled. Created: ${createdLeads.length}, Skipped: ${skippedRows.length}`
+          );
+        } else {
+          setStatusMessage(
+            `Import finished. Created: ${createdLeads.length}, Skipped: ${skippedRows.length}`
+          );
+        }
+        setProgress(100);
+        setImporting(false);
 
         if (onImported && createdLeads.length > 0) {
           onImported(createdLeads);
         }
+        // Dispatch global event so pages can auto-refresh (only if created leads exist)
+        try {
+          if (createdLeads && createdLeads.length > 0) {
+            window.dispatchEvent(
+              new CustomEvent("crm:imported", {
+                detail: { created: createdLeads },
+              })
+            );
+          }
+        } catch (e) {
+          console.warn("Failed to dispatch crm:imported event", e);
+        }
 
-        console.log("✅ CSV import finished");
+        console.log(
+          `✅ CSV import finished. Created: ${createdLeads.length}, Skipped: ${skippedRows.length}`
+        );
+        if (skippedRows.length) console.table(skippedRows);
       },
     });
+  };
+
+  const cancelImport = () => {
+    isCancelledRef.current = true;
+    try {
+      abortControllerRef.current?.abort();
+    } catch (e) {}
+    setImporting(false);
+    setStatusMessage("Import cancelled by user");
   };
 
   return (
@@ -114,6 +334,24 @@ const ImportCsvButton = ({ authToken, onImported }) => {
       >
         Import CSV
       </label>
+      {importing && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Imported {importedCount} / {totalCount}
+            </div>
+            <button
+              onClick={cancelImport}
+              className="text-sm text-red-600 hover:underline ml-2"
+            >
+              Cancel
+            </button>
+          </div>
+          {statusMessage && (
+            <div className="text-sm text-gray-600 mt-1">{statusMessage}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
