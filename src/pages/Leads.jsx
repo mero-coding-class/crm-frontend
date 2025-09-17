@@ -5,36 +5,41 @@ import LeadEditModal from "../components/LeadEditModal";
 import AddLeadModal from "../components/AddLeadModal";
 import ImportCsvButton from "../components/ImportCsvButton";
 import Toast from "../components/common/Toast";
-
+import scheduleBackground from "../utils/backgroundScheduler";
+import { BASE_URL } from "../config";
+import DelayedLoader from "../components/common/DelayedLoader";
+import {
+  leadService,
+  courseService,
+  enrollmentService,
+  changeLogService,
+} from "../services/api";
 import {
   PlusIcon,
+  ArrowDownTrayIcon,
   ArrowPathIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
-import { leadService, courseService, changeLogService } from "../services/api";
-
 const Leads = () => {
-  const { authToken } = useAuth();
+  const { authToken, user } = useAuth();
 
+  // core state
   const [allLeads, setAllLeads] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [courses, setCourses] = useState([]);
   const [toast, setToast] = useState({
     show: false,
     message: "",
     type: "success",
   });
-
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingLead, setEditingLead] = useState(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
+  const [editingLead, setEditingLead] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Active");
+  const [filterStatus, setFilterStatus] = useState("All");
 
   const [filterAge, setFilterAge] = useState("");
   const [filterGrade, setFilterGrade] = useState("");
@@ -42,24 +47,23 @@ const Leads = () => {
   const [filterClassType, setFilterClassType] = useState("Class");
   const [filterShift, setFilterShift] = useState("Shift");
   const [filterDevice, setFilterDevice] = useState("Device");
+  const [filterSubStatus, setFilterSubStatus] = useState("SubStatus");
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("CodingExp");
   const [showFilters, setShowFilters] = useState(false);
 
-  const statusOptions = [
-    "All",
-    "New",
-    "Open",
-    "Average",
-    "Followup",
-    "Interested",
-    "inProgress",
-    "Active",
-    "Converted",
-    "Lost",
-    "Junk",
-  ];
+  const statusOptions = ["All", "Active", "Converted", "Lost"];
 
   const classTypeOptions = ["Class", "Online", "Physical"];
+  const subStatusOptions = [
+    "SubStatus",
+    "New",
+    "Open",
+    "Followup",
+    "inProgress",
+    "Average",
+    "Interested",
+    "Junk",
+  ];
   const shiftOptions = [
     "Shift",
     "7 A.M. - 9 A.M.",
@@ -103,6 +107,33 @@ const Leads = () => {
       // Process leads to ensure course_name is set
       const processedLeads = leadsData.map((lead) => ({
         ...lead,
+        // backend may use `substatus` (no underscore) or `sub_status` — normalize to `sub_status` for UI
+        sub_status: lead.sub_status || lead.substatus || "New",
+        // normalize assigned username and assigned_to
+        assigned_to:
+          lead.assigned_to ||
+          lead.assigned_to_username ||
+          lead.assigned_to ||
+          "",
+        assigned_to_username:
+          lead.assigned_to_username || lead.assigned_to || "",
+        // normalized variants for reliable comparisons
+        assigned_to_normalized: (
+          lead.assigned_to ||
+          lead.assigned_to_username ||
+          ""
+        )
+          .toString()
+          .trim()
+          .toLowerCase(),
+        assigned_to_username_normalized: (
+          lead.assigned_to_username ||
+          lead.assigned_to ||
+          ""
+        )
+          .toString()
+          .trim()
+          .toLowerCase(),
         course_name: lead.course_name || "N/A", // Ensure course_name is always set
       }));
 
@@ -115,7 +146,7 @@ const Leads = () => {
     }
   }, [authToken]);
 
-  // Load leads & courses when component mounts
+  // Load leads & courses when component mounts: fetch first page quickly then load rest in background
   useEffect(() => {
     if (!authToken) {
       setError("You are not logged in. Please log in to view leads.");
@@ -123,94 +154,129 @@ const Leads = () => {
       return;
     }
 
-    const run = async () => {
+    let cancelled = false;
+    const baseUrl = `${BASE_URL}/leads/`;
+
+    const fetchFastThenFull = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        // First fetch courses
+        // fetch courses first
         const coursesData = await courseService.getCourses(authToken);
-        setCourses(coursesData);
+        if (!cancelled) setCourses(coursesData);
 
-        // Then fetch leads
-        const leadsData = await leadService.getLeads(authToken);
-        console.log("Raw leads data:", leadsData);
-        console.log("Available courses:", coursesData);
-
-        // Ensure each lead has the correct course_name and ID
-        const processedLeads = leadsData.map((lead) => {
-          // Log the lead's course information
-          console.log("Processing lead course info:", {
-            id: lead.id,
-            course: lead.course,
-            course_name: lead.course_name,
-          });
-
-          // First ensure we have consistent ID handling
-          const normalizedLead = {
-            ...lead,
-            id: lead.id || parseInt(lead._id),
-            _id: lead.id?.toString() || lead._id,
-          };
-
-          // If we have a course ID, try to find the matching course
-          if (lead.course) {
-            const matchingCourse = coursesData.find(
-              (c) => c.id === lead.course
-            );
-            console.log("Found matching course:", matchingCourse);
-
-            if (matchingCourse) {
-              return {
-                ...normalizedLead,
-                course_name:
-                  matchingCourse.course_name ||
-                  matchingCourse.name ||
-                  lead.course_name ||
-                  "N/A",
-              };
-            }
-          }
-
-          // Keep the original course_name if it exists
-          if (lead.course_name) {
-            console.log("Using existing course_name:", lead.course_name);
-            return normalizedLead;
-          }
-
-          // If we have a course ID, try to find its name
-          if (lead.course) {
-            console.log("Looking for course with ID:", lead.course);
-            const matchingCourse = coursesData.find(
-              (c) =>
-                c.id ===
-                (typeof lead.course === "string"
-                  ? parseInt(lead.course)
-                  : lead.course)
-            );
-            console.log("Found matching course:", matchingCourse);
-            if (matchingCourse) {
-              return {
-                ...normalizedLead,
-                course_name:
-                  matchingCourse.course_name || lead.course_name || "N/A",
-              };
-            }
-          }
-
-          // Keep any existing course_name or use N/A as fallback
-          return {
-            ...normalizedLead,
-            course_name: lead.course_name || "N/A",
-          };
+        const fastUrl = `${baseUrl}?page=1&page_size=20`;
+        const resp = await fetch(fastUrl, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
         });
 
-        setAllLeads(processedLeads);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (Array.isArray(json.results)) {
+            if (!cancelled) setAllLeads(json.results);
+            // background fetch remaining pages
+            (async () => {
+              try {
+                if (json.next) {
+                  let acc = [...json.results];
+                  let next = json.next;
+                  const MAX_ACCUMULATE = 2000; // protect the client from huge loads
+                  while (next) {
+                    const r = await fetch(next, {
+                      headers: { Authorization: `Token ${authToken}` },
+                      credentials: "include",
+                    });
+                    if (!r.ok) break;
+                    const j = await r.json();
+                    acc = acc.concat(j.results || []);
+                    // stop accumulating very large datasets to avoid freezing the UI
+                    if (acc.length >= MAX_ACCUMULATE) {
+                      console.warn(
+                        "Leads background fetch: reached accumulate cap, stopping further background fetch to avoid UI freeze"
+                      );
+                      break;
+                    }
+                    next = j.next;
+                  }
+                  if (!cancelled) setAllLeads(acc.slice(0, MAX_ACCUMULATE));
+                } else {
+                  const full = await fetch(baseUrl, {
+                    headers: { Authorization: `Token ${authToken}` },
+                    credentials: "include",
+                  });
+                  if (full.ok) {
+                    const all = await full.json();
+                    if (!cancelled)
+                      setAllLeads(Array.isArray(all) ? all : all.results || []);
+                  }
+                }
+              } catch (e) {
+                console.warn("Background leads fetch failed", e);
+              }
+            })();
+            return;
+          }
+
+          if (Array.isArray(json)) {
+            if (!cancelled) setAllLeads(json.slice(0, 20));
+            (async () => {
+              try {
+                const full = await fetch(baseUrl, {
+                  headers: { Authorization: `Token ${authToken}` },
+                  credentials: "include",
+                });
+                if (full.ok) {
+                  const all = await full.json();
+                  if (!cancelled)
+                    setAllLeads(Array.isArray(all) ? all : all.results || []);
+                }
+              } catch (e) {
+                console.warn("Background full leads fetch failed", e);
+              }
+            })();
+            return;
+          }
+        }
+
+        // fallback full fetch
+        const fallback = await fetch(baseUrl, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (fallback.ok) {
+          const data = await fallback.json();
+          if (!cancelled)
+            setAllLeads(Array.isArray(data) ? data : data.results || []);
+        }
       } catch (err) {
-        setError(err.message || "Failed to fetch data");
+        console.error(err);
+        if (!cancelled) setError(err.message || "Failed to load leads");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    run();
+    fetchFastThenFull();
+
+    // listen for global import events to refresh leads automatically
+    const importDebounceRef = { current: null };
+    const onImported = (e) => {
+      console.info("Leads.jsx detected crm:imported event, scheduling refresh");
+      // debounce to prevent overlapping fetches when multiple events fire
+      if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
+      importDebounceRef.current = setTimeout(() => {
+        handleRefresh();
+        importDebounceRef.current = null;
+      }, 700);
+    };
+    window.addEventListener("crm:imported", onImported);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("crm:imported", onImported);
+      if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
+    };
   }, [authToken]);
 
   const handleOpenAddModal = useCallback(() => setIsAddModalOpen(true), []);
@@ -287,32 +353,25 @@ const Leads = () => {
 
         // Handle special cases after UI update
         if (newLeadData.status === "Converted") {
-          await fetch(
-            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Token ${authToken}`,
-              },
-              body: JSON.stringify(newLeadData),
-            }
-          );
-        } else if (
-          newLeadData.status === "Lost" ||
-          newLeadData.status === "Junk"
-        ) {
-          await fetch(
-            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/trash/",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Token ${authToken}`,
-              },
-              body: JSON.stringify(newLeadData),
-            }
-          );
+          await fetch(`${BASE_URL}/enrollments/`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Token ${authToken}`,
+            },
+            body: JSON.stringify(newLeadData),
+          });
+        } else if (newLeadData.status === "Lost") {
+          // Backend accepts updating a lead to 'Lost' via updateLead.
+          try {
+            await leadService.updateLead(
+              newLeadData._id || newLeadData.id,
+              { status: "Lost" },
+              authToken
+            );
+          } catch (e) {
+            console.warn("Failed to mark newly created lead as Lost:", e);
+          }
         }
 
         // Update filters and close modal
@@ -381,20 +440,55 @@ const Leads = () => {
     async (leadId, fieldName, newValue) => {
       try {
         // Special behavior for status transitions
-        if (
-          fieldName === "status" &&
-          (newValue === "Converted" ||
-            newValue === "Lost" ||
-            newValue === "Junk")
-        ) {
+        if (fieldName === "status") {
+          // Update the lead status first
           await leadService.updateLead(
             leadId,
             { [fieldName]: newValue },
             authToken
           );
-          setAllLeads((prevLeads) =>
-            prevLeads.filter((lead) => lead._id !== leadId)
-          );
+
+          // Remove from local list for statuses that should no longer appear
+          if (newValue === "Lost" || newValue === "Converted") {
+            setAllLeads((prevLeads) =>
+              prevLeads.filter((lead) => lead._id !== leadId)
+            );
+          }
+
+          // If the lead was converted, create an enrollment record
+          if (newValue === "Converted") {
+            try {
+              // Try to find the lead object either in local state or by fetching
+              const leadObj = allLeads.find((l) => l._id === leadId) || {};
+              // Build enrollment payload expected by backend
+              const enrollmentPayload = {
+                lead: leadObj.id || leadId,
+                course: leadObj.course || leadObj.course_name || null,
+                total_payment: leadObj.value || null,
+                first_installment: null,
+                second_installment: null,
+                third_installment: null,
+                batchname: "",
+                last_pay_date: null,
+                payment_completed: false,
+                starting_date: null,
+                assigned_teacher: "",
+                // allow backend to infer created_by from auth
+              };
+
+              await enrollmentService.createEnrollment(
+                enrollmentPayload,
+                authToken
+              );
+              console.log("Enrollment created for lead", leadId);
+            } catch (enrollErr) {
+              console.error(
+                "Failed to create enrollment for converted lead:",
+                enrollErr
+              );
+            }
+          }
+
           return;
         }
 
@@ -432,6 +526,11 @@ const Leads = () => {
     (leadId, newStatus) => updateLeadField(leadId, "status", newStatus),
     [updateLeadField]
   );
+  const handleSubStatusChange = useCallback(
+    (leadId, newSubStatus) =>
+      updateLeadField(leadId, "substatus", newSubStatus),
+    [updateLeadField]
+  );
   const handleRemarkChange = useCallback(
     (leadId, newRemark) => updateLeadField(leadId, "remarks", newRemark),
     [updateLeadField]
@@ -467,7 +566,119 @@ const Leads = () => {
 
   const handleExport = useCallback(async () => {
     try {
-      const blob = await leadService.exportLeads(authToken);
+      // Preferred: ask backend to build and return the CSV file
+      if (authToken) {
+        try {
+          const backendExportUrl = `${BASE_URL}/leads/export-csv/export`;
+          const resp = await fetch(backendExportUrl, {
+            headers: { Authorization: `Token ${authToken}` },
+          });
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "leads-backend-export.csv";
+            a.click();
+            window.URL.revokeObjectURL(url);
+            return; // done
+          }
+          console.warn(
+            "Backend export failed, falling back to client-side export",
+            resp.status
+          );
+        } catch (e) {
+          console.warn("Backend export attempt failed:", e);
+          // fall through to client-side export
+        }
+      }
+
+      // Fallback: build CSV client-side so we can include all fields
+      const rows = allLeads || [];
+      if (!rows.length) {
+        setError("No leads to export");
+        return;
+      }
+
+      const headers = [
+        "id",
+        "student_name",
+        "parents_name",
+        "email",
+        "phone_number",
+        "whatsapp_number",
+        "age",
+        "grade",
+        "source",
+        "course_name",
+        "course",
+        "course_duration",
+        "class_type",
+        "shift",
+        "status",
+        "substatus",
+        "assigned_to",
+        "assigned_to_username",
+        "lead_type",
+        "school_college_name",
+        "previous_coding_experience",
+        "value",
+        "adset_name",
+        "remarks",
+        "payment_type",
+        "device",
+        "workshop_batch",
+        "address_line_1",
+        "address_line_2",
+        "city",
+        "county",
+        "post_code",
+        "add_date",
+        "created_by",
+        "last_call",
+        "next_call",
+      ];
+
+      const escape = (v) => {
+        if (v === null || v === undefined) return "";
+        return String(v).includes(",") || String(v).includes("\n")
+          ? `"${String(v).replace(/"/g, '""')}"`
+          : String(v);
+      };
+
+      const csv = [headers.join(",")]
+        .concat(
+          rows.map((r) =>
+            headers
+              .map((h) => {
+                switch (h) {
+                  case "substatus":
+                    return r.substatus || r.sub_status || "";
+                  case "assigned_to":
+                    return r.assigned_to || "";
+                  case "assigned_to_username":
+                    return r.assigned_to_username || r.assigned_to || "";
+                  case "course_duration":
+                    return r.course_duration || r.courseDuration || "";
+                  case "previous_coding_experience":
+                    return (
+                      r.previous_coding_experience || r.previousCodingExp || ""
+                    );
+                  case "post_code":
+                    return r.post_code || r.postCode || "";
+                  case "created_by":
+                    return r.created_by || r.assigned_to || r.createdBy || "";
+                  default:
+                    return r[h] ?? "";
+                }
+              })
+              .map(escape)
+              .join(",")
+          )
+        )
+        .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -477,7 +688,7 @@ const Leads = () => {
     } catch (err) {
       setError(err.message || "Failed to export CSV");
     }
-  }, [authToken]);
+  }, [authToken, allLeads]);
   const [leads, setLeads] = useState([]);
 
   const handleFieldChange = (id, field, value) => {
@@ -490,7 +701,8 @@ const Leads = () => {
     async (leadId) => {
       if (window.confirm("Are you sure you want to move this lead to trash?")) {
         try {
-          await leadService.updateLead(leadId, { status: "Junk" }, authToken);
+          // Mark the lead as 'Lost' using the update endpoint (backend accepts "Lost").
+          await leadService.updateLead(leadId, { status: "Lost" }, authToken);
           setAllLeads((prevLeads) =>
             prevLeads.filter((lead) => lead._id !== leadId)
           );
@@ -505,9 +717,10 @@ const Leads = () => {
   const handleBulkDelete = useCallback(
     async (leadIds) => {
       try {
+        // Mark each selected lead as 'Lost' via the update endpoint.
         await Promise.all(
           leadIds.map((id) =>
-            leadService.updateLead(id, { status: "Junk" }, authToken)
+            leadService.updateLead(id, { status: "Lost" }, authToken)
           )
         );
         // Remove the leads from the local state
@@ -523,12 +736,41 @@ const Leads = () => {
 
   // Filtering
   const displayedLeads = useMemo(() => {
-    let currentLeads = allLeads.filter(
-      (lead) =>
-        lead.status !== "Converted" &&
-        lead.status !== "Lost" &&
-        lead.status !== "Junk"
-    );
+    // Determine admin status
+    const role = user?.role?.toString().toLowerCase();
+    const isAdmin =
+      user &&
+      (role === "admin" ||
+        role === "super admin" ||
+        role === "superadmin" ||
+        role === "super-admin");
+
+    // Admins/super-admins should see all leads by default
+    // For non-admins, hide Converted/Lost/Junk except when the lead is assigned to the current user
+    let currentLeads = [...allLeads];
+    if (!isAdmin) {
+      const username =
+        (user && user.username) || localStorage.getItem("username") || "";
+      const normalizedUsername = String(username).trim().toLowerCase();
+      currentLeads = allLeads.filter((lead) => {
+        // consider the lead assigned to current user if normalized matches
+        const aNorm = (lead.assigned_to_normalized || "")
+          .toString()
+          .trim()
+          .toLowerCase();
+        const auNorm = (lead.assigned_to_username_normalized || "")
+          .toString()
+          .trim()
+          .toLowerCase();
+        const isAssigned =
+          normalizedUsername &&
+          (aNorm === normalizedUsername || auNorm === normalizedUsername);
+        // keep assigned leads regardless of status; otherwise filter out Converted/Lost
+        return (
+          isAssigned || (lead.status !== "Converted" && lead.status !== "Lost")
+        );
+      });
+    }
 
     if (filterStatus && filterStatus !== "All") {
       currentLeads = currentLeads.filter(
@@ -572,10 +814,100 @@ const Leads = () => {
         (lead) => lead.device === filterDevice
       );
     }
+    if (filterSubStatus && filterSubStatus !== "SubStatus") {
+      currentLeads = currentLeads.filter(
+        (lead) => lead.sub_status === filterSubStatus
+      );
+    }
     if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
       currentLeads = currentLeads.filter(
         (lead) => lead.previous_coding_experience === filterPrevCodingExp
       );
+    }
+
+    // Role-based visibility: non-admin users see only leads assigned to them
+    if (!isAdmin) {
+      const username =
+        (user && user.username) || localStorage.getItem("username") || "";
+      const normalizedUsername = String(username).trim().toLowerCase();
+      if (normalizedUsername) {
+        currentLeads = currentLeads.filter((lead) => {
+          // Use normalized assigned fields when available (set during fetch)
+          const aNorm = (lead.assigned_to_normalized || "")
+            .trim()
+            .toLowerCase();
+          const auNorm = (lead.assigned_to_username_normalized || "")
+            .trim()
+            .toLowerCase();
+          // Fallback to raw fields
+          const aRaw = String(lead.assigned_to || "").trim();
+          const auRaw = String(lead.assigned_to_username || "").trim();
+
+          return (
+            (aNorm && aNorm === normalizedUsername) ||
+            (auNorm && auNorm === normalizedUsername) ||
+            (aRaw && aRaw === username) ||
+            (auRaw && auRaw === username)
+          );
+        });
+      }
+    }
+
+    // DEBUG: print why leads may be filtered out
+    try {
+      const debugUser =
+        (user && user.username) || localStorage.getItem("username") || "";
+      const debugNorm = String(debugUser).trim().toLowerCase();
+      console.log(
+        "[Leads debug] current user:",
+        debugUser,
+        "normalized:",
+        debugNorm
+      );
+      console.log(
+        "[Leads debug] allLeads count:",
+        allLeads.length,
+        "-> displayed count:",
+        currentLeads.length,
+        "filterStatus:",
+        filterStatus
+      );
+      currentLeads.forEach((l) => {
+        const aNorm = (l.assigned_to_normalized || "")
+          .toString()
+          .trim()
+          .toLowerCase();
+        const auNorm = (l.assigned_to_username_normalized || "")
+          .toString()
+          .trim()
+          .toLowerCase();
+        const aRaw = String(l.assigned_to || "").trim();
+        const auRaw = String(l.assigned_to_username || "").trim();
+        const isAssigned =
+          debugNorm &&
+          (aNorm === debugNorm ||
+            auNorm === debugNorm ||
+            aRaw === debugUser ||
+            auRaw === debugUser);
+        console.log(
+          "[Leads debug] lead",
+          l._id,
+          "status",
+          l.status,
+          "assigned_to:",
+          l.assigned_to,
+          "assigned_to_username:",
+          l.assigned_to_username,
+          "aNorm:",
+          aNorm,
+          "auNorm:",
+          auNorm,
+          "isAssigned:",
+          isAssigned
+        );
+      });
+    } catch (e) {
+      console.error("Leads debug error", e);
     }
 
     return currentLeads;
@@ -590,14 +922,11 @@ const Leads = () => {
     filterShift,
     filterDevice,
     filterPrevCodingExp,
+    user,
   ]);
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-lg">Loading leads...</div>
-      </div>
-    );
+    return <DelayedLoader message="Loading leads..." minMs={2000} />;
   }
 
   if (error) {
@@ -613,6 +942,14 @@ const Leads = () => {
       </div>
     );
   }
+
+  // Debugging: inspect user and leads counts before render
+  console.log("Auth user:", user);
+  console.log("All leads count:", allLeads.length);
+  console.log("Displayed leads count:", displayedLeads.length);
+  console.log("Current filterStatus:", filterStatus);
+  if (displayedLeads && displayedLeads.length > 0)
+    console.log("Sample displayed lead:", displayedLeads[0]);
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">
@@ -771,6 +1108,20 @@ const Leads = () => {
           </div>
           <div className="relative w-full sm:w-auto">
             <select
+              value={filterSubStatus}
+              onChange={(e) => setFilterSubStatus(e.target.value)}
+              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
+            >
+              {subStatusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+          </div>
+          <div className="relative w-full sm:w-auto">
+            <select
               value={filterPrevCodingExp}
               onChange={(e) => setFilterPrevCodingExp(e.target.value)}
               className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
@@ -790,12 +1141,18 @@ const Leads = () => {
         {error ? (
           <div className="text-red-500 text-center">{error}</div>
         ) : (
+          // Debugging fallback: if filters hide all leads, pass allLeads so we can confirm rendering
           <LeadTableDisplay
-            leads={displayedLeads}
+            leads={
+              displayedLeads && displayedLeads.length > 0
+                ? displayedLeads
+                : allLeads
+            }
             handleEdit={handleEdit}
             handleDelete={handleDelete}
             handleBulkDelete={handleBulkDelete}
             onStatusChange={handleStatusChange}
+            onSubStatusChange={handleSubStatusChange}
             onRemarkChange={handleRemarkChange}
             onRecentCallChange={handleLastCallChange}
             onNextCallChange={handleNextCallChange}

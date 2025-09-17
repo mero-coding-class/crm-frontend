@@ -10,6 +10,8 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { trashService, leadService } from "../services/api.js";
+import { BASE_URL } from "../config";
+import DelayedLoader from "../components/common/DelayedLoader";
 
 const TrashPage = () => {
   const { authToken, currentUser } = useAuth();
@@ -65,10 +67,92 @@ const TrashPage = () => {
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const baseUrl = `${BASE_URL}/trash/`;
     try {
+      const fastUrl = `${baseUrl}?page=1&page_size=20`;
+      const resp = await fetch(fastUrl, {
+        headers: { Authorization: `Token ${authToken}` },
+        credentials: "include",
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (Array.isArray(json.results)) {
+          const sortedData = json.results.sort((a, b) => b.id - a.id);
+          setAllLeads(sortedData);
+          // background fetch remaining pages
+          (async () => {
+            try {
+              if (json.next) {
+                let acc = [...json.results];
+                let next = json.next;
+                const MAX_ACCUMULATE = 2000;
+                while (next) {
+                  const r = await fetch(next, {
+                    headers: { Authorization: `Token ${authToken}` },
+                    credentials: "include",
+                  });
+                  if (!r.ok) break;
+                  const j = await r.json();
+                  acc = acc.concat(j.results || []);
+                  if (acc.length >= MAX_ACCUMULATE) {
+                    console.warn(
+                      "Trash background fetch reached cap, stopping further fetch to avoid UI freeze"
+                    );
+                    break;
+                  }
+                  next = j.next;
+                }
+                setAllLeads(
+                  acc.slice(0, MAX_ACCUMULATE).sort((a, b) => b.id - a.id)
+                );
+              } else {
+                const full = await fetch(baseUrl, {
+                  headers: { Authorization: `Token ${authToken}` },
+                  credentials: "include",
+                });
+                if (full.ok) {
+                  const all = await full.json();
+                  setAllLeads(
+                    Array.isArray(all)
+                      ? all.sort((a, b) => b.id - a.id)
+                      : (all.results || []).sort((a, b) => b.id - a.id)
+                  );
+                }
+              }
+            } catch (e) {
+              console.warn("Background trash fetch failed", e);
+            }
+          })();
+          return;
+        }
+
+        if (Array.isArray(json)) {
+          const sliced = json.slice(0, 20).sort((a, b) => b.id - a.id);
+          setAllLeads(sliced);
+          (async () => {
+            try {
+              const full = await fetch(baseUrl, {
+                headers: { Authorization: `Token ${authToken}` },
+                credentials: "include",
+              });
+              if (full.ok) {
+                const all = await full.json();
+                setAllLeads(
+                  Array.isArray(all)
+                    ? all.sort((a, b) => b.id - a.id)
+                    : (all.results || []).sort((a, b) => b.id - a.id)
+                );
+              }
+            } catch (e) {
+              console.warn("Background full trash fetch failed", e);
+            }
+          })();
+          return;
+        }
+      }
+
+      // fallback to existing trashService call
       const data = await trashService.getTrashedLeads(authToken);
-      // **CHANGE MADE HERE:** Sort the data by id in descending order
-      // to show the newest entries at the top.
       const sortedData = data.sort((a, b) => b.id - a.id);
       setAllLeads(sortedData);
     } catch (err) {
@@ -450,13 +534,7 @@ const TrashPage = () => {
   ]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg font-semibold text-gray-700">
-          Loading trashed leads...
-        </div>
-      </div>
-    );
+    return <DelayedLoader message="Loading trashed leads..." minMs={2000} />;
   }
 
   return (

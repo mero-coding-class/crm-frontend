@@ -2,9 +2,12 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Loader from "../components/common/Loader";
+import DelayedLoader from "../components/common/DelayedLoader";
 import { useAuth } from "../context/AuthContext.jsx";
 import EnrolledStudentsTable from "../components/EnrolledStudentsTable";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import EnrolledStudentEditModal from "../components/EnrolledStudentEditModal";
+import { courseService } from "../services/courseService";
 import { BASE_URL } from "../config";
 
 const EnrolledStudents = () => {
@@ -18,28 +21,100 @@ const EnrolledStudents = () => {
   const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
   const [filterPaymentNotCompleted, setFilterPaymentNotCompleted] =
     useState(false);
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+  const [courses, setCourses] = useState([]);
 
   // Fetch enrolled students
   const fetchEnrolledStudents = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const baseUrl = `${BASE_URL}/enrollments/`;
     try {
-      const response = await fetch(`${BASE_URL}/enrollments/`, {
-        method: "GET",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
+      const pageUrl = `${baseUrl}?page=1&page_size=${ITEMS_PER_PAGE}`;
+      const resp = await fetch(pageUrl, {
+        headers: { Authorization: `Token ${authToken}` },
         credentials: "include",
       });
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const sortedData = data.sort((a, b) => b.id - a.id);
-      setAllStudents(sortedData);
+
+      if (resp.ok) {
+        const json = await resp.json();
+        if (Array.isArray(json.results)) {
+          setAllStudents(json.results);
+          (async () => {
+            try {
+              if (json.next) {
+                let accumulated = [...json.results];
+                let nextUrl = json.next;
+                const MAX_ACCUMULATE = 2000;
+                while (nextUrl) {
+                  const r = await fetch(nextUrl, {
+                    headers: { Authorization: `Token ${authToken}` },
+                    credentials: "include",
+                  });
+                  if (!r.ok) break;
+                  const j = await r.json();
+                  accumulated = accumulated.concat(j.results || []);
+                  if (accumulated.length >= MAX_ACCUMULATE) {
+                    console.warn(
+                      "Enrollments background fetch reached cap, stopping further fetch to avoid UI freeze"
+                    );
+                    break;
+                  }
+                  nextUrl = j.next;
+                }
+                setAllStudents(accumulated.slice(0, MAX_ACCUMULATE));
+              } else {
+                const full = await fetch(baseUrl, {
+                  headers: { Authorization: `Token ${authToken}` },
+                  credentials: "include",
+                });
+                if (full.ok) {
+                  const all = await full.json();
+                  setAllStudents(Array.isArray(all) ? all : all.results || []);
+                }
+              }
+            } catch (e) {
+              console.warn("Background enrollments fetch failed", e);
+            }
+          })();
+          return;
+        }
+
+        if (Array.isArray(json)) {
+          setAllStudents(json.slice(0, ITEMS_PER_PAGE));
+          (async () => {
+            try {
+              const full = await fetch(baseUrl, {
+                headers: { Authorization: `Token ${authToken}` },
+                credentials: "include",
+              });
+              if (full.ok) {
+                const all = await full.json();
+                setAllStudents(Array.isArray(all) ? all : all.results || []);
+              }
+            } catch (e) {
+              console.warn("Background enrollments full fetch failed", e);
+            }
+          })();
+          return;
+        }
+      }
+
+      const fallback = await fetch(baseUrl, {
+        headers: { Authorization: `Token ${authToken}` },
+        credentials: "include",
+      });
+      if (fallback.ok) {
+        const data = await fallback.json();
+        setAllStudents(Array.isArray(data) ? data : data.results || []);
+      } else {
+        throw new Error(`Failed to fetch enrollments: ${fallback.status}`);
+      }
     } catch (err) {
-      console.error("Failed to fetch enrolled students:", err);
-      setError(err.message);
+      console.error(err);
+      setError("Failed to load enrolled students");
     } finally {
       setLoading(false);
     }
@@ -47,16 +122,73 @@ const EnrolledStudents = () => {
 
   useEffect(() => {
     if (authToken) fetchEnrolledStudents();
+
+    const importDebounce = { timeoutId: null };
+    const onImported = (e) => {
+      console.info(
+        "EnrolledStudents: detected crm:imported event — scheduling refresh"
+      );
+      if (importDebounce.timeoutId) clearTimeout(importDebounce.timeoutId);
+      importDebounce.timeoutId = setTimeout(() => {
+        fetchEnrolledStudents();
+        importDebounce.timeoutId = null;
+      }, 700);
+    };
+    window.addEventListener("crm:imported", onImported);
+
+    return () => {
+      window.removeEventListener("crm:imported", onImported);
+      if (importDebounce.timeoutId) clearTimeout(importDebounce.timeoutId);
+    };
   }, [authToken, fetchEnrolledStudents]);
 
+  // Fetch course list so we can display friendly course names in the table
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCourses = async () => {
+      if (!authToken) return;
+      try {
+        const data = await courseService.getCourses(authToken);
+        if (!cancelled) setCourses(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to fetch courses:", err);
+      }
+    };
+    fetchCourses();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
+
+  // When the courses list is available, enrich any students that are missing
+  // an explicit course_name by resolving student.course (id or object).
+  useEffect(() => {
+    if (!courses || courses.length === 0 || allStudents.length === 0) return;
+    setAllStudents((prev) =>
+      prev.map((s) => {
+        if (s.course_name) return s;
+        const c = s.course;
+        let resolved = "";
+        if (c && typeof c === "object") {
+          resolved = c.course_name || c.name || "";
+        } else if (c !== undefined && c !== null) {
+          const found = courses.find((co) => String(co.id) === String(c));
+          if (found) resolved = found.course_name || found.name || "";
+        }
+        if (resolved) return { ...s, course_name: resolved };
+        return s;
+      })
+    );
+  }, [courses, allStudents.length]);
+
   // Filtered students for table
-  const enrolledStudents = allStudents.filter((student) => {
+  const filteredStudents = allStudents.filter((student) => {
     let matches = true;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      matches =
-        student.student_name.toLowerCase().includes(q) ||
-        (student.email && student.email.toLowerCase().includes(q));
+      const name = (student.student_name || "").toLowerCase();
+      const email = (student.email || "").toLowerCase();
+      matches = name.includes(q) || (email && email.includes(q));
     }
     if (matches && searchLastPaymentDate) {
       matches = student.last_pay_date === searchLastPaymentDate;
@@ -66,6 +198,23 @@ const EnrolledStudents = () => {
     }
     return matches;
   });
+
+  // compute pagination
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredStudents.length / ITEMS_PER_PAGE)
+  );
+  // Ensure current page is valid when filteredStudents changes
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(1);
+  }, [filteredStudents.length, totalPages]);
+
+  // students to display on current page
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const enrolledStudents = filteredStudents.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
 
   // Modal handlers
   const handleEdit = useCallback((student) => {
@@ -219,7 +368,10 @@ const EnrolledStudents = () => {
     [handleUpdateField]
   );
 
-  if (loading) return <Loader />;
+  if (loading)
+    return (
+      <DelayedLoader message="Loading enrolled students..." minMs={2000} />
+    );
 
   if (error)
     return (
@@ -279,12 +431,37 @@ const EnrolledStudents = () => {
       <div className="bg-white p-6 rounded-lg shadow-md">
         <EnrolledStudentsTable
           students={enrolledStudents}
+          courses={courses}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
           handleBulkDelete={handleBulkDelete}
           onUpdatePaymentStatus={handleUpdatePaymentStatus}
           onUpdateField={handleUpdateField}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={(p) => setCurrentPage(p)}
         />
+      </div>
+
+      {/* Pagination controls (arrow + Page X of Y style) */}
+      <div className="flex justify-end items-center mt-4">
+        <button
+          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+          className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronLeftIcon className="h-5 w-5 text-gray-500" />
+        </button>
+        <span className="mx-4 text-sm font-medium text-gray-700">
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ChevronRightIcon className="h-5 w-5 text-gray-500" />
+        </button>
       </div>
 
       {/* Edit Modal */}

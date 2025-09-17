@@ -4,7 +4,11 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Bars3Icon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import LeadLogDisplay from "./LeadLogDisplay";
-import { getCourseClasses, getStatusClasses } from "./helpers"; // Removed unused getFormattedDate
+import {
+  getCourseClasses,
+  getStatusClasses,
+  getSubStatusClasses,
+} from "./helpers"; // Removed unused getFormattedDate
 
 const DraggableRow = ({
   lead,
@@ -16,6 +20,7 @@ const DraggableRow = ({
   handleEdit,
   handleDelete,
   onStatusChange,
+  onSubStatusChange,
   onRemarkChange,
   onRecentCallChange: onLastCallChange,
   onNextCallChange,
@@ -41,7 +46,11 @@ const DraggableRow = ({
   };
 
   // No need for additional normalization as it's handled in parent component
-
+  // Debug assigned fields
+  console.log(`Row assigned fields for ${lead._id}:`, {
+    assigned_to: lead.assigned_to,
+    assigned_to_username: lead.assigned_to_username,
+  });
   const handleLocalRemarkChange = (value) =>
     setLocalRemarks((prev) => ({ ...prev, [lead._id]: value }));
 
@@ -77,6 +86,40 @@ const DraggableRow = ({
 
         const renderCell = () => {
           switch (key) {
+            case "sub_status":
+              return (
+                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <div
+                    className={`inline-flex items-center px-3 py-1 rounded-lg border shadow-sm ${getSubStatusClasses(
+                      lead.sub_status
+                    )}`}
+                  >
+                    <select
+                      value={lead.sub_status || "New"}
+                      onChange={(e) =>
+                        onSubStatusChange
+                          ? onSubStatusChange(lead._id, e.target.value)
+                          : null
+                      }
+                      className="bg-transparent border-0 p-0 m-0 text-sm font-semibold appearance-none focus:outline-none text-current"
+                    >
+                      {[
+                        "New",
+                        "Open",
+                        "Followup",
+                        "inProgress",
+                        "Average",
+                        "Interested",
+                        "Junk",
+                      ].map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </td>
+              );
             case "student_name":
               return (
                 <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -197,7 +240,7 @@ const DraggableRow = ({
                 <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
                   <input
                     type="text"
-                    value={lead.assigned_to || ""}
+                    value={lead.assigned_to || lead.assigned_to_username || ""}
                     onChange={(e) =>
                       onAssignedToChange(lead._id, e.target.value)
                     }
@@ -237,18 +280,7 @@ const DraggableRow = ({
                       lead.status
                     )}`}
                   >
-                    {[
-                      "New",
-                      "Open",
-                      "Average",
-                      "Followup",
-                      "Interested",
-                      "inProgress",
-                      "Active",
-                      "Converted",
-                      "Lost",
-                      "Junk",
-                    ].map((option) => (
+                    {["Active", "Converted", "Lost"].map((option) => (
                       <option
                         key={option}
                         value={option}

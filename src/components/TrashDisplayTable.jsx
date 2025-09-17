@@ -258,6 +258,13 @@ const TrashTableDisplay = ({
   const indexOfFirstLead = indexOfLastLead - leadsPerPage;
   const currentLeads = orderedLeads.slice(indexOfFirstLead, indexOfLastLead);
 
+  // Ensure table scrolls to top when page changes
+  useEffect(() => {
+    try {
+      if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
+    } catch (e) {}
+  }, [currentPage]);
+
   const handlePageChange = (pageNumber) => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
       setCurrentPage(pageNumber);

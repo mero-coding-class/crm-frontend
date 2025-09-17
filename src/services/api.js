@@ -146,10 +146,20 @@ export const leadService = {
       email: lead.email || "",
   age: lead.age || "",
   grade: lead.grade || "",
-      // Preserve backend status (fall back to 'New' if not provided)
-      status: lead.status || "New",
+  // Preserve backend status (fall back to 'New' if not provided)
+  status: lead.status || "New",
 
-      studentName: lead.student_name || "",
+  // Ensure assignment fields are passed through so the UI shows who a
+  // lead is assigned to. Different backend versions use `assigned_to`
+  // or `assigned_to_username` — include both.
+  assigned_to: lead.assigned_to || lead.assigned_to_username || "",
+  assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
+  // Also include substatus and lead_type if backend provides them
+  substatus: lead.substatus || lead.sub_status || "New",
+  lead_type: lead.lead_type || lead.leadType || "",
+  school_college_name: lead.school_college_name || "",
+
+  studentName: lead.student_name || "",
       parentsName: lead.parents_name || "",
       email: lead.email || "",
       phone: lead.phone_number || "",
@@ -246,8 +256,9 @@ export const leadService = {
     // The data should already be in the correct format from the form
     const backendData = {
       ...newLeadData,
-      // Ensure required fields have defaults
-      status: newLeadData.status || "New",
+      // Preserve status only if provided by caller. Do NOT force a default
+      // value here because the backend enforces allowed choices (Active/Converted/Lost).
+      ...(newLeadData.status !== undefined ? { status: newLeadData.status } : {}),
       add_date: newLeadData.add_date || new Date().toISOString().split('T')[0],
       last_call: newLeadData.last_call || null,
       next_call: newLeadData.next_call || null

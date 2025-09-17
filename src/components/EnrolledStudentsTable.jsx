@@ -36,6 +36,16 @@ const formatDisplayDate = (dateString) => {
   }
 };
 
+// Resolve a field from enrollment first, then fallback to nested lead object
+const resolveField = (student, key) => {
+  if (!student) return "";
+  const v = student[key];
+  if (v !== undefined && v !== null) return v;
+  if (student.lead && (student.lead[key] !== undefined && student.lead[key] !== null))
+    return student.lead[key];
+  return "";
+};
+
 // Column toggler
 const ColumnToggler = ({ columns, setColumns }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -129,6 +139,7 @@ const EnrolledStudentsTable = ({
   handleDelete,
   handleBulkDelete,
   onUpdatePaymentStatus,
+  courses = [],
   currentPage = 1,
   totalPages = 1,
   onPageChange,
@@ -138,8 +149,16 @@ const EnrolledStudentsTable = ({
   const [columns, setColumns] = useState({
     student_name: { label: "Student Name", visible: true },
     parents_name: { label: "Parents' Name", visible: true },
+    // (Lead-related fields removed to hide lead-level columns)
     email: { label: "Email", visible: true },
     phone_number: { label: "Phone", visible: true },
+    whatsapp_number: { label: "WhatsApp", visible: false },
+    grade: { label: "Grade", visible: false },
+    source: { label: "Source", visible: false },
+    class_type: { label: "Class Type", visible: false },
+    shift: { label: "Shift", visible: false },
+    device: { label: "Device", visible: false },
+    previous_coding_experience: { label: "Prev Coding Exp", visible: false },
     course_name: { label: "Course", visible: true },
     batch_name: { label: "Batch Name", visible: true },
     assigned_teacher: { label: "Assigned Teacher", visible: true },
@@ -151,23 +170,28 @@ const EnrolledStudentsTable = ({
     third_installment: { label: "3rd Installment", visible: false },
     last_pay_date: { label: "Last Pay Date", visible: true },
     payment_completed: { label: "Payment Completed", visible: true },
+    adset_name: { label: "Adset Name", visible: false },
+    remarks: { label: "Remarks", visible: false },
+    address_line_1: { label: "Address 1", visible: false },
+    address_line_2: { label: "Address 2", visible: false },
+    city: { label: "City", visible: false },
+    county: { label: "County", visible: false },
+    post_code: { label: "Post Code", visible: false },
+    demo_scheduled: { label: "Demo Scheduled", visible: false },
+    // Enrollment-level metadata
+  created_at: { label: "Enrollment Created", visible: false },
+  updated_at: { label: "Enrollment Updated", visible: false },
     actions: { label: "Actions", visible: true },
   });
 
   const scrollContainerRef = useRef(null);
-  const [scrollInterval, setScrollInterval] = useState(null);
-  const scrollSpeed = 5;
 
   useEffect(() => {
     setOrderedStudents(students);
     setSelectedStudents(new Set());
   }, [students]);
 
-  useEffect(() => {
-    return () => {
-      if (scrollInterval) clearInterval(scrollInterval);
-    };
-  }, [scrollInterval]);
+  // (no-op cleanup required here; requestAnimationFrame-based scroll effect handles its own cleanup)
 
   // Instant field update
   const onUpdateField = (studentId, field, value) => {
@@ -215,32 +239,67 @@ const EnrolledStudentsTable = ({
     }
   };
 
-  const handleMouseMove = (e) => {
+  // Smooth horizontal scroll on mouse move (requestAnimationFrame)
+  useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const boundary = 50;
-    let direction = 0;
-    if (e.clientX < rect.left + boundary) direction = -1;
-    else if (e.clientX > rect.right - boundary) direction = 1;
 
-    if (direction && !scrollInterval) {
-      const interval = setInterval(() => {
-        container.scrollLeft += direction * scrollSpeed;
-      }, 20);
-      setScrollInterval(interval);
-    } else if (!direction && scrollInterval) {
-      clearInterval(scrollInterval);
-      setScrollInterval(null);
-    }
-  };
+    let scrollDirection = 0;
+    let animationFrameId;
 
-  const handleMouseLeave = () => {
-    if (scrollInterval) {
-      clearInterval(scrollInterval);
-      setScrollInterval(null);
+    const edgeThreshold = 100; // px from edge
+    const baseSpeed = 20; // scroll speed (increase for faster)
+
+    const handleMouseMove = (e) => {
+      const { left, right } = container.getBoundingClientRect();
+      const mouseX = e.clientX;
+
+      if (mouseX < left + edgeThreshold) {
+        // Left edge → scroll left
+        const distanceFromEdge = mouseX - left;
+        const factor = (edgeThreshold - distanceFromEdge) / edgeThreshold;
+        scrollDirection = -factor; // negative = left
+      } else if (mouseX > right - edgeThreshold) {
+        // Right edge → scroll right
+        const distanceFromEdge = right - mouseX;
+        const factor = (edgeThreshold - distanceFromEdge) / edgeThreshold;
+        scrollDirection = factor; // positive = right
+      } else {
+        scrollDirection = 0;
+      }
+    };
+
+    const handleMouseLeave = () => {
+      scrollDirection = 0;
+    };
+
+    const smoothScroll = () => {
+      if (scrollDirection !== 0) {
+        container.scrollLeft += baseSpeed * scrollDirection;
+      }
+      animationFrameId = requestAnimationFrame(smoothScroll);
+    };
+
+    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("mouseleave", handleMouseLeave);
+
+    animationFrameId = requestAnimationFrame(smoothScroll);
+
+    return () => {
+      container.removeEventListener("mousemove", handleMouseMove);
+      container.removeEventListener("mouseleave", handleMouseLeave);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  // Scroll to top when page changes
+  useEffect(() => {
+    try {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
+    } catch (e) {
+      // ignore errors
     }
-  };
+  }, [currentPage]);
 
   if (!students || students.length === 0) {
     return (
@@ -269,8 +328,6 @@ const EnrolledStudentsTable = ({
       <div
         ref={scrollContainerRef}
         className="overflow-x-auto custom-scrollbar"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
       >
         <DndContext
           collisionDetection={closestCenter}
@@ -322,6 +379,7 @@ const EnrolledStudentsTable = ({
                     handleDelete={handleDelete}
                     handlePaymentStatusChange={onUpdatePaymentStatus}
                     onUpdateField={onUpdateField}
+                    courses={courses}
                   />
                 ))}
               </tbody>
@@ -330,27 +388,7 @@ const EnrolledStudentsTable = ({
         </DndContext>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex justify-end items-center mt-4 space-x-2">
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="p-2 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeftIcon className="h-5 w-5" />
-          </button>
-          <span className="text-sm font-medium text-gray-700">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="p-2 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronRightIcon className="h-5 w-5" />
-          </button>
-        </div>
-      )}
+      {/* pagination is handled at the page level (EnrolledStudents.jsx) */}
     </div>
   );
 };
@@ -366,6 +404,7 @@ const SortableStudentRow = ({
   handleDelete,
   handlePaymentStatusChange,
   onUpdateField,
+  courses = [],
 }) => {
   const {
     attributes,
@@ -409,6 +448,37 @@ const SortableStudentRow = ({
 
       {/* Render cells in the same stable order as headers */}
       {visibleKeys.map((key) => {
+        // If this is a nested lead field (we prefix columns with lead_), render from student.lead
+        if (key.startsWith("lead_")) {
+          const leadKey = key.replace("lead_", "");
+          const val = student.lead ? student.lead[leadKey] : undefined;
+          if (
+            [
+              "add_date",
+              "last_call",
+              "next_call",
+              "created_at",
+              "updated_at",
+            ].includes(leadKey)
+          ) {
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                {formatDisplayDate(val)}
+              </td>
+            );
+          }
+          return (
+            <td
+              key={key}
+              className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+            >
+              {String(val ?? "")}
+            </td>
+          );
+        }
         switch (key) {
           case "student_name":
             return (
@@ -416,7 +486,9 @@ const SortableStudentRow = ({
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
               >
-                {student.student_name}
+                {student.student_name ||
+                  (student.lead && student.lead.student_name) ||
+                  "N/A"}
               </td>
             );
           case "parents_name":
@@ -425,7 +497,9 @@ const SortableStudentRow = ({
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
               >
-                {student.parents_name || "N/A"}
+                {student.parents_name ||
+                  (student.lead && student.lead.parents_name) ||
+                  "N/A"}
               </td>
             );
           case "email":
@@ -434,7 +508,7 @@ const SortableStudentRow = ({
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
               >
-                {student.email}
+                {student.email || (student.lead && student.lead.email) || ""}
               </td>
             );
           case "phone_number":
@@ -443,16 +517,45 @@ const SortableStudentRow = ({
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
               >
-                {student.phone_number}
+                {student.phone_number ||
+                  (student.lead && student.lead.phone_number) ||
+                  ""}
               </td>
             );
           case "course_name":
+            // Prefer explicit course_name on the enrollment, then try to
+            // resolve a course id to a course_name from the fetched courses
+            // list, then fallback to lead.course_name or raw course value.
+            const courseDisplay = (() => {
+              if (student.course_name) return student.course_name;
+              // If course is an id, try to find it in the provided courses list
+              const c = student.course;
+              if (c !== undefined && c !== null) {
+                if (typeof c === "number" || typeof c === "string") {
+                  const found = courses.find(
+                    (co) => String(co.id) === String(c)
+                  );
+                  if (found && (found.course_name || found.name))
+                    return found.course_name || found.name;
+                  // if student.course is a string and not an id, display it
+                  if (typeof c === "string") return c;
+                }
+                if (typeof c === "object") {
+                  return (
+                    c.course_name || c.name || String(c.id || JSON.stringify(c))
+                  );
+                }
+              }
+              if (student.lead && student.lead.course_name)
+                return student.lead.course_name;
+              return "";
+            })();
             return (
               <td
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
               >
-                {student.course_name}
+                {courseDisplay || "N/A"}
               </td>
             );
           case "batch_name":
@@ -462,7 +565,10 @@ const SortableStudentRow = ({
               <EditableTextCell
                 key={key}
                 field={key}
-                value={student[key]}
+                value={
+                  // fallback to lead values for course_duration and batch_name
+                  student[key] ?? (student.lead ? student.lead[key] : undefined)
+                }
                 onSave={(v) => onUpdateField(student.id, key, v)}
               />
             );
@@ -545,7 +651,7 @@ const SortableStudentRow = ({
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
               >
-                {String(student[key] ?? "")}
+                {String(resolveField(student, key) ?? "")}
               </td>
             );
         }

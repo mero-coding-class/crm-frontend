@@ -1,4 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import { BASE_URL } from "../config";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
 // Helper function to get current date in YYYY-MM-DD format
@@ -34,7 +36,10 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     course_name: "", // Changed from course to course_name
     class_type: "",
     shift: "",
-    status: "New",
+    status: "Active",
+    sub_status: "New",
+    school_college_name: "",
+    lead_type: "",
     previous_coding_experience: "",
     last_call: "",
     next_call: "",
@@ -53,6 +58,41 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   });
 
   const modalContentRef = useRef(null);
+  const [users, setUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState(null);
+
+  useEffect(() => {
+    // Fetch users for the Assigned To dropdown when authToken is available
+    const fetchUsers = async () => {
+      if (!authToken) return;
+      setUsersLoading(true);
+      setUsersError(null);
+      try {
+        const res = await fetch(`${BASE_URL}/users/`, {
+          headers: {
+            Authorization: `Token ${authToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) {
+          const err = await res.text();
+          throw new Error(`Failed to fetch users: ${res.status} ${err}`);
+        }
+        const data = await res.json();
+        // Support both direct array and paginated { results: [] }
+        const list = Array.isArray(data) ? data : data.results || [];
+        setUsers(list);
+      } catch (err) {
+        console.error("Error fetching users:", err);
+        setUsersError(err.message || String(err));
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, [authToken]);
 
   const handleOverlayClick = (event) => {
     if (
@@ -75,7 +115,12 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     e.preventDefault();
 
     // --- 1️⃣ Required Fields Validation ---
-    const requiredFields = ["student_name", "parents_name", "phone_number"];
+    const requiredFields = [
+      "student_name",
+      "parents_name",
+      "phone_number",
+      "lead_type",
+    ];
     const missingFields = requiredFields.filter(
       (field) => !formData[field]?.trim()
     );
@@ -139,6 +184,8 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         class_type: formData.class_type === "Select" ? "" : formData.class_type,
         shift: formData.shift === "Select" ? "" : formData.shift,
         status: formData.status || "New",
+        // backend expects `substatus` (no underscore)
+        substatus: formData.sub_status || "New",
         device: formData.device === "Select" ? "" : formData.device,
         previous_coding_experience:
           formData.previous_coding_experience === "Select"
@@ -155,16 +202,28 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         payment_type:
           formData.payment_type === "Select" ? "" : formData.payment_type,
         workshop_batch: formData.workshop_batch,
+        // Lead type (B2B / B2C)
+        lead_type: formData.lead_type,
+        school_college_name: formData.school_college_name || "",
         // Important: send course id under `course` so backend links correctly
         course: selectedCourseId,
         // Keep course_name for optimistic UI only
         course_name: formData.course_name,
-  last_call: formatDateForBackend(formData.last_call),
-  next_call: formatDateForBackend(formData.next_call),
+        last_call: formatDateForBackend(formData.last_call),
+        next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+
+      // Only include assigned_to when the creator is an admin and a value was provided
+      if (
+        isAdmin &&
+        formData.created_by &&
+        String(formData.created_by).trim() !== ""
+      ) {
+        backendPayload.assigned_to = String(formData.created_by).trim();
+      }
 
       // Call onSave with the optimistic data first
       onSave(backendPayload);
@@ -172,17 +231,14 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       // Close the modal immediately
       onClose();
 
-      const response = await fetch(
-        "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Token ${authToken}`,
-          },
-          body: JSON.stringify(backendPayload),
-        }
-      );
+      const response = await fetch(`${BASE_URL}/leads/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${authToken}`,
+        },
+        body: JSON.stringify(backendPayload),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -216,7 +272,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       // Update the lead in the parent component with the server data
       onSave({
         ...serverLead,
-        logs_url: `https://crmmerocodingbackend.ktm.yetiappcloud.com/api/leads/${result.id}/logs/`,
+        logs_url: `${BASE_URL}/leads/${result.id}/logs/`,
       });
 
       console.log("Lead saved successfully:", serverLead);
@@ -229,18 +285,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   };
 
   // Dropdown options
-  const statusOptions = [
-    "New",
-    "Open",
-    "Average",
-    "Followup",
-    "Interested",
-    "inProgress",
-    "Active",
-    "Converted",
-    "Lost",
-    "Junk",
-  ];
+  const statusOptions = ["Active", "Converted", "Lost"];
   const sourceOptions = [
     "Select",
     "WhatsApp/Viber",
@@ -286,6 +331,25 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     "Other",
   ];
   const deviceOptions = ["Select", "Yes", "No"];
+
+  const subStatusOptions = [
+    "New",
+    "Open",
+    "Followup",
+    "inProgress",
+    "Average",
+    "Interested",
+    "Junk",
+  ];
+
+  const { user } = useAuth();
+
+  const isAdmin =
+    user &&
+    (user.role === "admin" ||
+      user.role === "super admin" ||
+      user.role === "superadmin" ||
+      user.role === "super-admin");
 
   return (
     <div
@@ -333,6 +397,51 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
             </select>
           </div>
 
+          {/* Sub Status */}
+          <div>
+            <label
+              htmlFor="sub_status"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Sub Status
+            </label>
+            <select
+              id="sub_status"
+              name="sub_status"
+              value={formData.sub_status}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              {subStatusOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Lead Type */}
+          <div>
+            <label
+              htmlFor="lead_type"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Lead Type
+            </label>
+            <select
+              id="lead_type"
+              name="lead_type"
+              value={formData.lead_type}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              required
+            >
+              <option value="">Select type</option>
+              <option value="B2B">B2B</option>
+              <option value="B2C">B2C</option>
+            </select>
+          </div>
+
           {/* Add Date - New Field */}
           <div>
             <label
@@ -350,23 +459,44 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
-          <div>
-            <label
-              htmlFor="created_by"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Assigned To
-            </label>
-            <input
-              type="text"
-              id="created_by"
-              name="created_by"
-              value={formData.created_by || ""}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="Optional"
-            />
-          </div>
+          {isAdmin && (
+            <div>
+              <label
+                htmlFor="created_by"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Assigned To
+              </label>
+              {usersLoading ? (
+                <div className="mt-1 p-2">Loading users...</div>
+              ) : usersError ? (
+                <div className="mt-1 p-2 text-sm text-red-600">
+                  Error loading users
+                </div>
+              ) : (
+                <select
+                  id="created_by"
+                  name="created_by"
+                  value={formData.created_by || ""}
+                  onChange={handleChange}
+                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="">(Unassigned)</option>
+                  {users.map((u) => {
+                    // prefer username but fall back to id if username not present
+                    const label =
+                      u.username || u.name || u.email || String(u.id);
+                    const value = u.username || String(u.id);
+                    return (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+            </div>
+          )}
 
           {/* Parents Name */}
           <div className="md:col-span-2">
@@ -405,6 +535,25 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
             />
+
+            {/* School/College Name */}
+            <div className="md:col-span-1">
+              <label
+                htmlFor="school_college_name"
+                className="block text-sm font-medium text-gray-700"
+              >
+                School / College Name
+              </label>
+              <input
+                type="text"
+                id="school_college_name"
+                name="school_college_name"
+                value={formData.school_college_name}
+                onChange={handleChange}
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Optional"
+              />
+            </div>
           </div>
 
           {/* Email */}

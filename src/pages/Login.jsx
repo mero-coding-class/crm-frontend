@@ -2,33 +2,32 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext.jsx";
-
-// Adjust if you have BASE_URL in config
-const API_BASE = "https://crmmerocodingbackend.ktm.yetiappcloud.com/api";
+import { BASE_URL } from "../config";
 
 async function fetchUserProfile(token, fallbackUsername) {
   const headers = { Authorization: `Token ${token}` };
-  // Try /users/me/
+  // Get user list and try to find the matching user by username
   try {
-    const { data } = await axios.get(`${API_BASE}/users/me/`, { headers });
-    return data; // { id, username, email, role }
-  } catch (_) {}
+    const { data } = await axios.get(`${BASE_URL}/users/`, { headers });
+    const list = Array.isArray(data) ? data : data.results || [];
+    const found =
+      list.find((u) => u?.username === fallbackUsername) ?? list[0] ?? null;
+    if (!found) return { username: fallbackUsername };
 
-  // Try /auth/user/
-  try {
-    const { data } = await axios.get(`${API_BASE}/auth/user/`, { headers });
-    return data;
-  } catch (_) {}
-
-  // Fallback: /users/ (list) and match by username
-  try {
-    const { data } = await axios.get(`${API_BASE}/users/`, { headers });
-    if (Array.isArray(data)) {
-      const found =
-        data.find((u) => u?.username === fallbackUsername) ?? data[0] ?? null;
-      return found;
+    // If we have an id, fetch the full user resource at /users/{id}/
+    if (found?.id != null) {
+      try {
+        const { data: full } = await axios.get(
+          `${BASE_URL}/users/${found.id}/`,
+          { headers }
+        );
+        return full;
+      } catch (_) {
+        return found; // return partial entry if detailed endpoint not available
+      }
     }
-    return data;
+
+    return found;
   } catch (_) {
     return { username: fallbackUsername }; // last resort
   }
@@ -72,7 +71,7 @@ const Login = () => {
     try {
       // 1) Login to get token
       const { data } = await axios.post(
-        `${API_BASE}/auth/login/`,
+        `${BASE_URL}/auth/login/`,
         {
           username: formData.username,
           password: formData.password,
@@ -86,12 +85,10 @@ const Login = () => {
       // 2) Fetch profile (username + role)
       const me = await fetchUserProfile(token, formData.username);
 
-      // 3) Persist token in context (existing behavior)
-      //    If your AuthContext.login accepts only token, this is fine.
-      //    (Your MainLayout reads username/role from localStorage too.)
-      login(token);
+      // 3) Persist token + user profile in context so AuthContext has full user info
+      login(token, me);
 
-      // 4) Save username/role so MainLayout can display them
+      // 4) Save username/role so MainLayout and other parts can display them
       if (me?.username) localStorage.setItem("username", me.username);
       if (me?.role) localStorage.setItem("role", me.role);
       // optional: id/email
@@ -189,7 +186,7 @@ const Login = () => {
             className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-md hover:bg-blue-700 transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-blue-300 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg hover:shadow-xl"
           >
             {loading ? "Signing In..." : "Sign In"}
-          </button>   
+          </button>
         </form>
 
         <div className="text-center mt-6 text-gray-600 text-sm">
