@@ -223,6 +223,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         course: selectedCourseId,
         // Keep course_name for optimistic UI only (resolve from selectedCourse if possible)
         course_name: selectedCourse?.course_name ?? formData.course_name,
+        course_duration: formData.course_duration,
         last_call: formatDateForBackend(formData.last_call),
         next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,

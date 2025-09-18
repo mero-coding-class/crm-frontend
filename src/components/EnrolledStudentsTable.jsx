@@ -652,22 +652,6 @@ const SortableStudentRow = ({
                 onSave={(v) => onUpdateField(student.id, key, v)}
               />
             );
-          case "starting_date":
-            return (
-              <td
-                key={key}
-                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
-              >
-                <input
-                  type="date"
-                  value={student.starting_date || ""}
-                  onChange={(e) =>
-                    onUpdateField(student.id, "starting_date", e.target.value)
-                  }
-                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
-                />
-              </td>
-            );
           case "last_pay_date":
             return (
               <td
@@ -744,26 +728,6 @@ const SortableStudentRow = ({
                   }
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
                 />
-              </td>
-            );
-          case "total_payment":
-            return (
-              <td
-                key={key}
-                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
-              >
-                {student.total_payment
-                  ? `Rs ${parseFloat(student.total_payment).toFixed(2)}`
-                  : "N/A"}
-              </td>
-            );
-          case "last_pay_date":
-            return (
-              <td
-                key={key}
-                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
-              >
-                {formatDisplayDate(student.last_pay_date)}
               </td>
             );
           case "payment_completed":
