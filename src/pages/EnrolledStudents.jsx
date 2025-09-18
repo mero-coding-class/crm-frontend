@@ -145,6 +145,7 @@ const EnrolledStudents = () => {
     [authToken]
   );
 
+
   useEffect(() => {
     if (!authToken) return;
     fetchEnrolledStudents(currentPage);
@@ -264,30 +265,22 @@ const EnrolledStudents = () => {
       if (field && field.startsWith("lead.")) {
         backendField = field.replace("lead.", "");
       }
-      // Always use correct backend field names
-      if (backendField === "batch_name" || backendField === "batchName") {
+      // Robust mapping for batchname and course_duration
+      if (["batch_name", "batchName", "batchname"].includes(backendField)) {
         backendField = "batchname";
       }
       if (
-        backendField === "courseDuration" ||
-        backendField === "course_duration" ||
-        backendField === "courseDuration"
+        [
+          "courseDuration",
+          "course_duration",
+          "courseDuration",
+          "courseduration",
+        ].includes(backendField)
       ) {
         backendField = "course_duration";
       }
 
-      // Update local optimistic state
-      if (field === null && value && typeof value === "object") {
-        setAllStudents((prev) =>
-          prev.map((s) => (s.id === studentId ? { ...s, ...value } : s))
-        );
-      } else {
-        setAllStudents((prev) =>
-          prev.map((s) =>
-            s.id === studentId ? { ...s, [backendField]: value } : s
-          )
-        );
-      }
+      // Do NOT update local state until backend confirms success
 
       try {
         let payload = {};
@@ -331,18 +324,33 @@ const EnrolledStudents = () => {
           credentials: "include",
         });
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(
-            errorData.detail ||
-              response.statusText ||
-              "Failed to update enrollment"
+          let errorText = await response.text();
+          let errorData = {};
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { detail: errorText };
+          }
+          // Show error in UI and log full response
+          setError(
+            `Failed to update enrollment: ${
+              errorData.detail || response.statusText
+            }`
           );
+          console.error("PATCH error details:", {
+            url: `${BASE_URL}/enrollments/${studentId}/`,
+            payload,
+            status: response.status,
+            response: errorData,
+          });
+          return;
         }
         // Refetch enrollment data after successful update
         fetchEnrolledStudents(currentPage);
+        setError(null);
       } catch (err) {
+        setError(`Error updating student: ${err.message}`);
         console.error(`Error updating student ${field}:`, err);
-        setError(err.message);
       }
     },
     [authToken, fetchEnrolledStudents, currentPage]
