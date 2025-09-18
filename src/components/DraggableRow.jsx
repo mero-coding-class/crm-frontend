@@ -1,5 +1,5 @@
 // src/components/DraggableRow.jsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Bars3Icon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
@@ -198,19 +198,13 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  <input
-                    type="text"
-                    value={
-                      lead.age !== undefined && lead.age !== null
-                        ? Math.floor(Number(lead.age))
-                        : ""
-                    }
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const leadId = lead.id || lead._id; // prefer backend id
-                      onAgeChange(leadId, v);
+                  {/* local state to avoid triggering parent update on every keystroke */}
+                  <AgeGradeInput
+                    initialValue={lead.age}
+                    onCommit={(val) => {
+                      const leadId = lead.id || lead._id;
+                      onAgeChange(leadId, val);
                     }}
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
                 </td>
               );
@@ -222,19 +216,12 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  <input
-                    type="text"
-                    value={
-                      lead.grade !== undefined && lead.grade !== null
-                        ? Math.floor(Number(lead.grade))
-                        : ""
-                    }
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const leadId = lead.id || lead._id; // prefer backend id
-                      onGradeChange(leadId, v);
+                  <AgeGradeInput
+                    initialValue={lead.grade}
+                    onCommit={(val) => {
+                      const leadId = lead.id || lead._id;
+                      onGradeChange(leadId, val);
                     }}
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
                 </td>
               );
@@ -278,13 +265,12 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  <input
-                    type="text"
-                    value={lead.course_duration || ""}
-                    onChange={(e) =>
-                      onCourseDurationChange(lead.id || lead._id, e.target.value)
-                    }
-                    className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+                  <TextCommitInput
+                    initialValue={lead.course_duration}
+                    onCommit={(val) => {
+                      const leadId = lead.id || lead._id;
+                      onCourseDurationChange(leadId, val);
+                    }}
                   />
                 </td>
               );
@@ -330,7 +316,9 @@ const DraggableRow = ({
                   <input
                     type="date"
                     value={lead.last_call ? lead.last_call.split("T")[0] : ""}
-                    onChange={(e) => onLastCallChange(lead.id || lead._id, e.target.value)}
+                    onChange={(e) =>
+                      onLastCallChange(lead.id || lead._id, e.target.value)
+                    }
                     className="block w-full p-1 border rounded-md shadow-sm text-xs font-semibold"
                   />
                 </td>
@@ -344,7 +332,9 @@ const DraggableRow = ({
                   <input
                     type="date"
                     value={lead.next_call ? lead.next_call.split("T")[0] : ""}
-                    onChange={(e) => onNextCallChange(lead.id || lead._id, e.target.value)}
+                    onChange={(e) =>
+                      onNextCallChange(lead.id || lead._id, e.target.value)
+                    }
                     className="block w-full p-1 border rounded-md shadow-sm text-xs font-semibold"
                   />
                 </td>
@@ -357,7 +347,9 @@ const DraggableRow = ({
                 >
                   <select
                     value={lead.status}
-                    onChange={(e) => onStatusChange(lead.id || lead._id, e.target.value)}
+                    onChange={(e) =>
+                      onStatusChange(lead.id || lead._id, e.target.value)
+                    }
                     className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
                       lead.status
                     )}`}
@@ -384,7 +376,9 @@ const DraggableRow = ({
                   <textarea
                     value={localRemarks[lead._id] || ""}
                     onChange={(e) => handleLocalRemarkChange(e.target.value)}
-                    onBlur={(e) => onRemarkChange(lead.id || lead._id, e.target.value)}
+                    onBlur={(e) =>
+                      onRemarkChange(lead.id || lead._id, e.target.value)
+                    }
                     rows="3"
                     className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 resize-y"
                     placeholder="Add remarks..."
@@ -472,3 +466,71 @@ const DraggableRow = ({
 };
 
 export default DraggableRow;
+
+// Small helper: numeric (or empty) input that commits on blur or Enter
+const AgeGradeInput = ({ initialValue, onCommit }) => {
+  const [text, setText] = useState(
+    initialValue === null || initialValue === undefined
+      ? ""
+      : String(initialValue)
+  );
+
+  useEffect(() => {
+    setText(
+      initialValue === null || initialValue === undefined
+        ? ""
+        : String(initialValue)
+    );
+  }, [initialValue]);
+
+  const commit = () => {
+    // send empty string for cleared value (backend expects blank string, not null)
+    const payload = text === "" ? "" : text;
+    onCommit(payload);
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter") {
+      e.currentTarget.blur();
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === "" || /^\d*$/.test(v)) setText(v);
+      }}
+      onBlur={commit}
+      onKeyDown={handleKey}
+      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+    />
+  );
+};
+
+// Generic text input commit-on-blur/Enter
+const TextCommitInput = ({ initialValue, onCommit }) => {
+  const [text, setText] = useState(initialValue || "");
+
+  useEffect(() => {
+    setText(initialValue || "");
+  }, [initialValue]);
+
+  const commit = () => onCommit(text);
+  const handleKey = (e) => {
+    if (e.key === "Enter") e.currentTarget.blur();
+  };
+
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={handleKey}
+      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+    />
+  );
+};

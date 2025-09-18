@@ -131,6 +131,7 @@ const TrashTableDisplay = ({
   }, [leads]);
 
   const [columns, setColumns] = useState({
+    actions: { label: "Actions", visible: true },
     student_name: { label: "Student Name", visible: true },
     parents_name: { label: "Parents' Name", visible: true },
     email: { label: "Email", visible: true },
@@ -141,7 +142,6 @@ const TrashTableDisplay = ({
     source: { label: "Source", visible: true },
     course_name: { label: "Course", visible: true },
     changeLog: { label: "Deletion Info", visible: true },
-    actions: { label: "Actions", visible: true },
   });
 
   /* ---------------------- HORIZONTAL SCROLL LOGIC ----------------------- */

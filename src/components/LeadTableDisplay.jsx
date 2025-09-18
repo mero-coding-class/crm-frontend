@@ -12,8 +12,61 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 
+// Editable inputs that commit on blur or Enter
+const EditableNumberCell = ({ initialValue, onCommit }) => {
+  const [text, setText] = useState(
+    initialValue === null || initialValue === undefined ? "" : String(initialValue)
+  );
+
+  useEffect(() => {
+    setText(initialValue === null || initialValue === undefined ? "" : String(initialValue));
+  }, [initialValue]);
+
+  const commit = () => {
+    onCommit(text === "" ? "" : text);
+  };
+
+  const onKey = (e) => {
+    if (e.key === "Enter") e.currentTarget.blur();
+  };
+
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === "" || /^\d*$/.test(v)) setText(v);
+      }}
+      onBlur={commit}
+      onKeyDown={onKey}
+      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+    />
+  );
+};
+
+const EditableTextCell = ({ initialValue, onCommit }) => {
+  const [text, setText] = useState(initialValue || "");
+  useEffect(() => setText(initialValue || ""), [initialValue]);
+  const commit = () => onCommit(text);
+  const onKey = (e) => {
+    if (e.key === "Enter") e.currentTarget.blur();
+  };
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={onKey}
+      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+    />
+  );
+};
+
 // Initial column configuration
 const initialColumns = {
+  actions: { label: "Actions", visible: true },
   id: { label: "ID", visible: true },
   student_name: { label: "Student Name", visible: true },
   parents_name: { label: "Parents' Name", visible: true },
@@ -29,18 +82,18 @@ const initialColumns = {
   source: { label: "Source", visible: true },
   class_type: { label: "Class Type", visible: true },
   shift: { label: "Shift", visible: true },
-  previous_coding_experience: { label: "Previous Coding", visible: true },
-  lead_type: { label: "Lead Type", visible: true },
-  value: { label: "Value", visible: true },
-  adset_name: { label: "Adset Name", visible: true },
-  payment_type: { label: "Payment Type", visible: true },
-  device: { label: "Device", visible: true },
-  school_college_name: { label: "School/College", visible: true },
+  previous_coding_experience: { label: "Previous Coding", visible: false },
+  lead_type: { label: "Lead Type", visible: false },
+  value: { label: "Value", visible: false },
+  adset_name: { label: "Adset Name", visible: false },
+  payment_type: { label: "Payment Type", visible: false },
+  device: { label: "Device", visible: false },
+  school_college_name: { label: "School/College", visible: false },
   demo_scheduled: { label: "Demo Scheduled", visible: true },
   last_call: { label: "Last Call", visible: true },
   next_call: { label: "Next Call", visible: true },
-  created_at: { label: "Created At", visible: true },
-  updated_at: { label: "Updated At", visible: true },
+  created_at: { label: "Created At", visible: false },
+  updated_at: { label: "Updated At", visible: false },
   remarks: { label: "Remarks", visible: true },
   address_line_1: { label: "Address Line 1", visible: false },
   address_line_2: { label: "Address Line 2", visible: false },
@@ -48,9 +101,8 @@ const initialColumns = {
   county: { label: "County", visible: false },
   post_code: { label: "Post Code", visible: false },
   assigned_to: { label: "Assigned To", visible: true },
-  created_by_username: { label: "Created By", visible: true },
+  created_by_username: { label: "Created By", visible: false },
   change_log: { label: "Change Log", visible: true },
-  actions: { label: "Actions", visible: true },
 };
 
 const LeadTableDisplay = ({

@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { leadService } from "../services/api";
 import { BASE_URL } from "../config";
 
-// ✅ Header mapping dictionary
+// ✅ Header mapping dictionary (loose matching)
 const headerMapping = {
   "Student Name": "student_name",
   "Parents Name": "parents_name",
@@ -44,19 +44,21 @@ const backendToFrontendKeyMap = {
   class_type: "classType",
 };
 
-const mapRowToLead = (row) => {
+const mapRowToLead = (row, headerMapLower) => {
   const leadBackend = {};
   const leadFrontend = {};
 
   Object.entries(row).forEach(([key, value]) => {
-    const mappedKey = headerMapping[key.trim()];
+    if (!key) return;
+    const normalized = key.trim().toLowerCase();
+    const mappedKey = headerMapLower[normalized];
     if (mappedKey) {
-      const val = value && value.trim() !== "" ? value.trim() : null;
+      const val = value && String(value).trim() !== "" ? String(value).trim() : null;
 
-      // ✅ Backend (snake_case)
+      // Backend (snake_case)
       leadBackend[mappedKey] = val;
 
-      // ✅ Frontend (camelCase)
+      // Frontend (camelCase)
       const frontendKey = backendToFrontendKeyMap[mappedKey] || mappedKey;
       leadFrontend[frontendKey] = val;
     }
@@ -102,13 +104,16 @@ const ImportCsvButton = ({ authToken, onImported }) => {
   const [statusMessage, setStatusMessage] = useState("");
   const [importedCount, setImportedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [fileName, setFileName] = useState("");
 
   const abortControllerRef = useRef(null);
   const isCancelledRef = useRef(false);
+  const papaParserRef = useRef(null);
 
   const handleFileChange = async (e) => {
-    const file = e.target.files[0];
+  const file = e.target.files[0];
     if (!file) return;
+  setFileName(file.name || "");
     // initialize progress UI
     setImporting(true);
     setProgress(0);
@@ -121,7 +126,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
     abortControllerRef.current = new AbortController();
     isCancelledRef.current = false;
 
-    if (authToken) {
+  if (authToken) {
       try {
         const formData = new FormData();
         formData.append("file", file);
@@ -133,7 +138,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           signal: abortControllerRef.current.signal,
         });
 
-        if (resp.ok) {
+  if (resp.ok) {
           // Expect backend to return created leads or a summary
           let body = null;
           try {
@@ -183,13 +188,8 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           }
         }
 
-        console.warn(
-          "Backend CSV import failed, falling back to client-side import",
-          resp.status
-        );
-        setStatusMessage(
-          "Backend import failed; falling back to client-side import..."
-        );
+        console.warn("Backend CSV import failed, falling back to client-side import", resp.status);
+        setStatusMessage("Backend import failed; falling back to client-side import...");
         setProgress(10);
       } catch (err) {
         console.warn("Backend import attempt failed:", err);
@@ -201,11 +201,21 @@ const ImportCsvButton = ({ authToken, onImported }) => {
     }
 
     // Fallback: parse and create each row client-side (existing behavior)
+    // Build a lowercase header mapping for case-insensitive mapping
+    const headerMapLower = Object.fromEntries(
+      Object.entries(headerMapping).map(([k, v]) => [k.trim().toLowerCase(), v])
+    );
+
     Papa.parse(file, {
       header: true,
+      worker: true,
       skipEmptyLines: true,
+      chunkSize: 1024 * 1024,
+      beforeFirstChunk: (chunk) => {
+        // store parser ref for abort
+      },
       complete: async (results) => {
-        const mappedRows = results.data.map(mapRowToLead);
+        const mappedRows = results.data.map((r) => mapRowToLead(r, headerMapLower));
 
         // initialize counts
         const total = mappedRows.length;
@@ -327,25 +337,33 @@ const ImportCsvButton = ({ authToken, onImported }) => {
         onChange={handleFileChange}
         className="hidden"
         id="csvUpload"
+        disabled={importing}
       />
       <label
         htmlFor="csvUpload"
-        className="cursor-pointer px-4 py-2 border rounded-md bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
+        className={`cursor-pointer px-4 py-2 border rounded-md bg-white text-gray-700 hover:bg-gray-50 shadow-sm ${importing ? 'opacity-60 pointer-events-none' : ''}`}
       >
         Import CSV
       </label>
+
+      {fileName && (
+        <div className="mt-2 text-sm text-gray-700">File: {fileName}</div>
+      )}
+
       {importing && (
         <div className="mt-3">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-700">
               Imported {importedCount} / {totalCount}
             </div>
-            <button
-              onClick={cancelImport}
-              className="text-sm text-red-600 hover:underline ml-2"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={cancelImport}
+                className="text-sm text-red-600 hover:underline ml-2"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
           {statusMessage && (
             <div className="text-sm text-gray-600 mt-1">{statusMessage}</div>

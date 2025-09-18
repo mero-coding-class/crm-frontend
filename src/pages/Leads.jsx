@@ -481,13 +481,26 @@ const Leads = () => {
         const restored = e?.detail?.lead;
         if (!restored) return;
         setAllLeads((prev) => {
-          const filtered = (prev || []).filter(
-            (l) =>
-              !(l.id === restored.id || String(l._id) === String(restored.id))
-          );
+          // Remove any existing lead that matches the restored one by id/_id
+          // or by identifying fields (email/phone) to avoid duplicates.
+          const filtered = (prev || []).filter((l) => {
+            const sameId = matchId(l, restored.id || restored._id);
+            const sameEmail =
+              restored.email && l.email && l.email === restored.email;
+            const samePhone =
+              restored.phone_number &&
+              l.phone_number &&
+              l.phone_number === restored.phone_number;
+            return !(sameId || sameEmail || samePhone);
+          });
+
           const withId = {
             ...restored,
-            _id: restored._id || restored.id || `lead-${Date.now()}`,
+            _id:
+              restored._id ||
+              restored.id ||
+              restored.email ||
+              `lead-${Date.now()}`,
           };
           return [withId, ...filtered];
         });
@@ -911,7 +924,11 @@ const Leads = () => {
         }
 
         // When updating assigned user, send both assigned_to and assigned_to_username
-        if (fieldName === "assigned_to") {
+        // Accept updates coming as either 'assigned_to' or 'assigned_to_username'
+        if (
+          fieldName === "assigned_to" ||
+          fieldName === "assigned_to_username"
+        ) {
           updatesToSend = {
             assigned_to: newValue,
             assigned_to_username: newValue,
@@ -975,6 +992,10 @@ const Leads = () => {
           updatesToSend.nextCall = normalizePipeDateToIso(
             updatesToSend.nextCall
           );
+
+        // Normalize empty numeric fields to empty string to avoid backend 'may not be blank' errors
+        if (updatesToSend.age === null) updatesToSend.age = "";
+        if (updatesToSend.grade === null) updatesToSend.grade = "";
 
         // send update
         await leadService.updateLead(serverId, updatesToSend, authToken);
@@ -1579,123 +1600,7 @@ const Leads = () => {
         previousCodingExpOptions={previousCodingExpOptions}
       />
 
-      {showFilters && (
-        <div className="flex flex-wrap items-center justify-end mb-6 gap-3 p-4 border border-gray-200 rounded-md bg-white shadow-sm">
-          <h3 className="text-lg font-semibold mr-4">Advanced Filters:</h3>
-          <div className="relative w-full sm:w-auto">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {statusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-
-          <div className="relative w-full sm:w-auto">
-            <input
-              type="text"
-              placeholder="Filter by Age..."
-              value={filterAge}
-              onChange={(e) => setFilterAge(e.target.value)}
-              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
-            />
-          </div>
-          <div className="relative w-full sm:w-auto">
-            <input
-              type="text"
-              placeholder="Filter by Grade..."
-              value={filterGrade}
-              onChange={(e) => setFilterGrade(e.target.value)}
-              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
-            />
-          </div>
-
-          <div className="relative w-full sm:w-auto">
-            <input
-              type="date"
-              value={filterLastCall}
-              onChange={(e) => setFilterLastCall(e.target.value)}
-              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div className="relative w-full sm:w-auto">
-            <select
-              value={filterClassType}
-              onChange={(e) => setFilterClassType(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {classTypeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-          <div className="relative w-full sm:w-auto">
-            <select
-              value={filterShift}
-              onChange={(e) => setFilterShift(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {shiftOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-          <div className="relative w-full sm:w-auto">
-            <select
-              value={filterDevice}
-              onChange={(e) => setFilterDevice(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {deviceOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-          <div className="relative w-full sm:w-auto">
-            <select
-              value={filterSubStatus}
-              onChange={(e) => setFilterSubStatus(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {subStatusOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-          <div className="relative w-full sm:w-auto">
-            <select
-              value={filterPrevCodingExp}
-              onChange={(e) => setFilterPrevCodingExp(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {previousCodingExpOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-      )}
+      {/* Advanced filters handled by `LeadsFilters` component above. Duplicate block removed. */}
 
       <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         {error ? (

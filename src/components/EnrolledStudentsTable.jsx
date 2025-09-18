@@ -198,9 +198,9 @@ const EnrolledStudentsTable = ({
     post_code: { label: "Post Code", visible: false },
     demo_scheduled: { label: "Demo Scheduled", visible: false },
     // Enrollment-level metadata
+    actions: { label: "Actions", visible: true },
     created_at: { label: "Enrollment Created", visible: false },
     updated_at: { label: "Enrollment Updated", visible: false },
-    actions: { label: "Actions", visible: true },
   });
 
   const scrollContainerRef = useRef(null);
@@ -361,17 +361,24 @@ const EnrolledStudentsTable = ({
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
                 </th>
-                {/* Render headers in a stable order so cells align correctly */}
-                {Object.keys(columns)
-                  .filter((k) => columns[k].visible)
-                  .map((key) => (
+                {/* Render headers in a stable order so cells align correctly. Ensure 'actions' is first among visible columns. */}
+                {(() => {
+                  const visibleKeys = Object.keys(columns).filter(
+                    (k) => columns[k].visible
+                  );
+                  // Place actions first if present
+                  const orderedKeys = visibleKeys.includes("actions")
+                    ? ["actions", ...visibleKeys.filter((k) => k !== "actions")]
+                    : visibleKeys;
+                  return orderedKeys.map((key) => (
                     <th
                       key={key}
                       className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                     >
                       {columns[key].label}
                     </th>
-                  ))}
+                  ));
+                })()}
               </tr>
             </thead>
             <SortableContext
@@ -379,23 +386,29 @@ const EnrolledStudentsTable = ({
               strategy={verticalListSortingStrategy}
             >
               <tbody className="bg-white divide-y divide-gray-200">
-                {orderedStudents.map((student) => (
-                  <SortableStudentRow
-                    key={student.id}
-                    student={student}
-                    columns={columns}
-                    visibleKeys={Object.keys(columns).filter(
-                      (k) => columns[k].visible
-                    )}
-                    isSelected={selectedStudents.has(student.id)}
-                    onSelectRow={handleSelectRow}
-                    handleEdit={handleEdit}
-                    handleDelete={handleDelete}
-                    handlePaymentStatusChange={onUpdatePaymentStatus}
-                    onUpdateField={onUpdateField}
-                    courses={courses}
-                  />
-                ))}
+                {orderedStudents.map((student) => {
+                  const visibleKeys = Object.keys(columns).filter(
+                    (k) => columns[k].visible
+                  );
+                  const orderedKeys = visibleKeys.includes("actions")
+                    ? ["actions", ...visibleKeys.filter((k) => k !== "actions")]
+                    : visibleKeys;
+                  return (
+                    <SortableStudentRow
+                      key={student.id}
+                      student={student}
+                      columns={columns}
+                      visibleKeys={orderedKeys}
+                      isSelected={selectedStudents.has(student.id)}
+                      onSelectRow={handleSelectRow}
+                      handleEdit={handleEdit}
+                      handleDelete={handleDelete}
+                      handlePaymentStatusChange={onUpdatePaymentStatus}
+                      onUpdateField={onUpdateField}
+                      courses={courses}
+                    />
+                  );
+                })}
               </tbody>
             </SortableContext>
           </table>

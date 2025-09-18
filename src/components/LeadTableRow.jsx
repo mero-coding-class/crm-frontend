@@ -18,16 +18,24 @@ export const LeadTableRow = ({
 }) => {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [courseDurationValue, setCourseDurationValue] = useState(
+    lead.course_duration || ""
+  );
+
+  // Update courseDurationValue when lead prop changes
+  React.useEffect(() => {
+    setCourseDurationValue(lead.course_duration || "");
+  }, [lead.course_duration]);
 
   const { updateLead, updating, errors } = useLeadUpdates(
     authToken,
     (updates) => {
       onUpdateSuccess?.(lead.id, updates);
-      setToastMessage('Updated successfully');
+      setToastMessage("Updated successfully");
       setShowToast(true);
     },
     (error) => {
-      setToastMessage(error.message || 'Update failed');
+      setToastMessage(error.message || "Update failed");
       setShowToast(true);
     }
   );
@@ -36,41 +44,41 @@ export const LeadTableRow = ({
     try {
       await updateLead(lead.id, { [field]: value });
     } catch (error) {
-      console.error('Failed to update lead:', error);
+      console.error("Failed to update lead:", error);
     }
   };
 
   const renderCell = (key) => {
     const value = lead[key];
-    
+
     switch (key) {
-      case 'status':
+      case "status":
         return (
-          <StatusBadge 
-            status={value} 
-            onChange={(e) => handleFieldChange('status', e.target.value)}
+          <StatusBadge
+            status={value}
+            onChange={(e) => handleFieldChange("status", e.target.value)}
           />
         );
-      
-      case 'substatus':
+
+      case "substatus":
         return (
-          <StatusBadge 
-            status={value} 
+          <StatusBadge
+            status={value}
             type="substatus"
-            onChange={(e) => handleFieldChange('substatus', e.target.value)}
+            onChange={(e) => handleFieldChange("substatus", e.target.value)}
           />
         );
-      
-      case 'actions':
+
+      case "actions":
         return (
           <div className="flex space-x-2">
-            <button 
+            <button
               onClick={() => onEdit(lead)}
               className="text-blue-600 hover:text-blue-800"
             >
               Edit
             </button>
-            <button 
+            <button
               onClick={() => onDelete(lead.id)}
               className="text-red-600 hover:text-red-800"
             >
@@ -78,34 +86,51 @@ export const LeadTableRow = ({
             </button>
           </div>
         );
-      
+
       default:
         // For editable fields like age, grade, remarks etc.
-        if (['age', 'grade', 'remarks', 'course_duration'].includes(key)) {
+        if (["age", "grade", "remarks"].includes(key)) {
           return (
             <input
               type="text"
-              value={value || ''}
+              value={value || ""}
               onChange={(e) => handleFieldChange(key, e.target.value)}
               className="w-full p-1 border rounded"
             />
           );
         }
-        
+
+        // Special handling for course_duration to update only on blur
+        if (key === "course_duration") {
+          return (
+            <input
+              type="text"
+              value={courseDurationValue}
+              onChange={(e) => setCourseDurationValue(e.target.value)}
+              onBlur={() => {
+                if (courseDurationValue !== value) {
+                  handleFieldChange(key, courseDurationValue);
+                }
+              }}
+              className="w-full p-1 border rounded"
+            />
+          );
+        }
+
         // For date fields
-        if (key.includes('date') || key.includes('call')) {
+        if (key.includes("date") || key.includes("call")) {
           return (
             <input
               type="date"
-              value={value ? value.split('T')[0] : ''}
+              value={value ? value.split("T")[0] : ""}
               onChange={(e) => handleFieldChange(key, e.target.value)}
               className="w-full p-1 border rounded"
             />
           );
         }
-        
+
         // Default cell display
-        return value || '-';
+        return value || "-";
     }
   };
 
