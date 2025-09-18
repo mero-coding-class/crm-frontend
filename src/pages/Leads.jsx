@@ -86,64 +86,85 @@ const Leads = () => {
   } = useLeadUpdates(
     authToken,
     (leadId, updates) => {
-      setToast({
-        show: true,
-        message: "Lead updated successfully",
-        type: "success",
-      });
-      // Update will be handled by the crm:leadUpdated event
+      // ...existing code...
     },
     (error) => {
-      setToast({
-        show: true,
-        message: error.message || "Failed to update lead",
-        type: "error",
-      });
+      // ...existing code...
     }
   );
 
-  // Fetch user list for Assigned To dropdown so LeadTableDisplay can show options
+  // Always recalculate filters on latest allLeads
   useEffect(() => {
-    if (!authToken) return;
-    let cancelled = false;
-    const fetchUsers = async () => {
-      setUsersLoading(true);
-      try {
-        const res = await fetch(`${BASE_URL}/users/`, {
-          headers: { Authorization: `Token ${authToken}` },
-          credentials: "include",
-        });
-        if (!res.ok) {
-          console.warn("Leads: failed to fetch users", res.status);
-          return;
-        }
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : data.results || [];
-        // Normalize user objects so the UI can rely on `id`, `username`, `name`, `email`.
-        const normalized = (list || []).map((u) => ({
-          id: u?.id ?? null,
-          username: u?.username ?? (u?.email ? u.email.split("@")[0] : null),
-          name: u?.name ?? u?.username ?? u?.email ?? String(u?.id ?? ""),
-          email: u?.email ?? "",
-          raw: u,
-        }));
-        console.debug(
-          "Leads: fetched users count=",
-          normalized.length,
-          normalized.slice(0, 10)
-        );
-        if (!cancelled) setUsers(normalized);
-      } catch (err) {
-        console.error("Leads: error fetching users", err);
-      } finally {
-        if (!cancelled) setUsersLoading(false);
-      }
-    };
-    fetchUsers();
-    return () => {
-      cancelled = true;
-    };
-  }, [authToken]);
+    let filtered = [...allLeads];
+    if (filterStatus && filterStatus !== "All") {
+      filtered = filtered.filter(
+        (lead) => (lead.status || "") === filterStatus
+      );
+    }
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      filtered = filtered.filter(
+        (lead) =>
+          (lead.student_name && lead.student_name.toLowerCase().includes(q)) ||
+          (lead.email && lead.email.toLowerCase().includes(q)) ||
+          (lead.phone_number && lead.phone_number.toLowerCase().includes(q))
+      );
+    }
+    if (filterAge && filterAge.trim()) {
+      filtered = filtered.filter(
+        (lead) => lead.age && lead.age.toString().includes(filterAge.trim())
+      );
+    }
+    if (filterGrade && filterGrade.trim()) {
+      filtered = filtered.filter(
+        (lead) =>
+          lead.grade && lead.grade.toString().includes(filterGrade.trim())
+      );
+    }
+    if (filterLastCall && filterLastCall.trim()) {
+      filtered = filtered.filter((lead) => {
+        const val = lead.last_call || lead.recentCall || "";
+        return val === filterLastCall.trim();
+      });
+    }
+    if (filterClassType && filterClassType !== "Class") {
+      filtered = filtered.filter(
+        (lead) => (lead.class_type || "") === filterClassType
+      );
+    }
+    if (filterShift && filterShift !== "Shift") {
+      filtered = filtered.filter((lead) => (lead.shift || "") === filterShift);
+    }
+    if (filterDevice && filterDevice !== "Device") {
+      filtered = filtered.filter(
+        (lead) => (lead.device || "") === filterDevice
+      );
+    }
+    if (filterSubStatus && filterSubStatus !== "SubStatus") {
+      filtered = filtered.filter(
+        (lead) => (lead.sub_status || lead.substatus || "") === filterSubStatus
+      );
+    }
+    if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
+      filtered = filtered.filter(
+        (lead) =>
+          (lead.previous_coding_experience || "") === filterPrevCodingExp
+      );
+    }
+    setLeads(filtered);
+  }, [
+    allLeads,
+    filterStatus,
+    searchTerm,
+    filterAge,
+    filterGrade,
+    filterLastCall,
+    filterClassType,
+    filterShift,
+    filterDevice,
+    filterSubStatus,
+    filterPrevCodingExp,
+  ]);
 
   // Fetch courses once when authToken is available so AddLeadModal receives
   // the `courses` array (backend objects with `course_name`). Previously
@@ -171,10 +192,6 @@ const Leads = () => {
 
   const statusOptions = ["All", "Active", "Converted", "Lost"];
 
-  // Ensure any leads array we store locally contains a stable `_id` field that
-  // the UI expects (some backends return `id`, others `_id`). This helper
-  // guarantees consistent identity so per-row updates (remarks/status/etc.)
-  // can find and update the right lead.
   const ensureLeadIds = (arr) =>
     (Array.isArray(arr) ? arr : []).map((lead, i) => ({
       ...lead,
@@ -251,6 +268,7 @@ const Leads = () => {
           assigned_to_username:
             lead.assigned_to_username || lead.assigned_to || "",
           course_name: lead.course_name || "N/A",
+          course_duration: lead.course_duration || "",
         }))
         .slice(0, pageSize);
 
@@ -725,7 +743,11 @@ const Leads = () => {
         if (!leadObj) {
           throw new Error("Lead not found");
         }
-        const serverId = leadObj.id || leadId;
+        // Only use backend id for PATCH requests
+        if (!leadObj.id) {
+          throw new Error("Cannot update: backend lead id missing");
+        }
+        const serverId = leadObj.id;
 
         // Apply optimistic local change. Keep both naming variants in local
         // lead object so table rendering (which may read either) updates.
@@ -873,6 +895,12 @@ const Leads = () => {
 
         // send update
         await leadService.updateLead(serverId, updatesToSend, authToken);
+        // If course_duration was updated, refresh leads table
+        if (fieldName === "course_duration") {
+          if (typeof handleRefresh === "function") {
+            await handleRefresh();
+          }
+        }
 
         // status side-effects (enrollment/trash) — run after successful PATCH
         if (fieldName === "status") {
@@ -1241,11 +1269,14 @@ const Leads = () => {
     });
   }
 
+  // Robust filter chaining for all advanced filters
   if (filterStatus && filterStatus !== "All") {
-    currentLeads = currentLeads.filter((lead) => lead.status === filterStatus);
+    currentLeads = currentLeads.filter(
+      (lead) => (lead.status || "") === filterStatus
+    );
   }
-  if (searchTerm) {
-    const q = searchTerm.toLowerCase();
+  if (searchTerm && searchTerm.trim()) {
+    const q = searchTerm.trim().toLowerCase();
     currentLeads = currentLeads.filter(
       (lead) =>
         (lead.student_name && lead.student_name.toLowerCase().includes(q)) ||
@@ -1253,40 +1284,46 @@ const Leads = () => {
         (lead.phone_number && lead.phone_number.toLowerCase().includes(q))
     );
   }
-  if (filterAge) {
+  if (filterAge && filterAge.trim()) {
     currentLeads = currentLeads.filter(
-      (lead) => lead.age && lead.age.toString().includes(filterAge)
+      (lead) => lead.age && lead.age.toString().includes(filterAge.trim())
     );
   }
-  if (filterGrade) {
+  if (filterGrade && filterGrade.trim()) {
     currentLeads = currentLeads.filter(
-      (lead) => lead.grade && lead.grade.toString().includes(filterGrade)
+      (lead) => lead.grade && lead.grade.toString().includes(filterGrade.trim())
     );
   }
-  if (filterLastCall) {
-    currentLeads = currentLeads.filter(
-      (lead) => lead.last_call && lead.last_call === filterLastCall
-    );
+  if (filterLastCall && filterLastCall.trim()) {
+    currentLeads = currentLeads.filter((lead) => {
+      // Accept both YYYY-MM-DD and legacy formats
+      const val = lead.last_call || lead.recentCall || "";
+      return val === filterLastCall.trim();
+    });
   }
   if (filterClassType && filterClassType !== "Class") {
     currentLeads = currentLeads.filter(
-      (lead) => lead.class_type === filterClassType
+      (lead) => (lead.class_type || "") === filterClassType
     );
   }
   if (filterShift && filterShift !== "Shift") {
-    currentLeads = currentLeads.filter((lead) => lead.shift === filterShift);
+    currentLeads = currentLeads.filter(
+      (lead) => (lead.shift || "") === filterShift
+    );
   }
   if (filterDevice && filterDevice !== "Device") {
-    currentLeads = currentLeads.filter((lead) => lead.device === filterDevice);
+    currentLeads = currentLeads.filter(
+      (lead) => (lead.device || "") === filterDevice
+    );
   }
   if (filterSubStatus && filterSubStatus !== "SubStatus") {
     currentLeads = currentLeads.filter(
-      (lead) => lead.sub_status === filterSubStatus
+      (lead) => (lead.sub_status || lead.substatus || "") === filterSubStatus
     );
   }
   if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
     currentLeads = currentLeads.filter(
-      (lead) => lead.previous_coding_experience === filterPrevCodingExp
+      (lead) => (lead.previous_coding_experience || "") === filterPrevCodingExp
     );
   }
 
@@ -1591,11 +1628,7 @@ const Leads = () => {
         ) : (
           // Debugging fallback: if filters hide all leads, pass allLeads so we can confirm rendering
           <LeadTableDisplay
-            leads={
-              displayedLeads && displayedLeads.length > 0
-                ? displayedLeads
-                : allLeads
-            }
+            leads={leads}
             handleEdit={handleEdit}
             handleDelete={handleDelete}
             handleBulkDelete={handleBulkDelete}
