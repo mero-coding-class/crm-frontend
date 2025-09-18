@@ -31,6 +31,45 @@ const Leads = () => {
   const [allLeads, setAllLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  // Fetch users for Assigned To dropdown (inside component so hooks are initialized)
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+    const fetchUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const res = await fetch(
+          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/users/",
+          {
+            headers: { Authorization: `Token ${authToken}` },
+            credentials: "include",
+          }
+        );
+        if (!res.ok) {
+          console.warn("Failed to fetch users", res.status);
+          return;
+        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.results || [];
+        const normalized = (list || []).map((u) => ({
+          id: u?.id ?? null,
+          username: u?.username ?? (u?.email ? u.email.split("@")[0] : null),
+          name: u?.name ?? u?.username ?? u?.email ?? String(u?.id ?? ""),
+          email: u?.email ?? "",
+          raw: u,
+        }));
+        if (!cancelled) setUsers(normalized);
+      } catch (err) {
+        console.error("Error fetching users", err);
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    fetchUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -637,9 +676,13 @@ const Leads = () => {
       // optimistic update: apply changes locally first
       const prevLeadsSnapshot = (allLeads || []).slice();
       try {
+        // Optimistic update: match lead by backend `id` or UI `_id` (normalize both)
         setAllLeads((prev) =>
           prev.map((l) =>
-            l._id === updatedLead._id ? { ...l, ...updatedLead } : l
+            String(l.id || l._id || "") ===
+            String(updatedLead.id || updatedLead._id || "")
+              ? { ...l, ...updatedLead }
+              : l
           )
         );
 
@@ -689,12 +732,45 @@ const Leads = () => {
           payload.course = parseInt(payload.course, 10);
         }
 
-        // Resolve the true server id by looking up the existing lead in our
-        // snapshot; modal `updatedLead` may only contain a client `_id`.
+        // Always use backend id for PATCH requests. Match by normalized string
+        // form of _id to avoid type mismatches (server id may be number).
+        // Find the existing lead in our snapshot by trying several id variants
         const existing =
-          prevLeadsSnapshot.find((l) => l._id === updatedLead._id) || {};
-        const serverId =
-          existing.id || updatedLead.id || existing._id || updatedLead._id;
+          prevLeadsSnapshot.find((l) => {
+            const lhs = String(l.id || l._id || "");
+            const rhs = String(updatedLead.id || updatedLead._id || "");
+            return lhs && rhs && lhs === rhs;
+          }) || {};
+
+        // If we don't have an explicit backend id, try to resolve it from
+        // other common fields (id, email, phone_number). As a last resort
+        // use updatedLead.id if provided. This makes saving edits from the
+        // modal resilient when the modal supplies only a display _id.
+        let serverId = existing.id || updatedLead.id || updatedLead._id || null;
+
+        // If serverId looks like the display _id (e.g., "lead-..."), attempt
+        // to fall back to matching prevLeadsSnapshot by email/phone to find
+        // the real backend id.
+        if (
+          serverId &&
+          typeof serverId === "string" &&
+          serverId.startsWith("lead-")
+        ) {
+          const match = prevLeadsSnapshot.find(
+            (l) =>
+              l.email === updatedLead.email ||
+              l.phone_number === updatedLead.phone_number ||
+              l.phone === updatedLead.phone ||
+              l.id === updatedLead.id
+          );
+          if (match && match.id) serverId = match.id;
+        }
+
+        if (!serverId) {
+          // Still cannot determine server id — throw a helpful error so the
+          // caller can handle it (and we don't attempt a blind PATCH).
+          throw new Error("Cannot update: backend lead id missing");
+        }
 
         // Call API and merge server response into local state so UI matches backend
         const serverResp = await leadService.updateLead(
@@ -705,7 +781,8 @@ const Leads = () => {
 
         setAllLeads((prev) =>
           prev.map((l) =>
-            l._id === updatedLead._id
+            String(l.id || l._id || "") ===
+            String(updatedLead.id || updatedLead._id || "")
               ? {
                   // merge fields returned by server, prefer server values
                   ...l,
@@ -741,11 +818,21 @@ const Leads = () => {
         // First find the exact lead using the _id which is unique
         const leadObj = allLeads.find((l) => l._id === leadId);
         if (!leadObj) {
-          throw new Error("Lead not found");
+          setToast({
+            show: true,
+            message: "Cannot update: Lead not found.",
+            type: "error",
+          });
+          return;
         }
         // Only use backend id for PATCH requests
         if (!leadObj.id) {
-          throw new Error("Cannot update: backend lead id missing");
+          setToast({
+            show: true,
+            message: "Cannot update: Lead not yet saved to backend.",
+            type: "error",
+          });
+          return;
         }
         const serverId = leadObj.id;
 
