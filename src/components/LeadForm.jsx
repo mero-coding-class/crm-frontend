@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import api from '../services/api'; // CORRECTED: Path to api.js
+import { leadService } from "../services/api";
 import { PlusIcon } from "@heroicons/react/24/outline"; // Assuming heroicons is installed
 
 const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    status: 'New', // Default status
+    name: "",
+    email: "",
+    phone: "",
+    status: "New", // Default status
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -18,10 +18,10 @@ const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
       setFormData(leadToEdit);
     } else {
       setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        status: 'New',
+        name: "",
+        email: "",
+        phone: "",
+        status: "New",
       });
     }
   }, [leadToEdit]);
@@ -41,34 +41,45 @@ const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
     setSuccess(null);
 
     try {
-      if (leadToEdit && leadToEdit._id) {
-        await api.updateLead(leadToEdit._id, formData, token);
-        setSuccess('Lead updated successfully!');
+      if (leadToEdit) {
+        // Prefer backend numeric id when available, fall back to _id
+        const serverId = leadToEdit.id || leadToEdit._id;
+        await leadService.updateLead(serverId, formData, token);
+        setSuccess("Lead updated successfully!");
       } else {
-        await api.createLead(formData, token);
-        setSuccess('Lead created successfully!');
-        setFormData({ name: '', email: '', phone: '', status: 'New' }); // Clear form on create
+        await leadService.addLead(formData, token);
+        setSuccess("Lead created successfully!");
+        setFormData({ name: "", email: "", phone: "", status: "New" }); // Clear form on create
       }
       if (onSaveSuccess) {
         onSaveSuccess(); // Trigger refresh in parent component
       }
     } catch (err) {
-      console.error('Lead save error:', err);
-      setError(err.message || 'Failed to save lead.');
+      console.error("Lead save error:", err);
+      setError(err.message || "Failed to save lead.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md"> {/* Replaced card */}
-      <h2 className="text-2xl font-semibold mb-4">{leadToEdit ? 'Edit Lead' : 'Create New Lead'}</h2> {/* Replaced font-semibold */}
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      {" "}
+      {/* Replaced card */}
+      <h2 className="text-2xl font-semibold mb-4">
+        {leadToEdit ? "Edit Lead" : "Create New Lead"}
+      </h2>{" "}
+      {/* Replaced font-semibold */}
       {error && <div className="text-red-500 mb-4">{error}</div>}
       {success && <div className="text-green-500 mb-4">{success}</div>}
-
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label htmlFor="name" className="block text-gray-700 text-sm font-bold mb-2">Name:</label>
+          <label
+            htmlFor="name"
+            className="block text-gray-700 text-sm font-bold mb-2"
+          >
+            Name:
+          </label>
           <input
             type="text"
             id="name"
@@ -80,7 +91,12 @@ const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">Email:</label>
+          <label
+            htmlFor="email"
+            className="block text-gray-700 text-sm font-bold mb-2"
+          >
+            Email:
+          </label>
           <input
             type="email"
             id="email"
@@ -92,7 +108,12 @@ const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="phone" className="block text-gray-700 text-sm font-bold mb-2">Phone:</label>
+          <label
+            htmlFor="phone"
+            className="block text-gray-700 text-sm font-bold mb-2"
+          >
+            Phone:
+          </label>
           <input
             type="tel"
             id="phone"
@@ -103,7 +124,12 @@ const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
           />
         </div>
         <div className="mb-4">
-          <label htmlFor="status" className="block text-gray-700 text-sm font-bold mb-2">Status:</label>
+          <label
+            htmlFor="status"
+            className="block text-gray-700 text-sm font-bold mb-2"
+          >
+            Status:
+          </label>
           <select
             id="status"
             name="status"
@@ -123,7 +149,7 @@ const LeadForm = ({ leadToEdit, onSaveSuccess, token }) => {
           disabled={loading}
           className="bg-blue-600 text-white font-medium py-2 px-4 rounded-md hover:bg-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" // Replaced btn-primary
         >
-          {loading ? 'Saving...' : (leadToEdit ? 'Update Lead' : 'Create Lead')}
+          {loading ? "Saving..." : leadToEdit ? "Update Lead" : "Create Lead"}
         </button>
       </form>
     </div>

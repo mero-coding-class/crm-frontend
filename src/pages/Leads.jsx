@@ -231,6 +231,12 @@ const Leads = () => {
 
   const statusOptions = ["All", "Active", "Converted", "Lost"];
 
+  // helper to match a lead by backend `id` or UI `_id` (normalizes to string)
+  const matchId = (lead, idToMatch) => {
+    const n = (v) => (v === undefined || v === null ? "" : String(v));
+    return n(lead.id || lead._id) === n(idToMatch);
+  };
+
   const ensureLeadIds = (arr) =>
     (Array.isArray(arr) ? arr : []).map((lead, i) => ({
       ...lead,
@@ -496,8 +502,8 @@ const Leads = () => {
           enrollment.lead?.id || enrollment.lead || enrollment.student || null;
         if (leadId) {
           setAllLeads((prev) => {
-            const foundIndex = (prev || []).findIndex(
-              (l) => l.id === leadId || String(l._id) === String(leadId)
+            const foundIndex = (prev || []).findIndex((l) =>
+              matchId(l, leadId)
             );
             if (foundIndex === -1) return prev;
             const next = [...prev];
@@ -569,7 +575,7 @@ const Leads = () => {
         setAllLeads((prevLeads) => {
           const existingLeadIndex = prevLeads.findIndex(
             (lead) =>
-              lead._id === formattedLead._id ||
+              matchId(lead, formattedLead._id) ||
               (lead.phone_number === formattedLead.phone_number &&
                 lead.student_name === formattedLead.student_name)
           );
@@ -736,16 +742,11 @@ const Leads = () => {
         // form of _id to avoid type mismatches (server id may be number).
         // Find the existing lead in our snapshot by trying several id variants
         const existing =
-          prevLeadsSnapshot.find((l) => {
-            const lhs = String(l.id || l._id || "");
-            const rhs = String(updatedLead.id || updatedLead._id || "");
-            return lhs && rhs && lhs === rhs;
-          }) || {};
+          prevLeadsSnapshot.find((l) =>
+            matchId(l, updatedLead.id || updatedLead._id)
+          ) || {};
 
-        // If we don't have an explicit backend id, try to resolve it from
-        // other common fields (id, email, phone_number). As a last resort
-        // use updatedLead.id if provided. This makes saving edits from the
-        // modal resilient when the modal supplies only a display _id.
+        // Prefer backend numeric `id` for PATCH; fall back to updatedLead.id/_id
         let serverId = existing.id || updatedLead.id || updatedLead._id || null;
 
         // If serverId looks like the display _id (e.g., "lead-..."), attempt
@@ -815,8 +816,12 @@ const Leads = () => {
       // Optimistic update: apply locally first, then call API.
       const prevLeads = (allLeads || []).slice();
       try {
-        // First find the exact lead using the _id which is unique
-        const leadObj = allLeads.find((l) => l._id === leadId);
+        // Find the lead using either backend `id` or UI `_id`.
+        const normalize = (v) =>
+          v === undefined || v === null ? "" : String(v);
+        const leadObj = (allLeads || []).find(
+          (l) => normalize(l.id || l._id) === normalize(leadId)
+        );
         if (!leadObj) {
           setToast({
             show: true,
@@ -825,8 +830,17 @@ const Leads = () => {
           });
           return;
         }
-        // Only use backend id for PATCH requests
-        if (!leadObj.id) {
+
+        // Prefer backend numeric `id` for PATCH; fallback to `_id` if it looks like a real id
+        let serverId = leadObj.id || null;
+        if (
+          !serverId &&
+          leadObj._id &&
+          !String(leadObj._id).startsWith("lead-")
+        ) {
+          serverId = leadObj._id;
+        }
+        if (!serverId) {
           setToast({
             show: true,
             message: "Cannot update: Lead not yet saved to backend.",
@@ -834,7 +848,6 @@ const Leads = () => {
           });
           return;
         }
-        const serverId = leadObj.id;
 
         // Apply optimistic local change. Keep both naming variants in local
         // lead object so table rendering (which may read either) updates.
@@ -842,12 +855,14 @@ const Leads = () => {
           fieldName === "status" &&
           (newValue === "Lost" || newValue === "Converted")
         ) {
-          // remove locally for these statuses
-          setAllLeads((prev) => prev.filter((l) => l._id !== leadId));
+          // remove locally for these statuses (normalize ids)
+          setAllLeads((prev) =>
+            prev.filter((l) => normalize(l.id || l._id) !== normalize(leadId))
+          );
         } else {
           setAllLeads((prev) =>
             prev.map((lead) =>
-              lead._id === leadId
+              normalize(lead.id || lead._id) === normalize(leadId)
                 ? {
                     ...lead,
                     // keep both variants in sync
@@ -994,7 +1009,7 @@ const Leads = () => {
           if (newValue === "Converted") {
             try {
               const leadObjAfter =
-                prevLeads.find((l) => l._id === leadId) || {};
+                prevLeads.find((l) => matchId(l, leadId)) || {};
               const resolvedCourseId =
                 leadObjAfter.course &&
                 (typeof leadObjAfter.course === "number" ||
@@ -1059,7 +1074,7 @@ const Leads = () => {
           if (newValue === "Lost") {
             try {
               const leadObjAfter =
-                prevLeads.find((l) => l._id === leadId) || {};
+                prevLeads.find((l) => matchId(l, leadId)) || {};
               const serverIdAfter = leadObjAfter.id || leadId;
               const resp = await fetch(`${BASE_URL}/trash/${serverIdAfter}/`, {
                 method: "PATCH",
@@ -1279,7 +1294,9 @@ const Leads = () => {
 
   const handleFieldChange = (id, field, value) => {
     setLeads((prev) =>
-      prev.map((lead) => (lead._id === id ? { ...lead, [field]: value } : lead))
+      prev.map((lead) =>
+        matchId(lead, id) ? { ...lead, [field]: value } : lead
+      )
     );
   };
 
