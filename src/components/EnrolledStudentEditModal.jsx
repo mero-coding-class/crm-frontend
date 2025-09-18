@@ -11,75 +11,67 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
   const { authToken } = useAuth();
   // store full course objects (id, course_name, ...)
   const [courseOptions, setCourseOptions] = useState([]);
-  const [formData, setFormData] = useState({
-    ...student,
-    // Keep existing enrollment-level fields
-    student_name: student?.student_name || "",
-    parents_name: student?.parents_name || "",
-    email: student?.email || "",
-    phone_number: student?.phone_number || "",
-    course_name: student?.course_name || "",
-    batch_name: student?.batch_name || "",
-    assigned_teacher: student?.assigned_teacher || "",
-    course_duration: student?.course_duration || "",
-    starting_date: student?.starting_date || "",
-    total_payment: student?.total_payment ?? "",
-    first_installment: student?.first_installment ?? "",
-    second_installment: student?.second_installment ?? "",
-    third_installment: student?.third_installment ?? "",
-    last_pay_date: student?.last_pay_date || "",
-    payment_completed: student?.payment_completed,
-    // ensure invoice entries have file/previewUrl for consistent editing
-    invoice: (student?.invoice || []).map((inv) => ({
-      ...inv,
-      file: null,
-      previewUrl: inv?.url || "",
-    })),
-    // align created/updated with backend
-    created_at: student?.created_at || student?.enrollment_created_at || "",
-    updated_at: student?.updated_at || student?.enrollment_updated_at || "",
-    remarks: student?.remarks || "",
-    // Nested lead object - ensure default structure exists for editing
-    lead: {
-      ...(student?.lead || student || {}),
-      student_name:
-        (student?.lead && student.lead.student_name) ||
-        student?.student_name ||
-        "",
-      parents_name:
-        (student?.lead && student.lead.parents_name) ||
-        student?.parents_name ||
-        "",
-      email: (student?.lead && student.lead.email) || student?.email || "",
-      phone_number: (student?.lead && student.lead.phone_number) || "",
-      whatsapp_number: (student?.lead && student.lead.whatsapp_number) || "",
-      age: (student?.lead && student.lead.age) || "",
-      grade: (student?.lead && student.lead.grade) || "",
-      status: (student?.lead && student.lead.status) || "",
-      substatus: (student?.lead && student.lead.substatus) || "",
-      add_date: (student?.lead && student.lead.add_date) || "",
-      school_college_name:
-        (student?.lead && student.lead.school_college_name) || "",
-      lead_type: (student?.lead && student.lead.lead_type) || "",
-      source: (student?.lead && student.lead.source) || "",
-      class_type: (student?.lead && student.lead.class_type) || "",
-      shift: (student?.lead && student.lead.shift) || "",
-      previous_coding_experience:
-        (student?.lead && student.lead.previous_coding_experience) || "",
-      last_call: (student?.lead && student.lead.last_call) || "",
-      next_call: (student?.lead && student.lead.next_call) || "",
-      value: (student?.lead && student.lead.value) || "",
-      adset_name: (student?.lead && student.lead.adset_name) || "",
-      course_duration: (student?.lead && student.lead.course_duration) || "",
-      payment_type: (student?.lead && student.lead.payment_type) || "",
-      device: (student?.lead && student.lead.device) || "",
-      address_line_1: (student?.lead && student.lead.address_line_1) || "",
-      address_line_2: (student?.lead && student.lead.address_line_2) || "",
-      city: (student?.lead && student.lead.city) || "",
-      county: (student?.lead && student.lead.county) || "",
-      post_code: (student?.lead && student.lead.post_code) || "",
-      demo_scheduled: (student?.lead && student.lead.demo_scheduled) || "",
-    },
+  const [formData, setFormData] = useState(() => {
+    // Merge lead info immediately if available
+    const lead = student?.lead || {};
+    return {
+      ...student,
+      student_name: student?.student_name || lead.student_name || "",
+      parents_name: student?.parents_name || lead.parents_name || "",
+      email: student?.email || lead.email || "",
+      phone_number: student?.phone_number || lead.phone_number || "",
+      course_name: student?.course_name || "",
+      batch_name: student?.batch_name || "",
+      assigned_teacher: student?.assigned_teacher || "",
+      course_duration: student?.course_duration || lead.course_duration || "",
+      starting_date: student?.starting_date || "",
+      total_payment: student?.total_payment ?? "",
+      first_installment: student?.first_installment ?? "",
+      second_installment: student?.second_installment ?? "",
+      third_installment: student?.third_installment ?? "",
+      last_pay_date: student?.last_pay_date || "",
+      payment_completed: student?.payment_completed,
+      invoice: (student?.invoice || []).map((inv) => ({
+        ...inv,
+        file: null,
+        previewUrl: inv?.url || "",
+      })),
+      created_at: student?.created_at || student?.enrollment_created_at || "",
+      updated_at: student?.updated_at || student?.enrollment_updated_at || "",
+      remarks: student?.remarks || "",
+      lead: {
+        ...lead,
+        student_name: lead.student_name || student?.student_name || "",
+        parents_name: lead.parents_name || student?.parents_name || "",
+        email: lead.email || student?.email || "",
+        phone_number: lead.phone_number || student?.phone_number || "",
+        whatsapp_number: lead.whatsapp_number || "",
+        age: lead.age || "",
+        grade: lead.grade || "",
+        status: lead.status || "",
+        substatus: lead.substatus || "",
+        add_date: lead.add_date || "",
+        school_college_name: lead.school_college_name || "",
+        lead_type: lead.lead_type || "",
+        source: lead.source || "",
+        class_type: lead.class_type || "",
+        shift: lead.shift || "",
+        previous_coding_experience: lead.previous_coding_experience || "",
+        last_call: lead.last_call || "",
+        next_call: lead.next_call || "",
+        value: lead.value || "",
+        adset_name: lead.adset_name || "",
+        course_duration: lead.course_duration || "",
+        payment_type: lead.payment_type || "",
+        device: lead.device || "",
+        address_line_1: lead.address_line_1 || "",
+        address_line_2: lead.address_line_2 || "",
+        city: lead.city || "",
+        county: lead.county || "",
+        post_code: lead.post_code || "",
+        demo_scheduled: lead.demo_scheduled || "",
+      },
+    };
   });
 
   const modalRef = useRef(null);

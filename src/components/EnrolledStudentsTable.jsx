@@ -139,6 +139,7 @@ const EnrolledStudentsTable = ({
   handleDelete,
   handleBulkDelete,
   onUpdatePaymentStatus,
+  onUpdateField,
   courses = [],
   currentPage = 1,
   totalPages = 1,
@@ -179,8 +180,8 @@ const EnrolledStudentsTable = ({
     post_code: { label: "Post Code", visible: false },
     demo_scheduled: { label: "Demo Scheduled", visible: false },
     // Enrollment-level metadata
-  created_at: { label: "Enrollment Created", visible: false },
-  updated_at: { label: "Enrollment Updated", visible: false },
+    created_at: { label: "Enrollment Created", visible: false },
+    updated_at: { label: "Enrollment Updated", visible: false },
     actions: { label: "Actions", visible: true },
   });
 
@@ -194,11 +195,6 @@ const EnrolledStudentsTable = ({
   // (no-op cleanup required here; requestAnimationFrame-based scroll effect handles its own cleanup)
 
   // Instant field update
-  const onUpdateField = (studentId, field, value) => {
-    setOrderedStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? { ...s, [field]: value } : s))
-    );
-  };
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
@@ -448,10 +444,11 @@ const SortableStudentRow = ({
 
       {/* Render cells in the same stable order as headers */}
       {visibleKeys.map((key) => {
-        // If this is a nested lead field (we prefix columns with lead_), render from student.lead
+        // If this is a nested lead field (we prefix columns with lead_), render editable input for student.lead
         if (key.startsWith("lead_")) {
           const leadKey = key.replace("lead_", "");
-          const val = student.lead ? student.lead[leadKey] : undefined;
+          const val = student.lead ? student.lead[leadKey] : "";
+          // Render date picker for date fields
           if (
             [
               "add_date",
@@ -466,16 +463,84 @@ const SortableStudentRow = ({
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
               >
-                {formatDisplayDate(val)}
+                <input
+                  type="date"
+                  value={val ? val.split("T")[0] : ""}
+                  onChange={(e) =>
+                    onUpdateField(student.id, `lead.${leadKey}`, e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                />
               </td>
             );
           }
+          // Render select for status/substatus
+          if (leadKey === "status") {
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <select
+                  value={val || "Active"}
+                  onChange={(e) =>
+                    onUpdateField(student.id, `lead.${leadKey}`, e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  {["Active", "Converted", "Lost"].map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </td>
+            );
+          }
+          if (leadKey === "substatus") {
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <select
+                  value={val || "New"}
+                  onChange={(e) =>
+                    onUpdateField(student.id, `lead.${leadKey}`, e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  {[
+                    "New",
+                    "Open",
+                    "Followup",
+                    "inProgress",
+                    "Average",
+                    "Interested",
+                    "Junk",
+                  ].map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </td>
+            );
+          }
+          // Render text input for all other fields
           return (
             <td
               key={key}
               className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
             >
-              {String(val ?? "")}
+              <input
+                type="text"
+                value={val}
+                onChange={(e) =>
+                  onUpdateField(student.id, `lead.${leadKey}`, e.target.value)
+                }
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+              />
             </td>
           );
         }

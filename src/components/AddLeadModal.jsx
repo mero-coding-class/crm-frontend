@@ -24,6 +24,18 @@ const formatDateForBackend = (d) => {
 };
 
 const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
+  // Debug: log courses prop to help diagnose missing course_name in dropdown
+  React.useEffect(() => {
+    try {
+      console.debug("AddLeadModal: courses prop:", courses);
+      console.debug(
+        "AddLeadModal: coursesList length:",
+        Array.isArray(courses) ? courses.length : 0
+      );
+    } catch (e) {
+      // ignore
+    }
+  }, [courses]);
   const [formData, setFormData] = useState({
     student_name: "",
     parents_name: "",
@@ -33,7 +45,8 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     age: "",
     grade: "",
     source: "",
-    course_name: "", // Changed from course to course_name
+    course_name: "",
+    course_duration: "",
     class_type: "",
     shift: "",
     status: "Active",
@@ -114,7 +127,6 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // --- 1️⃣ Required Fields Validation ---
     const requiredFields = [
       "student_name",
       "parents_name",
@@ -165,9 +177,12 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       const tempId = `new-${Date.now()}`;
 
       // Transform the data to match backend's format and create the final lead object
-      // Find selected course by name so we can send the course id to backend
+      // Find selected course by id (value stored in select) so we can send the
+      // numeric id to backend. The select now stores course.id as value.
       const selectedCourse = courses.find(
-        (c) => String(c.course_name) === String(formData.course_name)
+        (c) =>
+          String(c.id) === String(formData.course_name) ||
+          String(c.id) === String(formData.course)
       );
       const selectedCourseId = selectedCourse ? selectedCourse.id : null;
 
@@ -184,7 +199,6 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         class_type: formData.class_type === "Select" ? "" : formData.class_type,
         shift: formData.shift === "Select" ? "" : formData.shift,
         status: formData.status || "New",
-        // backend expects `substatus` (no underscore)
         substatus: formData.sub_status || "New",
         device: formData.device === "Select" ? "" : formData.device,
         previous_coding_experience:
@@ -207,8 +221,8 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         school_college_name: formData.school_college_name || "",
         // Important: send course id under `course` so backend links correctly
         course: selectedCourseId,
-        // Keep course_name for optimistic UI only
-        course_name: formData.course_name,
+        // Keep course_name for optimistic UI only (resolve from selectedCourse if possible)
+        course_name: selectedCourse?.course_name ?? formData.course_name,
         last_call: formatDateForBackend(formData.last_call),
         next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,
@@ -267,6 +281,15 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
           selectedCourse?.course_name ??
           formData.course_name,
         course: result.course ?? selectedCourseId ?? null,
+        // Ensure front-end consumers can read both variants and course duration
+        substatus:
+          result.substatus ?? result.sub_status ?? backendPayload.substatus,
+        sub_status:
+          result.sub_status ?? result.substatus ?? backendPayload.sub_status,
+        course_duration:
+          result.course_duration ??
+          backendPayload.course_duration ??
+          formData.course_duration,
       };
 
       // Update the lead in the parent component with the server data
@@ -676,11 +699,20 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               <option value="">Select a course</option>
-              {coursesList.map((course) => (
-                <option key={course.id} value={course.course_name}>
-                  {course.course_name}
-                </option>
-              ))}
+              {coursesList.map((course) => {
+                const label =
+                  course.course_name ||
+                  course.name ||
+                  course.title ||
+                  String(course.id || "");
+                const value = course.id ?? label;
+                const key = course.id ?? label;
+                return (
+                  <option key={key} value={value}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
           </div>
           {/* Course Duration - Now a text field */}

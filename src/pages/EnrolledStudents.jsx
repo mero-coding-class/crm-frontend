@@ -95,199 +95,65 @@ const EnrolledStudents = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+  const [totalPages, setTotalPages] = useState(1);
   const [courses, setCourses] = useState([]);
 
-  // Fetch enrolled students
-  const fetchEnrolledStudents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const baseUrl = `${BASE_URL}/enrollments/`;
-    try {
-      const pageUrl = `${baseUrl}?page=1&page_size=${ITEMS_PER_PAGE}`;
-      const resp = await safeFetchWithRetries(pageUrl, {
-        headers: { Authorization: `Token ${authToken}` },
-        credentials: "include",
-      });
-
-      if (resp && resp.ok) {
-        // Use clone() because safeFetchWithRetries may return the same
-        // Response object to multiple callers; reading the body twice will
-        // throw "body stream already read". Clone before parsing.
-        const json = await resp.clone().json();
-        if (Array.isArray(json.results)) {
-          setAllStudents(json.results);
-          (async () => {
-            try {
-              if (json.next) {
-                let accumulated = [...json.results];
-                const MAX_ACCUMULATE = 2000;
-                // Instead of fetching the `next` absolute URL directly (which can
-                // trigger CORS/mixed-protocol issues if the backend returns a
-                // host/protocol that differs), parse the `page` query param from
-                // the `next` link and request pages via our canonical `baseUrl`.
-                let nextUrl = json.next;
-                while (nextUrl) {
-                  // extract page number from nextUrl
-                  let pageNum = null;
-                  try {
-                    const m = String(nextUrl).match(/[?&]page=(\d+)/);
-                    if (m) pageNum = Number(m[1]);
-                  } catch (e) {
-                    // ignore
-                  }
-
-                  const fetchUrl = pageNum
-                    ? `${baseUrl}?page=${pageNum}&page_size=${ITEMS_PER_PAGE}`
-                    : nextUrl; // fallback if we couldn't parse
-
-                    const r = await safeFetchWithRetries(fetchUrl, {
-                    headers: { Authorization: `Token ${authToken}` },
-                    credentials: "include",
-                  });
-                    if (!r || !r.ok) break;
-                    const j = await r.clone().json();
-                  accumulated = accumulated.concat(j.results || []);
-                  if (accumulated.length >= MAX_ACCUMULATE) {
-                    console.warn(
-                      "Enrollments background fetch reached cap, stopping further fetch to avoid UI freeze"
-                    );
-                    break;
-                  }
-                  nextUrl = j.next;
-                }
-                setAllStudents(
-                  (accumulated || []).slice(0, MAX_ACCUMULATE).sort((a, b) => {
-                    const ta = a.created_at || a.updated_at || null;
-                    const tb = b.created_at || b.updated_at || null;
-                    if (ta && tb) return new Date(tb) - new Date(ta);
-                    if (a.id !== undefined && b.id !== undefined)
-                      return Number(b.id) - Number(a.id);
-                    return 0;
-                  })
-                );
-              } else {
-                const full = await safeFetchWithRetries(baseUrl, {
-                  headers: { Authorization: `Token ${authToken}` },
-                  credentials: "include",
-                });
-                if (full && full.ok) {
-                  const all = await full.clone().json();
-                  setAllStudents(Array.isArray(all) ? all : all.results || []);
-                } else {
-                  console.warn(
-                    "Background full enrollments fetch failed or returned no response"
-                  );
-                }
-              }
-            } catch (e) {
-              console.warn(
-                "Background enrollments fetch failed",
-                e && e.message ? e.message : e
-              );
-            }
-          })();
-          return;
-        }
-
+  // Server-driven pagination: fetch enrollments for a page
+  const fetchEnrolledStudents = useCallback(
+    async (page = 1) => {
+      if (!authToken) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const url = `${BASE_URL}/enrollments/?page=${page}&page_size=${ITEMS_PER_PAGE}`;
+        const resp = await fetch(url, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (!resp.ok)
+          throw new Error(`Failed to fetch enrollments: ${resp.status}`);
+        const json = await resp.json();
+        let list = [];
+        let count = null;
         if (Array.isArray(json)) {
-          setAllStudents(
-            (json.slice(0, ITEMS_PER_PAGE) || []).sort((a, b) => {
-              const ta = a.created_at || a.updated_at || null;
-              const tb = b.created_at || b.updated_at || null;
-              if (ta && tb) return new Date(tb) - new Date(ta);
-              if (a.id !== undefined && b.id !== undefined)
-                return Number(b.id) - Number(a.id);
-              return 0;
-            })
+          list = json;
+          count = json.length;
+        } else if (Array.isArray(json.results)) {
+          list = json.results;
+          count = json.count ?? null;
+        } else if (Array.isArray(json.data)) {
+          list = json.data;
+          count = json.count ?? null;
+        }
+
+        setAllStudents(list || []);
+        setCurrentPage(page);
+        if (count != null) {
+          setTotalPages(Math.max(1, Math.ceil(count / ITEMS_PER_PAGE)));
+        } else {
+          setTotalPages(
+            Math.max(1, Math.ceil((list || []).length / ITEMS_PER_PAGE))
           );
-          (async () => {
-            try {
-              const full = await safeFetchWithRetries(baseUrl, {
-                headers: { Authorization: `Token ${authToken}` },
-                credentials: "include",
-              });
-              if (full && full.ok) {
-                const all = await full.json();
-                setAllStudents(
-                  ((Array.isArray(all) ? all : all.results || []) || []).sort(
-                    (a, b) => {
-                      const ta = a.created_at || a.updated_at || null;
-                      const tb = b.created_at || b.updated_at || null;
-                      if (ta && tb) return new Date(tb) - new Date(ta);
-                      if (a.id !== undefined && b.id !== undefined)
-                        return Number(b.id) - Number(a.id);
-                      return 0;
-                    }
-                  )
-                );
-              } else {
-                console.warn(
-                  "Background enrollments full fetch failed or returned no response"
-                );
-              }
-            } catch (e) {
-              console.warn(
-                "Background enrollments full fetch failed",
-                e && e.message ? e.message : e
-              );
-            }
-          })();
-          return;
         }
+      } catch (err) {
+        console.error("Failed to fetch enrollments page:", err);
+        setError(err.message || "Failed to load enrollments");
+      } finally {
+        setLoading(false);
       }
-      const fallback = await safeFetchWithRetries(baseUrl, {
-        headers: { Authorization: `Token ${authToken}` },
-        credentials: "include",
-      });
-      if (fallback && fallback.ok) {
-        const data = await fallback.clone().json();
-        setAllStudents(
-          ((Array.isArray(data) ? data : data.results || []) || []).sort(
-            (a, b) => {
-              const ta = a.created_at || a.updated_at || null;
-              const tb = b.created_at || b.updated_at || null;
-              if (ta && tb) return new Date(tb) - new Date(ta);
-              if (a.id !== undefined && b.id !== undefined)
-                return Number(b.id) - Number(a.id);
-              return 0;
-            }
-          )
-        );
-      } else {
-        // No usable response from fallback request. Try to extract status/text
-        let status = fallback && fallback.status;
-        let text = null;
-        try {
-          if (fallback) text = await fallback.clone().text();
-        } catch (e) {
-          // ignore parse errors
-        }
-        const msg = `Failed to fetch enrollments: status=${status} text=${String(
-          text
-        ).slice(0, 800)}`;
-        console.error(msg, { fallback });
-        throw new Error(msg);
-      }
-    } catch (err) {
-      // Log full error for debugging and surface HTTP detail in UI when present
-      console.error("fetchEnrolledStudents error:", err);
-      setError(err && err.message ? `Failed to load enrolled students: ${err.message}` : "Failed to load enrolled students");
-    } finally {
-      setLoading(false);
-    }
-  }, [authToken]);
+    },
+    [authToken]
+  );
 
   useEffect(() => {
-    if (authToken) fetchEnrolledStudents();
+    if (!authToken) return;
+    fetchEnrolledStudents(currentPage);
 
     const importDebounce = { timeoutId: null };
     const onImported = (e) => {
-      console.info(
-        "EnrolledStudents: detected crm:imported event — scheduling refresh"
-      );
       if (importDebounce.timeoutId) clearTimeout(importDebounce.timeoutId);
       importDebounce.timeoutId = setTimeout(() => {
-        fetchEnrolledStudents();
+        fetchEnrolledStudents(currentPage);
         importDebounce.timeoutId = null;
       }, 700);
     };
@@ -297,7 +163,7 @@ const EnrolledStudents = () => {
       window.removeEventListener("crm:imported", onImported);
       if (importDebounce.timeoutId) clearTimeout(importDebounce.timeoutId);
     };
-  }, [authToken, fetchEnrolledStudents]);
+  }, [authToken, fetchEnrolledStudents, currentPage]);
 
   // Respond to lead updates: if backend returns enrollment info or updates a
   // student's fields, merge them into enrolled students list.
@@ -367,152 +233,48 @@ const EnrolledStudents = () => {
   // Fetch course list so we can display friendly course names in the table
   useEffect(() => {
     let cancelled = false;
-    const fetchCourses = async () => {
+    const load = async () => {
       if (!authToken) return;
       try {
-        const data = await courseService.getCourses(authToken);
-        if (!cancelled) setCourses(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Failed to fetch courses:", err);
+        const res = await courseService.getCourses(authToken);
+        const list = Array.isArray(res) ? res : res?.results || [];
+        if (!cancelled) setCourses(list);
+      } catch (e) {
+        console.warn("EnrolledStudents: failed to load courses", e);
       }
     };
-    fetchCourses();
+    load();
     return () => {
       cancelled = true;
     };
   }, [authToken]);
 
-  // When the courses list is available, enrich any students that are missing
-  // an explicit course_name by resolving student.course (id or object).
-  useEffect(() => {
-    if (!courses || courses.length === 0 || allStudents.length === 0) return;
-    setAllStudents((prev) =>
-      prev.map((s) => {
-        if (s.course_name) return s;
-        const c = s.course;
-        let resolved = "";
-        if (c && typeof c === "object") {
-          resolved = c.course_name || c.name || "";
-        } else if (c !== undefined && c !== null) {
-          const found = courses.find((co) => String(co.id) === String(c));
-          if (found) resolved = found.course_name || found.name || "";
-        }
-        if (resolved) return { ...s, course_name: resolved };
-        return s;
-      })
-    );
-  }, [courses, allStudents.length]);
-
-  // Filtered students for table
-  const filteredStudents = allStudents.filter((student) => {
-    let matches = true;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const name = (student.student_name || "").toLowerCase();
-      const email = (student.email || "").toLowerCase();
-      matches = name.includes(q) || (email && email.includes(q));
-    }
-    if (matches && searchLastPaymentDate) {
-      matches = student.last_pay_date === searchLastPaymentDate;
-    }
-    if (matches && filterPaymentNotCompleted) {
-      matches = !student.payment_completed;
-    }
-    return matches;
-  });
-
-  // compute pagination
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredStudents.length / ITEMS_PER_PAGE)
-  );
-  // Ensure current page is valid when filteredStudents changes
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(1);
-  }, [filteredStudents.length, totalPages]);
-
-  // students to display on current page
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const enrolledStudents = filteredStudents.slice(
-    startIndex,
-    startIndex + ITEMS_PER_PAGE
-  );
-
-  // Modal handlers
-  const handleEdit = useCallback((student) => {
-    setEditingStudent(student);
-    setIsModalOpen(true);
-  }, []);
-
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
-    setEditingStudent(null);
-  }, []);
-
-  // Delete handlers
-  const handleDelete = useCallback(
-    async (studentId) => {
-      setLoading(true);
-      try {
-        const response = await fetch(`${BASE_URL}/enrollments/${studentId}/`, {
-          method: "DELETE",
-          headers: { Authorization: `Token ${authToken}` },
-          credentials: "include",
-        });
-        if (!response.ok)
-          throw new Error(`Failed to delete student: ${response.statusText}`);
-        setAllStudents((prev) => prev.filter((s) => s.id !== studentId));
-      } catch (err) {
-        console.error("Error deleting student:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [authToken]
-  );
-
-  const handleBulkDelete = useCallback(
-    async (studentIds) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const deletePromises = studentIds.map((id) =>
-          fetch(`${BASE_URL}/enrollments/${id}/`, {
-            method: "DELETE",
-            headers: { Authorization: `Token ${authToken}` },
-            credentials: "include",
-          })
-        );
-        const responses = await Promise.all(deletePromises);
-        const failedDeletes = responses.filter((r) => !r.ok);
-        if (failedDeletes.length > 0)
-          throw new Error(
-            `Failed to delete ${failedDeletes.length} student(s).`
-          );
-        setAllStudents((prev) =>
-          prev.filter((s) => !studentIds.includes(s.id))
-        );
-      } catch (err) {
-        console.error("Error during bulk delete:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [authToken]
-  );
-
   // Instant field update (sends PATCH to backend immediately)
   const handleUpdateField = useCallback(
     async (studentId, field, value) => {
-      // If caller passed a full object (modal save), apply full merge
       const paymentFields = new Set([
         "total_payment",
         "first_installment",
         "second_installment",
         "third_installment",
       ]);
+
+      // Map frontend field to backend field
+      let backendField = field;
+      if (field && field.startsWith("lead.")) {
+        backendField = field.replace("lead.", "");
+      }
+      // Always use correct backend field names
+      if (backendField === "batch_name" || backendField === "batchName") {
+        backendField = "batchname";
+      }
+      if (
+        backendField === "courseDuration" ||
+        backendField === "course_duration" ||
+        backendField === "courseDuration"
+      ) {
+        backendField = "course_duration";
+      }
 
       // Update local optimistic state
       if (field === null && value && typeof value === "object") {
@@ -521,36 +283,34 @@ const EnrolledStudents = () => {
         );
       } else {
         setAllStudents((prev) =>
-          prev.map((s) => (s.id === studentId ? { ...s, [field]: value } : s))
+          prev.map((s) =>
+            s.id === studentId ? { ...s, [backendField]: value } : s
+          )
         );
       }
 
       try {
         let payload = {};
-
         if (field === null && value && typeof value === "object") {
-          // full object update from modal
           payload = { ...value };
         } else {
-          payload = { [field]: value };
+          payload = { [backendField]: value };
         }
 
-        // If a payment-related field changed or payment_completed is set to true,
-        // update last_pay_date to today (in YYYY-MM-DD) so the table reflects recent payment
+        // Payment logic
         const todayDate = new Date().toISOString().split("T")[0];
         const paymentChanged =
-          field === "payment_completed" ||
-          paymentFields.has(field) ||
+          backendField === "payment_completed" ||
+          paymentFields.has(backendField) ||
           (field === null &&
             value &&
             (paymentFields.has("total_payment") ||
               paymentFields.has("first_installment")));
 
         if (paymentChanged) {
-          // If payment_completed explicitly true or any installment/total provided, set last_pay_date
           if (
             payload.payment_completed === true ||
-            paymentFields.has(field) ||
+            paymentFields.has(backendField) ||
             (field === null &&
               (payload.total_payment ||
                 payload.first_installment ||
@@ -571,15 +331,21 @@ const EnrolledStudents = () => {
           credentials: "include",
         });
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || response.statusText);
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.detail ||
+              response.statusText ||
+              "Failed to update enrollment"
+          );
         }
+        // Refetch enrollment data after successful update
+        fetchEnrolledStudents(currentPage);
       } catch (err) {
         console.error(`Error updating student ${field}:`, err);
         setError(err.message);
       }
     },
-    [authToken]
+    [authToken, fetchEnrolledStudents, currentPage]
   );
 
   // Payment status update
@@ -588,6 +354,68 @@ const EnrolledStudents = () => {
       handleUpdateField(studentId, "payment_completed", newStatus);
     },
     [handleUpdateField]
+  );
+
+  // Open edit modal for a student
+  const handleEdit = useCallback((student) => {
+    setEditingStudent(student);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+    setEditingStudent(null);
+  }, []);
+
+  // Delete a single enrollment
+  const handleDelete = useCallback(
+    async (studentId) => {
+      if (!window.confirm("Are you sure you want to delete this enrollment?"))
+        return;
+      try {
+        const resp = await fetch(`${BASE_URL}/enrollments/${studentId}/`, {
+          method: "DELETE",
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (!resp.ok)
+          throw new Error(`Failed to delete enrollment: ${resp.status}`);
+        setAllStudents((prev) => prev.filter((s) => s.id !== studentId));
+        // Optionally refresh current page to keep server and client in sync
+        fetchEnrolledStudents(currentPage);
+      } catch (err) {
+        console.error("Failed to delete enrollment:", err);
+        setError(err.message || "Failed to delete enrollment");
+      }
+    },
+    [authToken, fetchEnrolledStudents, currentPage]
+  );
+
+  // Bulk delete enrollments
+  const handleBulkDelete = useCallback(
+    async (ids = []) => {
+      if (!ids || ids.length === 0) return;
+      if (!window.confirm(`Permanently delete ${ids.length} enrollments?`))
+        return;
+      try {
+        await Promise.all(
+          ids.map((id) =>
+            fetch(`${BASE_URL}/enrollments/${id}/`, {
+              method: "DELETE",
+              headers: { Authorization: `Token ${authToken}` },
+              credentials: "include",
+            })
+          )
+        );
+        setAllStudents((prev) => prev.filter((s) => !ids.includes(s.id)));
+        fetchEnrolledStudents(currentPage);
+      } catch (err) {
+        console.error("Bulk delete failed:", err);
+        setError("Failed to delete some enrollments.");
+        fetchEnrolledStudents(currentPage);
+      }
+    },
+    [authToken, fetchEnrolledStudents, currentPage]
   );
 
   if (loading)
@@ -652,7 +480,7 @@ const EnrolledStudents = () => {
       {/* Students Table */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <EnrolledStudentsTable
-          students={enrolledStudents}
+          students={allStudents}
           courses={courses}
           handleEdit={handleEdit}
           handleDelete={handleDelete}

@@ -14,6 +14,7 @@ import {
 
 // Initial column configuration
 const initialColumns = {
+  id: { label: "ID", visible: true },
   student_name: { label: "Student Name", visible: true },
   parents_name: { label: "Parents' Name", visible: true },
   email: { label: "Email", visible: true },
@@ -21,20 +22,33 @@ const initialColumns = {
   whatsapp_number: { label: "WhatsApp Number", visible: true },
   age: { label: "Age", visible: true },
   grade: { label: "Grade", visible: true },
-  source: { label: "Source", visible: true },
   course_name: { label: "Course", visible: true },
   course_duration: { label: "Course Duration", visible: true },
-  assigned_to: { label: "Assigned To", visible: true },
-  lead_type: { label: "Lead Type", visible: false },
-  class_type: { label: "Class Type", visible: false },
-  shift: { label: "Shift", visible: false },
-  previous_coding_experience: { label: "Previous Coding", visible: false },
+  status: { label: "Status", visible: true },
+  substatus: { label: "Sub Status", visible: true },
+  source: { label: "Source", visible: true },
+  class_type: { label: "Class Type", visible: true },
+  shift: { label: "Shift", visible: true },
+  previous_coding_experience: { label: "Previous Coding", visible: true },
+  lead_type: { label: "Lead Type", visible: true },
+  value: { label: "Value", visible: true },
+  adset_name: { label: "Adset Name", visible: true },
+  payment_type: { label: "Payment Type", visible: true },
+  device: { label: "Device", visible: true },
+  school_college_name: { label: "School/College", visible: true },
+  demo_scheduled: { label: "Demo Scheduled", visible: true },
   last_call: { label: "Last Call", visible: true },
   next_call: { label: "Next Call", visible: true },
-  device: { label: "Device", visible: false },
+  created_at: { label: "Created At", visible: true },
+  updated_at: { label: "Updated At", visible: true },
   remarks: { label: "Remarks", visible: true },
-  sub_status: { label: "Sub Status", visible: true },
-  status: { label: "Status", visible: true },
+  address_line_1: { label: "Address Line 1", visible: false },
+  address_line_2: { label: "Address Line 2", visible: false },
+  city: { label: "City", visible: false },
+  county: { label: "County", visible: false },
+  post_code: { label: "Post Code", visible: false },
+  assigned_to: { label: "Assigned To", visible: true },
+  created_by_username: { label: "Created By", visible: true },
   change_log: { label: "Change Log", visible: true },
   actions: { label: "Actions", visible: true },
 };
@@ -127,6 +141,8 @@ const LeadTableDisplay = ({
     // guarantee a unique id: prefer _id, then id, then email/phone, then index
     _id:
       lead._id || lead.id || lead.email || lead.phone_number || `lead-${_idx}`,
+    // Use the actual backend ID without modification
+    id: lead.id || "",
     student_name: lead.student_name || "N/A",
     parents_name: lead.parents_name || "N/A",
     email: lead.email || "",
@@ -143,7 +159,9 @@ const LeadTableDisplay = ({
     next_call: lead.next_call || "",
     status: lead.status || lead.status || "New",
     // backend may use `substatus` or `sub_status`
-    sub_status: lead.sub_status || lead.substatus || "New",
+    // Ensure both variants match by using the most recently provided value
+    sub_status: lead.substatus || lead.sub_status || "New",
+    substatus: lead.substatus || lead.sub_status || "New",
     remarks: lead.remarks || "",
     previous_coding_experience: lead.previous_coding_experience || "",
     value: lead.value || "",
@@ -282,12 +300,18 @@ const LeadTableDisplay = ({
     ? parentCurrentPage
     : internalPage;
 
+  // Sort leads with newest first (based on createdAt/addDate if available)
+  const sortedLeads = [...normalizedLeads].sort((a, b) => {
+    const dateA = new Date(a.created_at || a.addDate || 0);
+    const dateB = new Date(b.created_at || b.addDate || 0);
+    return dateB - dateA; // newest first
+  });
+
   // If parent controls pagination we assume it has already supplied the
-  // appropriate subset of `leads` (or wants the full list). Otherwise slice
-  // the normalized leads by internal pagination state.
+  // appropriate subset of `leads`. Otherwise slice the sorted leads by internal pagination.
   const currentLeads = parentControlsPagination
-    ? normalizedLeads
-    : normalizedLeads.slice(
+    ? sortedLeads
+    : sortedLeads.slice(
         (currentPage - 1) * leadsPerPage,
         currentPage * leadsPerPage
       );
@@ -449,9 +473,10 @@ const LeadTableDisplay = ({
                       .filter(([, { visible }]) => visible)
                       .map(([k]) => k);
 
-                    return currentLeads.map((lead) => (
+                    return currentLeads.map((lead, index) => (
                       <DraggableRow
                         key={lead._id}
+                        rowIndex={index}
                         lead={{
                           ...lead,
                           _users: users || [],

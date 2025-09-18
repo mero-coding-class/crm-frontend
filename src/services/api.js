@@ -17,7 +17,17 @@ const handleResponse = async (response) => {
     }
     throw new Error(errorMsg);
   }
-  return response.json();
+  // Some endpoints may return 204 No Content — handle that gracefully.
+  if (response.status === 204) return {};
+  // If there's no body, return an empty object to avoid parse errors
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // fallback to original behavior
+    return text;
+  }
 };
 
 // normalize header keys like "Student Name" -> "student_name"
@@ -82,30 +92,70 @@ const _csvRowToLeadPayload = (row, courses) => {
   };
 };
 
-// Format date from 'YYYY-MM-DD' or Date to 'YYYY|DD|MM'
-const formatDateForBackend = (d) => {
+// Format date for API: backend expects YYYY-MM-DD for date fields like last_call/next_call.
+const formatDateForApi = (d) => {
   if (!d && d !== 0) return null;
-  // If already in backend format, return as-is
-  if (typeof d === "string" && d.includes("|")) return d;
-
-  // Date object
+  // Date object -> YYYY-MM-DD
   if (d instanceof Date) {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}|${dd}|${mm}`;
+    return `${yyyy}-${mm}-${dd}`;
   }
 
-  // String in YYYY-MM-DD
-  const s = String(d);
+  // If already a string in YYYY-MM-DD, return it
+  const s = String(d).trim();
   const parts = s.split("-");
-  if (parts.length === 3) {
-    const [yyyy, mm, dd] = parts;
-    return `${yyyy}|${dd}|${mm}`;
+  if (parts.length === 3 && parts[0].length === 4) return s;
+
+  // If input was in backend-old format 'YYYY|DD|MM', convert to YYYY-MM-DD
+  if (s.includes("|")) {
+    const parts2 = s.split("|");
+    if (parts2.length === 3) {
+      const [yyyy, dd, mm] = parts2;
+      return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+    }
   }
 
-  // Fallback: return original string
-  return s;
+  // Fallback: try Date parse and format
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return null;
+};
+
+// Allowed shift choices (keeps in sync with UI options)
+const allowedShifts = [
+  "7 A.M. - 9 A.M.",
+  "8 A.M. - 10 A.M.",
+  "10 A.M. - 12 P.M.",
+  "11 A.M. - 1 P.M.",
+  "12 P.M. - 2 P.M.",
+  "2 P.M. - 4 P.M.",
+  "2:30 P.M. - 4:30 P.M.",
+  "4 P.M. - 6 P.M.",
+  "4:30 P.M. - 6:30 P.M.",
+  "5 P.M. - 7 P.M.",
+  "6 P.M. - 7 P.M.",
+  "6 P.M. - 8 P.M.",
+  "7 P.M. - 8 P.M.",
+  // legacy/fallback short names
+  "Morning",
+  "Afternoon",
+  "Evening",
+  "Flexible",
+];
+
+const sanitizeShift = (s) => {
+  if (s === undefined || s === null) return undefined;
+  const str = String(s).trim();
+  if (!str) return undefined;
+  return allowedShifts.includes(str) ? str : undefined;
 };
 
 export const leadService = {
@@ -130,8 +180,8 @@ export const leadService = {
     leadsList.forEach((lead) => {
       if (lead.course || lead.course_name) {
         console.log("Lead with course info:", {
-          last_call: formatDateForBackend(lead.last_call) || null,
-          next_call: formatDateForBackend(lead.next_call) || null,
+          last_call: formatDateForApi(lead.last_call) || null,
+          next_call: formatDateForApi(lead.next_call) || null,
           course_name: lead.course_name,
         });
       }
@@ -140,6 +190,8 @@ export const leadService = {
     return leadsList.map((lead) => ({
       // Use just 'id' since that's what backend uses
       id: lead.id,
+      // Provide a stable _id for UI components that expect it
+      _id: lead._id || lead.id || lead.email || lead.phone_number || `lead-${lead.id}`,
       student_name: lead.student_name || "",
       parents_name: lead.parents_name || "",
       phone_number: lead.phone_number || "",
@@ -159,8 +211,12 @@ export const leadService = {
   // or `assigned_to_username` — include both.
   assigned_to: lead.assigned_to || lead.assigned_to_username || "",
   assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
-  // Also include substatus and lead_type if backend provides them
+  // Include both substatus and sub_status variants so the UI can
+  // reliably read whichever naming the backend returns.
   substatus: lead.substatus || lead.sub_status || "New",
+  sub_status: lead.sub_status || lead.substatus || "New",
+  // Expose course_duration (backend may use snake_case or camelCase)
+  course_duration: lead.course_duration || lead.courseDuration || "",
   lead_type: lead.lead_type || lead.leadType || "",
   school_college_name: lead.school_college_name || "",
 
@@ -197,10 +253,13 @@ export const leadService = {
     const backendUpdates = {};
     if (updates.status !== undefined) backendUpdates.status = updates.status;
     if (updates.remarks !== undefined) backendUpdates.remarks = updates.remarks;
-    if (updates.recentCall !== undefined)
-      backendUpdates.last_call = formatDateForBackend(updates.recentCall);
-    if (updates.nextCall !== undefined)
-      backendUpdates.next_call = formatDateForBackend(updates.nextCall);
+    // Support both camelCase (recentCall/nextCall) and snake_case
+    // (last_call/next_call) coming from different parts of the app.
+    if (updates.recentCall !== undefined) backendUpdates.last_call = formatDateForApi(updates.recentCall);
+    if (updates.nextCall !== undefined) backendUpdates.next_call = formatDateForApi(updates.nextCall);
+    // Accept snake_case variants as well (some callers use these keys).
+    if (updates.last_call !== undefined) backendUpdates.last_call = formatDateForApi(updates.last_call);
+    if (updates.next_call !== undefined) backendUpdates.next_call = formatDateForApi(updates.next_call);
     if (updates.device !== undefined) backendUpdates.device = updates.device;
     // Avoid sending null for age/grade (backend rejects null). Send empty string
     // when the user clears the field so server receives a blank value instead
@@ -232,7 +291,10 @@ export const leadService = {
     if (updates.value !== undefined) backendUpdates.value = updates.value;
     if (updates.adsetName !== undefined)
       backendUpdates.adset_name = updates.adsetName;
-    if (updates.shift !== undefined) backendUpdates.shift = updates.shift;
+    if (updates.shift !== undefined) {
+      const s = sanitizeShift(updates.shift);
+      if (s !== undefined) backendUpdates.shift = s;
+    }
     if (updates.paymentType !== undefined)
       backendUpdates.payment_type = updates.paymentType;
     if (updates.previousCodingExp !== undefined)
@@ -242,6 +304,16 @@ export const leadService = {
     if (updates.addDate !== undefined) backendUpdates.add_date = updates.addDate;
     if (updates.changeLog !== undefined)
       backendUpdates.change_log = updates.changeLog;
+    // Support updating substatus (UI may send `substatus` or `sub_status`)
+    // Backend expects `substatus` (no underscore) — accept either incoming
+    // variant but always send `substatus` to the server.
+    if (updates.substatus !== undefined) backendUpdates.substatus = updates.substatus;
+    if (updates.sub_status !== undefined) backendUpdates.substatus = updates.sub_status;
+    // Support updating course duration (UI may send snake_case or camelCase)
+    if (updates.course_duration !== undefined)
+      backendUpdates.course_duration = updates.course_duration;
+    if (updates.courseDuration !== undefined)
+      backendUpdates.course_duration = updates.courseDuration;
     // Support updating assigned user (username) or assigned_to field
     if (updates.assigned_to !== undefined)
       backendUpdates.assigned_to = updates.assigned_to;
@@ -257,13 +329,54 @@ export const leadService = {
       body: JSON.stringify(backendUpdates),
     });
 
+    // Debug: log outgoing request details so we can trace missing updates
+    try {
+      console.debug("leadService.updateLead -> PATCH", `${BASE_URL}/leads/${id}/`, {
+        id,
+        payload: backendUpdates,
+      });
+    } catch (e) {
+      // ignore
+    }
+
     // Wait for the parsed JSON so we can broadcast the updated lead to the app
     const data = await handleResponse(response);
+
+    // Debug: log server response for visibility during dev
+    try {
+      console.debug("leadService.updateLead <- response", { id, data });
+    } catch (e) {
+      // ignore
+    }
+
+    // Some backends return an empty object or 204 No Content on PATCH.
+    // In that case we still want the app to have the updated fields the UI sent
+    // (so they persist in the UI until a fresh fetch). Merge the server
+    // response with the backendUpdates we sent and ensure an `id` is present
+    // so listeners can find the right row to update.
+  const serverData = data && typeof data === "object" ? data : {};
+  const merged = { ...(serverData || {}), ...(backendUpdates || {}) };
+  // Ensure id/_id are set (use server id when available, otherwise use the id we patched)
+  merged.id = serverData.id || serverData._id || id;
+  merged._id = serverData._id || serverData.id || merged._id || id;
+
+  // Normalize naming variants so UI code can read `substatus` primarily.
+  merged.substatus = merged.substatus || merged.sub_status || backendUpdates.substatus || backendUpdates.sub_status || "New";
+  // Keep underscore variant as alias for legacy readers
+  merged.sub_status = merged.sub_status || merged.substatus;
+
+  // Keep assigned_to and assigned_to_username in sync
+  merged.assigned_to = merged.assigned_to || merged.assigned_to_username || backendUpdates.assigned_to || backendUpdates.assigned_to_username || "";
+  merged.assigned_to_username = merged.assigned_to_username || merged.assigned_to || "";
+
+  // Normalize course_duration variants
+  merged.course_duration = merged.course_duration || merged.courseDuration || backendUpdates.course_duration || backendUpdates.courseDuration || "";
+  merged.courseDuration = merged.courseDuration || merged.course_duration || "";
 
     try {
       // Broadcast a global event so other pages/components can update optimistically
       window.dispatchEvent(
-        new CustomEvent("crm:leadUpdated", { detail: { lead: data } })
+        new CustomEvent("crm:leadUpdated", { detail: { lead: merged } })
       );
 
       // If the update included remarks, send a targeted event so the table
@@ -272,7 +385,7 @@ export const leadService = {
         try {
           window.dispatchEvent(
             new CustomEvent("crm:remarkUpdated", {
-              detail: { id: data.id || data._id || null, remarks: backendUpdates.remarks },
+              detail: { id: merged.id || null, remarks: backendUpdates.remarks },
             })
           );
         } catch (e) {
@@ -284,22 +397,52 @@ export const leadService = {
       console.warn("Could not dispatch crm:leadUpdated event", e);
     }
 
-    return data;
+    return merged;
   },
 
   addLead: async (newLeadData, authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
 
     // The data should already be in the correct format from the form
+    // Normalize fields to backend expectations (snake_case keys).
+    // Build backendData carefully and sanitize shift
     const backendData = {
+      // include all provided values, we'll override specific keys below
       ...newLeadData,
-      // Preserve status only if provided by caller. Do NOT force a default
-      // value here because the backend enforces allowed choices (Active/Converted/Lost).
       ...(newLeadData.status !== undefined ? { status: newLeadData.status } : {}),
-      add_date: newLeadData.add_date || new Date().toISOString().split('T')[0],
-      last_call: newLeadData.last_call || null,
-      next_call: newLeadData.next_call || null
+      add_date: newLeadData.add_date || new Date().toISOString().split("T")[0],
+      // last_call/next_call should be YYYY-MM-DD (convert if possible)
+      last_call: formatDateForApi(newLeadData.last_call) || null,
+      next_call: formatDateForApi(newLeadData.next_call) || null,
+      // ensure sub_status is sent if provided under either name
+      // ensure we send `substatus` (backend uses this key). Accept either
+      // incoming `substatus` or `sub_status`.
+      ...(newLeadData.sub_status !== undefined ? { substatus: newLeadData.sub_status } : {}),
+      ...(newLeadData.substatus !== undefined ? { substatus: newLeadData.substatus } : {}),
+      // course duration mapping
+      ...(newLeadData.course_duration !== undefined
+        ? { course_duration: newLeadData.course_duration }
+        : {}),
+      ...(newLeadData.courseDuration !== undefined
+        ? { course_duration: newLeadData.courseDuration }
+        : {}),
+      // assigned username mapping
+      ...(newLeadData.assigned_to_username !== undefined
+        ? { assigned_to_username: newLeadData.assigned_to_username }
+        : {}),
+      ...(newLeadData.assigned_to !== undefined && newLeadData.assigned_to_username === undefined
+        ? { assigned_to_username: newLeadData.assigned_to, assigned_to: newLeadData.assigned_to }
+        : {}),
     };
+
+    // Sanitize shift: only include if valid
+    const sanitizedShift = sanitizeShift(newLeadData.shift ?? newLeadData.shift === "" ? newLeadData.shift : undefined);
+    if (sanitizedShift !== undefined) {
+      backendData.shift = sanitizedShift;
+    } else {
+      // Remove shift if explicitly invalid or blank to avoid backend 400s
+      if (backendData.shift !== undefined) delete backendData.shift;
+    }
     
     const response = await fetch(`${BASE_URL}/leads/`, {
       method: "POST",

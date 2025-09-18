@@ -29,10 +29,47 @@ const getFormattedDate = (dateString) => {
 };
 
 const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
-  // Initialize formData as empty then normalize incoming `lead` prop into
-  // camelCase fields. This ensures the modal shows correct initial values
-  // whether `lead` uses snake_case (from API) or camelCase (internal).
-  const [formData, setFormData] = useState({});
+  // Controlled form defaults to avoid uncontrolled -> controlled warnings.
+  // Keep a flat list of commonly-used fields so every input has a defined
+  // initial value. We'll merge the normalized lead into this object when
+  // `lead` prop is available.
+  const DEFAULT_FORM = {
+    _id: "",
+    studentName: "",
+    parentsName: "",
+    email: "",
+    phone: "",
+    contactWhatsapp: "",
+    age: "",
+    grade: "",
+    course: "",
+    courseDuration: "",
+    course_duration: "",
+    source: "",
+    addDate: "",
+    recentCall: "",
+    nextCall: "",
+    status: "Active",
+    substatus: "New", // Backend expects this field
+    permanentAddress: "",
+    temporaryAddress: "",
+    city: "",
+    county: "",
+    postCode: "",
+    classType: "",
+    value: "",
+    adsetName: "",
+    remarks: "",
+    shift: "",
+    paymentType: "",
+    device: "",
+    previousCodingExp: "",
+    workshopBatch: "",
+    assigned_to: "",
+    assigned_to_username: "",
+  };
+
+  const [formData, setFormData] = useState(DEFAULT_FORM);
 
   const { user, authToken } = useAuth();
 
@@ -87,7 +124,12 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
         "",
       recentCall: getFormattedDate(lead.recentCall || lead.last_call) || "",
       nextCall: getFormattedDate(lead.nextCall || lead.next_call) || "",
-      status: lead.status || lead.state || "New",
+      status: lead.status || lead.state || "",
+      // support both substatus naming variants and course duration
+      substatus: lead.substatus || lead.sub_status || "",
+      sub_status: lead.sub_status || lead.substatus || "",
+      course_duration: lead.course_duration || lead.courseDuration || "",
+      courseDuration: lead.courseDuration || lead.course_duration || "",
       permanentAddress: lead.permanentAddress || lead.address_line_1 || "",
       temporaryAddress: lead.temporaryAddress || lead.address_line_2 || "",
       city: lead.city || "",
@@ -105,8 +147,169 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       workshopBatch: lead.workshopBatch || lead.workshop_batch || "",
     };
 
-    setFormData(normalized);
+    // Enforce backend-level semantics: backend only accepts these top-level
+    // statuses; anything else is a sub-status. If incoming status is not in
+    // the allowed list, move it into substatus and set a safe default for
+    // the top-level `status` so we never send invalid choices.
+    const allowedTopStatuses = ["Active", "Converted", "Lost"];
+    const incomingStatus = (normalized.status || "").toString();
+    if (incomingStatus && !allowedTopStatuses.includes(incomingStatus)) {
+      // If no explicit substatus was provided, move this value there.
+      if (!normalized.substatus || normalized.substatus === "") {
+        normalized.substatus = incomingStatus;
+        normalized.sub_status = incomingStatus;
+      }
+      normalized.status = "Active"; // safe default recognized by backend
+    } else {
+      normalized.status = incomingStatus || "Active";
+      // ensure substatus matches backend format and preserves current value
+      normalized.substatus =
+        lead.substatus || lead.sub_status || normalized.substatus || "New";
+    }
+
+    // Merge with DEFAULT_FORM so every key is defined and inputs stay controlled
+    setFormData({ ...DEFAULT_FORM, ...normalized });
   }, [lead]);
+
+  // If the lead being edited is updated elsewhere in the app (inline edit),
+  // pick up that change and refresh the modal form so fields (like
+  // substatus/course_duration) reflect the latest value.
+  useEffect(() => {
+    const onLeadUpdated = (e) => {
+      try {
+        const updated = e?.detail?.lead;
+        if (!updated) return;
+        const editedId = (lead && (lead._id || lead.id)) || formData._id;
+        const updatedId = updated._id || updated.id;
+        if (!editedId || !updatedId) return;
+        if (String(editedId) !== String(updatedId)) return;
+
+        // Build a normalized object similar to the lead->form mapping above
+        const normalized = {
+          assigned_to:
+            updated.assigned_to || updated.assigned_to_username || "",
+          assigned_to_username:
+            updated.assigned_to_username || updated.assigned_to || "",
+          _id:
+            updated._id ||
+            updated.id ||
+            String(updated.id || "") ||
+            `lead-${Date.now()}`,
+          studentName:
+            updated.studentName ||
+            updated.student_name ||
+            updated.student ||
+            "",
+          parentsName:
+            updated.parentsName ||
+            updated.parents_name ||
+            updated.parent_name ||
+            "",
+          email: updated.email || "",
+          phone:
+            updated.phone || updated.phone_number || updated.phone_number || "",
+          contactWhatsapp:
+            updated.contactWhatsapp ||
+            updated.contact_whatsapp ||
+            updated.whatsapp_number ||
+            updated.whatsapp ||
+            "",
+          age: updated.age ?? "",
+          grade: updated.grade || "",
+          course: (() => {
+            if (updated.course && typeof updated.course === "object")
+              return updated.course.id || updated.course;
+            if (
+              updated.course &&
+              (typeof updated.course === "number" ||
+                /^\d+$/.test(String(updated.course)))
+            )
+              return updated.course;
+            if (updated.course_name && Array.isArray(courses)) {
+              const found = courses.find(
+                (c) =>
+                  (c.course_name || c.name || "").toString().trim() ===
+                  String(updated.course_name).trim()
+              );
+              return found ? found.id : "";
+            }
+            return "";
+          })(),
+          source: updated.source || "",
+          addDate:
+            getFormattedDate(
+              updated.addDate || updated.add_date || updated.created_at
+            ) || "",
+          recentCall:
+            getFormattedDate(updated.recentCall || updated.last_call) || "",
+          nextCall:
+            getFormattedDate(updated.nextCall || updated.next_call) || "",
+          status: updated.status || updated.state || "",
+          substatus:
+            updated.substatus || updated.sub_status || formData.substatus || "",
+          sub_status:
+            updated.sub_status ||
+            updated.substatus ||
+            formData.sub_status ||
+            "",
+          course_duration:
+            updated.course_duration ||
+            updated.courseDuration ||
+            formData.course_duration ||
+            "",
+          courseDuration:
+            updated.courseDuration ||
+            updated.course_duration ||
+            formData.courseDuration ||
+            "",
+          permanentAddress:
+            updated.permanentAddress || updated.address_line_1 || "",
+          temporaryAddress:
+            updated.temporaryAddress || updated.address_line_2 || "",
+          city: updated.city || "",
+          county: updated.county || "",
+          postCode: updated.postCode || updated.post_code || "",
+          classType: updated.classType || updated.class_type || "",
+          value: updated.value || "",
+          adsetName: updated.adsetName || updated.adset_name || "",
+          remarks:
+            updated.remarks || updated.change_log || updated.changeLog || "",
+          shift: updated.shift || "",
+          paymentType: updated.paymentType || updated.payment_type || "",
+          device: updated.device || "",
+          previousCodingExp:
+            updated.previousCodingExp ||
+            updated.previous_coding_experience ||
+            "",
+          workshopBatch: updated.workshopBatch || updated.workshop_batch || "",
+        };
+
+        // Preserve backend-level semantics as in the lead prop mapping
+        const allowedTopStatuses = ["Active", "Converted", "Lost"];
+        const incomingStatus = (normalized.status || "").toString();
+        if (incomingStatus && !allowedTopStatuses.includes(incomingStatus)) {
+          if (!normalized.substatus || normalized.substatus === "") {
+            normalized.substatus = incomingStatus;
+            normalized.sub_status = incomingStatus;
+          }
+          normalized.status = "Active";
+        } else {
+          normalized.status = incomingStatus || "Active";
+          normalized.substatus = normalized.substatus || "New";
+          normalized.sub_status =
+            normalized.sub_status || normalized.substatus || "New";
+        }
+
+        setFormData((prev) => ({ ...DEFAULT_FORM, ...prev, ...normalized }));
+      } catch (err) {
+        // ignore
+        console.warn("LeadEditModal: failed to apply crm:leadUpdated", err);
+      }
+    };
+
+    window.addEventListener("crm:leadUpdated", onLeadUpdated);
+    return () => window.removeEventListener("crm:leadUpdated", onLeadUpdated);
+  }, [lead, courses, formData._id]);
 
   // Fetch users for the "Assigned To" dropdown if current user is admin/superadmin
   useEffect(() => {
@@ -166,22 +369,20 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+    // Send data in format expected by backend
+    const updatedData = {
+      ...formData,
+      // Send only substatus (no underscore) as that's what backend expects
+      substatus: formData.substatus || "New",
+      // Remove sub_status to avoid confusion
+      sub_status: undefined,
+    };
+    onSave(updatedData);
   };
 
   // Dropdown options
-  const statusOptions = [
-    "New",
-    "Open",
-    "Average",
-    "Followup",
-    "Interested",
-    "inProgress",
-    "Active",
-    "Converted",
-    "Lost",
-    "Junk",
-  ];
+  // Status in the app is limited to these three; other states are kept in Sub Status
+  const statusOptions = ["Active", "Converted", "Lost"];
   const sourceOptions = [
     "Select",
     "WhatsApp/Viber",
@@ -377,14 +578,45 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
               Age
             </label>
             <input
-              type="number"
+              type="text"
               id="age"
               name="age"
-              value={formData.age}
+              value={formData.age || ""}
               onChange={handleInputChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
+          {/* Sub Status */}
+          <div className="flex flex-col">
+            <label
+              htmlFor="substatus"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Sub Status
+            </label>
+            <select
+              id="substatus"
+              name="substatus"
+              value={formData.substatus || "New"}
+              onChange={handleInputChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              {[
+                "New",
+                "Open",
+                "Followup",
+                "inProgress",
+                "Average",
+                "Interested",
+                "Junk",
+              ].map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Grade */}
           <div className="flex flex-col">
             <label
@@ -425,6 +657,24 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
               ))}
             </select>
           </div>
+          {/* Course Duration */}
+          <div className="flex flex-col">
+            <label
+              htmlFor="courseDuration"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Course Duration
+            </label>
+            <input
+              type="text"
+              id="courseDuration"
+              name="courseDuration"
+              value={formData.courseDuration || formData.course_duration || ""}
+              onChange={handleInputChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+          </div>
+
           {/* Assigned To (visible only to admin/superadmin) */}
           {((user?.role || "").toString().toLowerCase() === "admin" ||
             (user?.role || "").toString().toLowerCase() === "superadmin") && (
