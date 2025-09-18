@@ -108,15 +108,31 @@ const ColumnToggler = ({ columns, setColumns }) => {
 // Editable text cell
 const EditableTextCell = ({ value, field, onSave }) => {
   const [text, setText] = useState(value || "");
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     setText(value || "");
   }, [value]);
 
+  // Only save on blur or Enter
+  const handleBlur = () => {
+    if (editing) {
+      setEditing(false);
+      if (text !== value) {
+        onSave(text);
+      }
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.target.blur();
+    }
+  };
+
   const handleChange = (e) => {
-    const newValue = e.target.value;
-    setText(newValue);
-    onSave(newValue); // instant update
+    setText(e.target.value);
+    setEditing(true);
   };
 
   return (
@@ -125,6 +141,8 @@ const EditableTextCell = ({ value, field, onSave }) => {
         type="text"
         value={text}
         onChange={handleChange}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 ${
           FIELD_BG_CLASSES[field] || "bg-white"
         }`}
@@ -161,7 +179,7 @@ const EnrolledStudentsTable = ({
     device: { label: "Device", visible: false },
     previous_coding_experience: { label: "Prev Coding Exp", visible: false },
     course_name: { label: "Course", visible: true },
-    batch_name: { label: "Batch Name", visible: true },
+    batchname: { label: "Batch Name", visible: true },
     assigned_teacher: { label: "Assigned Teacher", visible: true },
     course_duration: { label: "Course Duration", visible: true },
     starting_date: { label: "Starting Date", visible: true },
@@ -623,17 +641,92 @@ const SortableStudentRow = ({
                 {courseDisplay || "N/A"}
               </td>
             );
-          case "batch_name":
+          case "batchname":
           case "assigned_teacher":
           case "course_duration":
             return (
               <EditableTextCell
                 key={key}
                 field={key}
-                value={
-                  // fallback to lead values for course_duration and batch_name
-                  student[key] ?? (student.lead ? student.lead[key] : undefined)
-                }
+                value={student[key] ?? (student.lead ? student.lead[key] : "")}
+                onSave={(v) => onUpdateField(student.id, key, v)}
+              />
+            );
+          case "starting_date":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <input
+                  type="date"
+                  value={student.starting_date || ""}
+                  onChange={(e) =>
+                    onUpdateField(student.id, "starting_date", e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                />
+              </td>
+            );
+          case "last_pay_date":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <input
+                  type="date"
+                  value={
+                    student.last_pay_date
+                      ? student.last_pay_date.split("T")[0]
+                      : ""
+                  }
+                  onChange={(e) =>
+                    onUpdateField(student.id, "last_pay_date", e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                />
+              </td>
+            );
+          case "course":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <select
+                  value={student.course || ""}
+                  onChange={(e) =>
+                    onUpdateField(student.id, "course", e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  <option value="">Select Course</option>
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.course_name || c.name}
+                    </option>
+                  ))}
+                </select>
+              </td>
+            );
+          case "total_payment":
+            return (
+              <EditableTextCell
+                key={key}
+                field={key}
+                value={student.total_payment || ""}
+                onSave={(v) => onUpdateField(student.id, "total_payment", v)}
+              />
+            );
+          case "first_installment":
+          case "second_installment":
+          case "third_installment":
+            return (
+              <EditableTextCell
+                key={key}
+                field={key}
+                value={student[key] || ""}
                 onSave={(v) => onUpdateField(student.id, key, v)}
               />
             );

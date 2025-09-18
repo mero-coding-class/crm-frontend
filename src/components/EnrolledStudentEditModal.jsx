@@ -16,45 +16,47 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
     const lead = student?.lead || {};
     return {
       ...student,
-      student_name: student?.student_name || lead.student_name || "",
-      parents_name: student?.parents_name || lead.parents_name || "",
-      email: student?.email || lead.email || "",
-      phone_number: student?.phone_number || lead.phone_number || "",
-      course_name: student?.course_name || "",
-      batch_name: student?.batch_name || "",
-      assigned_teacher: student?.assigned_teacher || "",
-      course_duration: student?.course_duration || lead.course_duration || "",
-      starting_date: student?.starting_date || "",
+      student_name: student?.student_name ?? lead.student_name ?? "",
+      parents_name: student?.parents_name ?? lead.parents_name ?? "",
+      email: student?.email ?? lead.email ?? "",
+      phone_number: student?.phone_number ?? lead.phone_number ?? "",
+      course: student?.course ?? lead.course ?? "",
+      batchname: student?.batchname ?? "", // backend field
+      assigned_teacher: student?.assigned_teacher ?? "",
+      course_duration: student?.course_duration ?? lead.course_duration ?? "",
+      starting_date: student?.starting_date ?? "",
       total_payment: student?.total_payment ?? "",
       first_installment: student?.first_installment ?? "",
       second_installment: student?.second_installment ?? "",
       third_installment: student?.third_installment ?? "",
-      last_pay_date: student?.last_pay_date || "",
-      payment_completed: student?.payment_completed,
-      invoice: (student?.invoice || []).map((inv) => ({
-        ...inv,
-        file: null,
-        previewUrl: inv?.url || "",
-      })),
-      created_at: student?.created_at || student?.enrollment_created_at || "",
-      updated_at: student?.updated_at || student?.enrollment_updated_at || "",
-      remarks: student?.remarks || "",
+      last_pay_date: student?.last_pay_date ?? "",
+      payment_completed: student?.payment_completed ?? false,
+      created_at: student?.created_at ?? student?.enrollment_created_at ?? "",
+      updated_at: student?.updated_at ?? student?.enrollment_updated_at ?? "",
+      remarks: student?.remarks ?? lead.remarks ?? "",
+      invoice: Array.isArray(student?.invoice)
+        ? student.invoice.map((inv) => ({
+            ...inv,
+            file: null,
+            previewUrl: inv?.url || "",
+          }))
+        : [],
       lead: {
         ...lead,
-        student_name: lead.student_name || student?.student_name || "",
-        parents_name: lead.parents_name || student?.parents_name || "",
-        email: lead.email || student?.email || "",
-        phone_number: lead.phone_number || student?.phone_number || "",
-        whatsapp_number: lead.whatsapp_number || "",
-        age: lead.age || "",
-        grade: lead.grade || "",
+        id: lead.id || "",
         status: lead.status || "",
         substatus: lead.substatus || "",
         add_date: lead.add_date || "",
-        school_college_name: lead.school_college_name || "",
-        lead_type: lead.lead_type || "",
+        parents_name: lead.parents_name || "",
+        student_name: lead.student_name || "",
+        email: lead.email || "",
+        phone_number: lead.phone_number || "",
+        whatsapp_number: lead.whatsapp_number || "",
+        age: lead.age || "",
+        grade: lead.grade || "",
         source: lead.source || "",
         class_type: lead.class_type || "",
+        lead_type: lead.lead_type || "",
         shift: lead.shift || "",
         previous_coding_experience: lead.previous_coding_experience || "",
         last_call: lead.last_call || "",
@@ -64,12 +66,19 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
         course_duration: lead.course_duration || "",
         payment_type: lead.payment_type || "",
         device: lead.device || "",
+        school_college_name: lead.school_college_name || "",
+        remarks: lead.remarks || "",
         address_line_1: lead.address_line_1 || "",
         address_line_2: lead.address_line_2 || "",
         city: lead.city || "",
         county: lead.county || "",
         post_code: lead.post_code || "",
         demo_scheduled: lead.demo_scheduled || "",
+        created_at: lead.created_at || "",
+        updated_at: lead.updated_at || "",
+        course: lead.course || "",
+        assigned_to: lead.assigned_to || "",
+        created_by: lead.created_by || "",
       },
     };
   });
@@ -325,6 +334,8 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
     e.preventDefault();
     const updatedStudentData = {
       ...formData,
+      batchname: formData.batchname ?? formData.batch_name ?? "",
+      course_duration: formData.course_duration ?? "",
       total_payment: formData.total_payment
         ? parseFloat(formData.total_payment)
         : null,
@@ -342,9 +353,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       last_pay_date: formData.last_pay_date || null,
 
       // accept invoices if they have a file, external url, or name
-      invoice: formData.invoice.filter(
-        (inv) => inv.file || inv.url || inv.name
-      ),
+      invoice: Array.isArray(formData.invoice)
+        ? formData.invoice.filter((inv) => inv.file || inv.url || inv.name)
+        : [],
     };
 
     // Coerce course id to number when possible (backend expects id)
