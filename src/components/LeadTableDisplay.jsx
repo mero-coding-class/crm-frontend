@@ -88,49 +88,98 @@ const LeadTableDisplay = ({
   // use them; otherwise fall back to internal pagination state
 
   const tableContainerRef = useRef(null);
-  const [scrollDirection, setScrollDirection] = useState(null);
-  const scrollSpeed = 15;
-  const scrollInterval = useRef(null);
+
+  // Smooth scroll helper used by the arrow buttons
   const smoothScroll = (distance) => {
     if (!tableContainerRef.current) return;
     tableContainerRef.current.scrollBy({ left: distance, behavior: "smooth" });
   };
 
-  // Handle mouse enter for scroll areas
-  const handleMouseEnter = (direction) => {
-    setScrollDirection(direction);
-  };
-
-  // Handle mouse leave
-  const handleMouseLeave = () => {
-    setScrollDirection(null);
-  };
-
-  // Auto-scroll effect
+  // Pointer-aware auto-scroll (requestAnimationFrame): matches the enrolled
+  // students table behavior. When the pointer moves near left/right edges
+  // of the container we compute an eased scroll factor and run a single
+  // rAF loop to update scrollLeft. Falls back to mouse events when
+  // pointer events are not supported.
   useEffect(() => {
-    if (!scrollDirection || !tableContainerRef.current) {
-      if (scrollInterval.current) {
-        clearInterval(scrollInterval.current);
-        scrollInterval.current = null;
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    let pointerX = null;
+    let isPointerOver = false;
+    let rafId = null;
+
+    const edgeThreshold = 120; // px from edge to start scrolling
+    const baseSpeed = 18; // base scroll speed multiplier
+
+    const getScrollFactor = () => {
+      if (pointerX === null) return 0;
+      const rect = container.getBoundingClientRect();
+      const leftDist = pointerX - rect.left;
+      const rightDist = rect.right - pointerX;
+      if (leftDist < edgeThreshold) {
+        const t = Math.max(0, (edgeThreshold - leftDist) / edgeThreshold);
+        return -Math.pow(t, 1.8) * baseSpeed; // ease-in curve
       }
-      return;
+      if (rightDist < edgeThreshold) {
+        const t = Math.max(0, (edgeThreshold - rightDist) / edgeThreshold);
+        return Math.pow(t, 1.8) * baseSpeed;
+      }
+      return 0;
+    };
+
+    const step = () => {
+      const factor = getScrollFactor();
+      if (Math.abs(factor) > 0.01 && container) {
+        // clamp within scroll bounds
+        const max = container.scrollWidth - container.clientWidth;
+        const next = Math.max(0, Math.min(max, container.scrollLeft + factor));
+        if (next !== container.scrollLeft) container.scrollLeft = next;
+      }
+      rafId = requestAnimationFrame(step);
+    };
+
+    const onPointerMove = (e) => {
+      pointerX = e.clientX;
+    };
+    const onPointerEnter = (e) => {
+      isPointerOver = true;
+      pointerX = e.clientX;
+      if (!rafId) rafId = requestAnimationFrame(step);
+    };
+    const onPointerLeave = () => {
+      isPointerOver = false;
+      pointerX = null;
+    };
+
+    // Use pointer events when available
+    if (window.PointerEvent) {
+      container.addEventListener("pointermove", onPointerMove);
+      container.addEventListener("pointerenter", onPointerEnter);
+      container.addEventListener("pointerleave", onPointerLeave);
+    } else {
+      // Fallback to mouse events
+      container.addEventListener("mousemove", onPointerMove);
+      container.addEventListener("mouseenter", onPointerEnter);
+      container.addEventListener("mouseleave", onPointerLeave);
     }
 
-    scrollInterval.current = setInterval(() => {
-      if (tableContainerRef.current) {
-        const scrollAmount =
-          scrollDirection === "left" ? -scrollSpeed : scrollSpeed;
-        tableContainerRef.current.scrollLeft += scrollAmount;
-      }
-    }, 50);
+    // start rAF loop if pointer is already over (rare) to ensure responsiveness
+    // eslint-disable-next-line no-unused-expressions
+    isPointerOver && (rafId = requestAnimationFrame(step));
 
     return () => {
-      if (scrollInterval.current) {
-        clearInterval(scrollInterval.current);
-        scrollInterval.current = null;
+      if (rafId) cancelAnimationFrame(rafId);
+      if (window.PointerEvent) {
+        container.removeEventListener("pointermove", onPointerMove);
+        container.removeEventListener("pointerenter", onPointerEnter);
+        container.removeEventListener("pointerleave", onPointerLeave);
+      } else {
+        container.removeEventListener("mousemove", onPointerMove);
+        container.removeEventListener("mouseenter", onPointerEnter);
+        container.removeEventListener("mouseleave", onPointerLeave);
       }
     };
-  }, [scrollDirection]);
+  }, [tableContainerRef.current]);
 
   // Normalize lead data to avoid undefined and match backend field names
   // Ensure a stable, unique `_id` for each lead so per-row state (remarks,

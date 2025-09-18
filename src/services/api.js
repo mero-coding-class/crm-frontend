@@ -494,6 +494,64 @@ export const leadService = {
   // importCsvRows: async (rows, courses, authToken, onProgress) => { ... },
 };
 
+// Resolve a backend server id for a lead-like object or id value.
+// Preferences:
+// 1. If passed a primitive string/number that looks like a real id, return it
+// 2. If passed an object with `id`, return that
+// 3. If passed an object with `_id` that doesn't look like a temporary UI id
+//    (e.g., not starting with "lead-"), return that
+// 4. Otherwise try to find a matching lead in `prevLeads` by email/phone/student_name
+//    and return its id/_id if available.
+export const resolveServerId = (leadOrId, prevLeads = []) => {
+  if (leadOrId === null || leadOrId === undefined) return null;
+
+  // If a primitive id was passed directly
+  if (typeof leadOrId === "string" || typeof leadOrId === "number") {
+    const s = String(leadOrId);
+    // Treat temporary UI ids that start with 'lead-' as unresolved
+    if (s.startsWith("lead-")) return null;
+    // Prefer numeric ids when possible
+    if (/^\d+$/.test(s)) return Number(s);
+    return s;
+  }
+
+  // It's an object-like lead
+  const lead = leadOrId || {};
+  if (lead.id !== undefined && lead.id !== null) return lead.id;
+  if (lead._id !== undefined && lead._id !== null) {
+    const s = String(lead._id);
+    if (!s.startsWith("lead-")) {
+      // prefer numeric conversion where appropriate
+      if (/^\d+$/.test(s)) return Number(s);
+      return s;
+    }
+  }
+
+  // Fallback: try to locate by unique fields in the previous leads list
+  try {
+    if (Array.isArray(prevLeads) && prevLeads.length) {
+      const match = prevLeads.find((l) =>
+        (l.email && lead.email && l.email === lead.email) ||
+        (l.phone_number && lead.phone_number && l.phone_number === lead.phone_number) ||
+        (l.phone && lead.phone && l.phone === lead.phone) ||
+        (l.student_name && lead.student_name && l.student_name === lead.student_name)
+      );
+      if (match) {
+        if (match.id !== undefined && match.id !== null) return match.id;
+        if (match._id !== undefined && match._id !== null) {
+          const ms = String(match._id);
+          if (!ms.startsWith("lead-")) return /^\d+$/.test(ms) ? Number(ms) : ms;
+          return match._id;
+        }
+      }
+    }
+  } catch (e) {
+    // ignore and return null below
+  }
+
+  return null;
+};
+
 export const enrollmentService = {
   createEnrollment: async (enrollmentData, authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
@@ -621,6 +679,43 @@ export const courseService = {
       body: JSON.stringify({ course_name: courseName }),
     });
     return handleResponse(response);
+  },
+  
+  // Update an existing course's name
+  updateCourse: async (id, courseName, authToken) => {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const response = await fetch(`${BASE_URL}/courses/${id}/`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Token ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ course_name: courseName }),
+    });
+    return handleResponse(response);
+  },
+
+  // Delete a course by id
+  deleteCourse: async (id, authToken) => {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const response = await fetch(`${BASE_URL}/courses/${id}/`, {
+      method: "DELETE",
+      headers: { Authorization: `Token ${authToken}` },
+    });
+    if (!response.ok) {
+      let errorMsg = "Failed to delete course";
+      try {
+        const data = await response.json();
+        errorMsg = data.detail || JSON.stringify(data);
+      } catch (e) {
+        try {
+          errorMsg = await response.text();
+        } catch {}
+      }
+      throw new Error(errorMsg);
+    }
+    // Return an empty object for consistency with handleResponse behavior
+    return {};
   },
 };
 
