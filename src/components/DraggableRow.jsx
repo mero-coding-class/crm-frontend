@@ -14,6 +14,7 @@ const DraggableRow = ({
   lead,
   columns,
   columnOrder, // array of visible column keys in header order
+  rowIndex, // sequential number for display
   selected,
   onSelect,
   localRemarks,
@@ -53,8 +54,10 @@ const DraggableRow = ({
     assigned_to: lead.assigned_to,
     assigned_to_username: lead.assigned_to_username,
   });
-  const handleLocalRemarkChange = (value) =>
-    setLocalRemarks((prev) => ({ ...prev, [lead._id]: value }));
+  const handleLocalRemarkChange = (value) => {
+    const leadId = lead._id || lead.id; // Use either ID format
+    setLocalRemarks((prev) => ({ ...prev, [leadId]: value }));
+  };
 
   return (
     <tr
@@ -89,21 +92,28 @@ const DraggableRow = ({
 
         const renderCell = () => {
           switch (key) {
-            case "sub_status":
+            case "substatus":
+              // Read either variant (sub_status or substatus) so the UI shows
+              // the most recently-updated value regardless of naming used by
+              // upstream code or the API merge logic.
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <div
                     className={`inline-flex items-center px-3 py-1 rounded-lg border shadow-sm ${getSubStatusClasses(
-                      lead.sub_status
+                      lead.substatus || lead.sub_status
                     )}`}
                   >
                     <select
-                      value={lead.sub_status || "New"}
-                      onChange={(e) =>
-                        onSubStatusChange
-                          ? onSubStatusChange(lead._id, e.target.value)
-                          : null
-                      }
+                      value={lead.substatus || lead.sub_status || "New"}
+                      onChange={(e) => {
+                        // Update frontend state and backend
+                        if (onSubStatusChange) {
+                          onSubStatusChange(lead._id, e.target.value);
+                        }
+                      }}
                       className="bg-transparent border-0 p-0 m-0 text-sm font-semibold appearance-none focus:outline-none text-current"
                     >
                       {[
@@ -125,51 +135,77 @@ const DraggableRow = ({
               );
             case "student_name":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+                >
                   {lead.student_name || "N/A"}
+                </td>
+              );
+            case "id":
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
+                  {/* Display actual backend ID */}
+                  {lead.id || "-"}
                 </td>
               );
             case "parents_name":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   {lead.parents_name || "N/A"}
                 </td>
               );
             case "email":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   {lead.email || ""}
                 </td>
               );
             case "phone_number":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   {lead.phone_number || ""}
                 </td>
               );
             case "whatsapp_number":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   {lead.whatsapp_number || ""}
                 </td>
               );
             // ... inside renderCell for "age":
             case "age":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <input
                     type="text"
-                    value={lead.age ?? ""} // show "" if null
+                    value={
+                      lead.age !== undefined && lead.age !== null
+                        ? Math.floor(Number(lead.age))
+                        : ""
+                    }
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v === "") {
-                        // Inform user and prevent sending an empty value
-                        window.alert(
-                          "This field cannot be empty. Please enter an age or cancel."
-                        );
-                        return;
-                      }
-                      onAgeChange(lead._id, v);
+                      const leadId = lead._id || lead.id; // Use either ID format
+                      onAgeChange(leadId, v);
                     }}
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -179,19 +215,21 @@ const DraggableRow = ({
             // ... same for "grade":
             case "grade":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <input
                     type="text"
-                    value={lead.grade ?? ""}
+                    value={
+                      lead.grade !== undefined && lead.grade !== null
+                        ? Math.floor(Number(lead.grade))
+                        : ""
+                    }
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v === "") {
-                        window.alert(
-                          "This field cannot be empty. Please enter a grade or cancel."
-                        );
-                        return;
-                      }
-                      onGradeChange(lead._id, v);
+                      const leadId = lead._id || lead.id; // Use either ID format
+                      onGradeChange(leadId, v);
                     }}
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -199,7 +237,10 @@ const DraggableRow = ({
               );
             case "source":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   {lead.source}
                 </td>
               );
@@ -212,7 +253,10 @@ const DraggableRow = ({
                 lead.course_name
               );
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded border ${getCourseClasses(
                       lead.course_name
@@ -227,7 +271,10 @@ const DraggableRow = ({
               );
             case "course_duration":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <input
                     type="text"
                     value={lead.course_duration || ""}
@@ -240,42 +287,15 @@ const DraggableRow = ({
               );
             case "assigned_to":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-                  {/* Mirror AddLeadModal behavior: show loading, errors, and select for admins */}
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   {lead._usersLoading ? (
                     <div className="mt-1 p-1 text-sm">Loading users...</div>
-                  ) : Array.isArray(lead._users || []) &&
-                    (lead._users || []).length > 0 ? (
-                    <select
-                      value={
-                        lead.assigned_to || lead.assigned_to_username || ""
-                      }
-                      onChange={(e) =>
-                        onAssignedToChange(lead._id, e.target.value)
-                      }
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">(Unassigned)</option>
-                      {(lead._users || []).map((u) => {
-                        const label =
-                          u.username || u.name || u.email || String(u.id);
-                        const value = u.username || String(u.id);
-                        return (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        );
-                      })}
-                    </select>
                   ) : (
-                    // Always render a select even if users list is empty so the UI
-                    // consistently shows a dropdown as requested.
                     <select
-                      value={
-                        lead.assigned_to || lead.assigned_to_username || ""
-                      }
+                      value={lead.assigned_to_username || ""}
                       onChange={(e) =>
                         onAssignedToChange(lead._id, e.target.value)
                       }
@@ -283,24 +303,27 @@ const DraggableRow = ({
                       onMouseDown={(e) => e.stopPropagation()}
                       className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                     >
-                      <option value="">(Unassigned)</option>
-                      {(lead._users || []).map((u) => {
-                        const label =
-                          u.username || u.name || u.email || String(u.id);
-                        const value = u.username || String(u.id);
-                        return (
-                          <option key={value} value={value}>
-                            {label}
+                      <option value="">
+                        {Array.isArray(lead._users) && lead._users.length > 0
+                          ? "(Unassigned)"
+                          : "(No users available)"}
+                      </option>
+                      {Array.isArray(lead._users) &&
+                        lead._users.map((u) => (
+                          <option key={u.username} value={u.username}>
+                            {u.username || u.name || String(u.id)}
                           </option>
-                        );
-                      })}
+                        ))}
                     </select>
                   )}
                 </td>
               );
             case "last_call":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <input
                     type="date"
                     value={lead.last_call ? lead.last_call.split("T")[0] : ""}
@@ -311,7 +334,10 @@ const DraggableRow = ({
               );
             case "next_call":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
                   <input
                     type="date"
                     value={lead.next_call ? lead.next_call.split("T")[0] : ""}
@@ -322,7 +348,10 @@ const DraggableRow = ({
               );
             case "status":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-sm min-w-[140px]">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm min-w-[140px]"
+                >
                   <select
                     value={lead.status}
                     onChange={(e) => onStatusChange(lead._id, e.target.value)}
@@ -345,7 +374,10 @@ const DraggableRow = ({
 
             case "remarks":
               return (
-                <td className="px-3 py-4 text-sm text-gray-700 min-w-[300px]">
+                <td
+                  key={key}
+                  className="px-3 py-4 text-sm text-gray-700 min-w-[300px]"
+                >
                   <textarea
                     value={localRemarks[lead._id] || ""}
                     onChange={(e) => handleLocalRemarkChange(e.target.value)}
@@ -358,7 +390,7 @@ const DraggableRow = ({
               );
             case "change_log":
               return (
-                <td className="px-3 py-4 text-sm text-gray-700">
+                <td key={key} className="px-3 py-4 text-sm text-gray-700">
                   <LeadLogDisplay
                     // Use backend id when available so the logs endpoint receives
                     // the expected primary key. Fall back to _id otherwise.
@@ -377,7 +409,10 @@ const DraggableRow = ({
               );
             case "actions":
               return (
-                <td className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-right text-sm font-medium"
+                >
                   <button
                     onClick={() => handleEdit(lead)}
                     className="text-indigo-600 hover:text-indigo-900 mr-2 p-1 rounded-md hover:bg-indigo-50"
@@ -393,7 +428,37 @@ const DraggableRow = ({
                 </td>
               );
             default:
-              return null;
+              // Generic renderer: look up the value on the lead object using
+              // common variants (snake_case and camelCase). This covers
+              // dynamically toggled columns where a specific case isn't
+              // implemented above.
+              const getFieldValue = (obj, key) => {
+                if (!obj) return "";
+                // direct key (snake_case)
+                if (obj[key] !== undefined && obj[key] !== null)
+                  return obj[key];
+                // camelCase fallback
+                const camel = key.replace(/_([a-z])/g, (m, p1) =>
+                  p1.toUpperCase()
+                );
+                if (obj[camel] !== undefined && obj[camel] !== null)
+                  return obj[camel];
+                // also try variants without underscore (e.g., substatus)
+                const compact = key.replace(/_/g, "");
+                if (obj[compact] !== undefined && obj[compact] !== null)
+                  return obj[compact];
+                return "";
+              };
+
+              const cellValue = getFieldValue(lead, key);
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                >
+                  {cellValue}
+                </td>
+              );
           }
         };
 

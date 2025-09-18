@@ -116,16 +116,18 @@ const TrashTableDisplay = ({
   onRestoreLead,
   onBulkRestore,
   onBulkPermanentDelete,
+  currentPage,
+  totalPages,
+  onPageChange,
 }) => {
   const [orderedLeads, setOrderedLeads] = useState([]);
   const [selectedLeads, setSelectedLeads] = useState(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
   const leadsPerPage = 20;
 
   useEffect(() => {
-    setOrderedLeads(leads);
+    setOrderedLeads(leads || []);
     setSelectedLeads(new Set());
-    setCurrentPage(1); // Reset to first page when new data loads
+    // do not force page change here; parent controls page
   }, [leads]);
 
   const [columns, setColumns] = useState({
@@ -207,7 +209,7 @@ const TrashTableDisplay = ({
   };
 
   const handleSelectAll = (e) => {
-    const currentLeads = orderedLeads.slice(indexOfFirstLead, indexOfLastLead);
+    const currentLeads = orderedLeads;
     if (e.target.checked) {
       const allLeadIds = new Set(currentLeads.map((lead) => lead.id));
       setSelectedLeads((prev) => new Set([...prev, ...allLeadIds]));
@@ -253,10 +255,8 @@ const TrashTableDisplay = ({
   };
 
   /* -------------------------- PAGINATION LOGIC -------------------------- */
-  const totalPages = Math.ceil(orderedLeads.length / leadsPerPage);
-  const indexOfLastLead = currentPage * leadsPerPage;
-  const indexOfFirstLead = indexOfLastLead - leadsPerPage;
-  const currentLeads = orderedLeads.slice(indexOfFirstLead, indexOfLastLead);
+  // When backend provides paginated data, `leads` should already be the current page
+  const currentLeads = orderedLeads;
 
   // Ensure table scrolls to top when page changes
   useEffect(() => {
@@ -266,8 +266,12 @@ const TrashTableDisplay = ({
   }, [currentPage]);
 
   const handlePageChange = (pageNumber) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
+    if (
+      pageNumber > 0 &&
+      pageNumber <= totalPages &&
+      typeof onPageChange === "function"
+    ) {
+      onPageChange(pageNumber);
       if (tableContainerRef.current) {
         tableContainerRef.current.scrollIntoView({ behavior: "smooth" });
       }

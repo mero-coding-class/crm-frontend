@@ -16,6 +16,9 @@ import DelayedLoader from "../components/common/DelayedLoader";
 const TrashPage = () => {
   const { authToken, currentUser } = useAuth();
   const [allLeads, setAllLeads] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 20;
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -64,133 +67,62 @@ const TrashPage = () => {
     "Other",
   ];
 
-  const fetchLeads = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const baseUrl = `${BASE_URL}/trash/`;
-    try {
-      const fastUrl = `${baseUrl}?page=1&page_size=20`;
-      const resp = await fetch(fastUrl, {
-        headers: { Authorization: `Token ${authToken}` },
-        credentials: "include",
-      });
-      if (resp.ok) {
+  const fetchLeads = useCallback(
+    async (page = 1) => {
+      setLoading(true);
+      setError(null);
+      const baseUrl = `${BASE_URL}/trash/`;
+      try {
+        const url = `${baseUrl}?page=${page}&page_size=${PAGE_SIZE}`;
+        const resp = await fetch(url, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (!resp.ok) {
+          throw new Error(`Failed to fetch trash: ${resp.status}`);
+        }
         const json = await resp.json();
-        if (Array.isArray(json.results)) {
-          const sortedData = (json.results || []).slice().sort((a, b) => {
+        // If API returns paginated object with results and count
+        const results = Array.isArray(json.results)
+          ? json.results
+          : Array.isArray(json)
+          ? json
+          : json.results || [];
+        setAllLeads(
+          (results || []).slice().sort((a, b) => {
             const ta = a.created_at || a.updated_at || null;
             const tb = b.created_at || b.updated_at || null;
             if (ta && tb) return new Date(tb) - new Date(ta);
             if (a.id !== undefined && b.id !== undefined)
               return Number(b.id) - Number(a.id);
             return 0;
-          });
-          setAllLeads(sortedData);
-          // background fetch remaining pages
-          (async () => {
-            try {
-              if (json.next) {
-                let acc = [...json.results];
-                let next = json.next;
-                const MAX_ACCUMULATE = 2000;
-                while (next) {
-                  const r = await fetch(next, {
-                    headers: { Authorization: `Token ${authToken}` },
-                    credentials: "include",
-                  });
-                  if (!r.ok) break;
-                  const j = await r.json();
-                  acc = acc.concat(j.results || []);
-                  if (acc.length >= MAX_ACCUMULATE) {
-                    console.warn(
-                      "Trash background fetch reached cap, stopping further fetch to avoid UI freeze"
-                    );
-                    break;
-                  }
-                  next = j.next;
-                }
-                setAllLeads(
-                  (acc.slice(0, MAX_ACCUMULATE) || []).slice().sort((a, b) => {
-                    const ta = a.created_at || a.updated_at || null;
-                    const tb = b.created_at || b.updated_at || null;
-                    if (ta && tb) return new Date(tb) - new Date(ta);
-                    if (a.id !== undefined && b.id !== undefined)
-                      return Number(b.id) - Number(a.id);
-                    return 0;
-                  })
-                );
-              } else {
-                const full = await fetch(baseUrl, {
-                  headers: { Authorization: `Token ${authToken}` },
-                  credentials: "include",
-                });
-                if (full.ok) {
-                  const all = await full.json();
-                  setAllLeads(
-                    Array.isArray(all)
-                      ? all.sort((a, b) => b.id - a.id)
-                      : (all.results || []).sort((a, b) => b.id - a.id)
-                  );
-                }
-              }
-            } catch (e) {
-              console.warn("Background trash fetch failed", e);
-            }
-          })();
-          return;
+          })
+        );
+        if (typeof json.count === "number") {
+          setTotalPages(Math.max(1, Math.ceil(json.count / PAGE_SIZE)));
+        } else if (Array.isArray(json)) {
+          setTotalPages(1);
+        } else {
+          setTotalPages(1);
         }
-
-        if (Array.isArray(json)) {
-          const sliced = json.slice(0, 20).sort((a, b) => b.id - a.id);
-          setAllLeads(sliced);
-          (async () => {
-            try {
-              const full = await fetch(baseUrl, {
-                headers: { Authorization: `Token ${authToken}` },
-                credentials: "include",
-              });
-              if (full.ok) {
-                const all = await full.json();
-                setAllLeads(
-                  ((Array.isArray(all) ? all : all.results || []) || [])
-                    .slice()
-                    .sort((a, b) => {
-                      const ta = a.created_at || a.updated_at || null;
-                      const tb = b.created_at || b.updated_at || null;
-                      if (ta && tb) return new Date(tb) - new Date(ta);
-                      if (a.id !== undefined && b.id !== undefined)
-                        return Number(b.id) - Number(a.id);
-                      return 0;
-                    })
-                );
-              }
-            } catch (e) {
-              console.warn("Background full trash fetch failed", e);
-            }
-          })();
-          return;
-        }
+        setCurrentPage(page);
+      } catch (err) {
+        console.error("Failed to fetch leads from trash:", err);
+        setError(
+          err.message || "Failed to load trashed leads. Please try again."
+        );
+      } finally {
+        setLoading(false);
       }
-
-      // fallback to existing trashService call
-      const data = await trashService.getTrashedLeads(authToken);
-      const sortedData = data.sort((a, b) => b.id - a.id);
-      setAllLeads(sortedData);
-    } catch (err) {
-      console.error("Failed to fetch leads from trash:", err);
-      setError(
-        err.message || "Failed to load trashed leads. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [authToken]);
+    },
+    [authToken]
+  );
 
   useEffect(() => {
     if (authToken) {
-      fetchLeads();
+      fetchLeads(currentPage);
     }
-  }, [authToken, fetchLeads]);
+  }, [authToken, fetchLeads, currentPage]);
 
   // Listen for leads moved to trash elsewhere in the app and insert them at top
   useEffect(() => {
@@ -198,18 +130,8 @@ const TrashPage = () => {
       try {
         const { leadId } = e?.detail || {};
         if (!leadId || !authToken) return;
-        (async () => {
-          try {
-            const resp = await fetch(`${BASE_URL}/trash/${leadId}/`, {
-              headers: { Authorization: `Token ${authToken}` },
-            });
-            if (!resp.ok) return;
-            const lead = await resp.json();
-            setAllLeads((prev) => [lead, ...(prev || [])]);
-          } catch (err) {
-            console.warn("Failed to fetch moved-to-trash lead:", err);
-          }
-        })();
+        // Refresh current page so the moved lead shows up appropriately
+        fetchLeads(currentPage);
       } catch (err) {
         console.warn("TrashPage onLeadMoved error:", err);
       }
@@ -583,7 +505,7 @@ const TrashPage = () => {
   );
 
   const handleRefresh = useCallback(() => {
-    fetchLeads();
+    fetchLeads(currentPage);
   }, [fetchLeads]);
 
   const filteredTrashedLeads = useMemo(() => {
@@ -805,6 +727,9 @@ const TrashPage = () => {
             onRestoreLead={handleRestoreLead}
             onBulkRestore={handleBulkRestoreLeads}
             onBulkPermanentDelete={handleBulkPermanentDeleteLeads}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={(p) => fetchLeads(p)}
             onStatusChange={(leadId, newStatus) =>
               updateLeadField(leadId, "status", newStatus)
             }

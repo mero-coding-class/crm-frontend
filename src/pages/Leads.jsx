@@ -8,6 +8,8 @@ import Toast from "../components/common/Toast";
 import scheduleBackground from "../utils/backgroundScheduler";
 import { BASE_URL } from "../config";
 import DelayedLoader from "../components/common/DelayedLoader";
+import { useLeadSearch } from "../hooks/useLeadSearch";
+import { useLeadUpdates } from "../hooks/useLeadUpdates";
 import {
   leadService,
   courseService,
@@ -24,29 +26,30 @@ import {
 
 const Leads = () => {
   const { authToken, user } = useAuth();
+
+  // Core state declarations
+  const [allLeads, setAllLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
-
-  // core state
-  const [allLeads, setAllLeads] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(null);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [pageSize] = useState(50);
+  const [totalCount, setTotalCount] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
   const [toast, setToast] = useState({
     show: false,
     message: "",
     type: "success",
   });
+
+  // Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All");
 
+  // Filter state
+  const [filterStatus, setFilterStatus] = useState("All");
   const [filterAge, setFilterAge] = useState("");
   const [filterGrade, setFilterGrade] = useState("");
   const [filterLastCall, setFilterLastCall] = useState("");
@@ -55,7 +58,116 @@ const Leads = () => {
   const [filterDevice, setFilterDevice] = useState("Device");
   const [filterSubStatus, setFilterSubStatus] = useState("SubStatus");
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("CodingExp");
-  const [showFilters, setShowFilters] = useState(false);
+
+  // Refs
+  const leadsOrderRef = React.useRef([]);
+
+  // Use our custom hooks for search and updates
+  const {
+    searchTerm,
+    setSearchTerm,
+    filters,
+    handleFilterChange,
+    currentPage,
+    setCurrentPage,
+    sortConfig,
+    handleSort,
+    filteredLeads,
+    displayedLeads,
+    totalPages,
+  } = useLeadSearch(allLeads, 20);
+
+  const {
+    updateLead,
+    bulkUpdate,
+    updating,
+    errors: updateErrors,
+    clearError,
+  } = useLeadUpdates(
+    authToken,
+    (leadId, updates) => {
+      setToast({
+        show: true,
+        message: "Lead updated successfully",
+        type: "success",
+      });
+      // Update will be handled by the crm:leadUpdated event
+    },
+    (error) => {
+      setToast({
+        show: true,
+        message: error.message || "Failed to update lead",
+        type: "error",
+      });
+    }
+  );
+
+  // Fetch user list for Assigned To dropdown so LeadTableDisplay can show options
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+    const fetchUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const res = await fetch(`${BASE_URL}/users/`, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (!res.ok) {
+          console.warn("Leads: failed to fetch users", res.status);
+          return;
+        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.results || [];
+        // Normalize user objects so the UI can rely on `id`, `username`, `name`, `email`.
+        const normalized = (list || []).map((u) => ({
+          id: u?.id ?? null,
+          username: u?.username ?? (u?.email ? u.email.split("@")[0] : null),
+          name: u?.name ?? u?.username ?? u?.email ?? String(u?.id ?? ""),
+          email: u?.email ?? "",
+          raw: u,
+        }));
+        console.debug(
+          "Leads: fetched users count=",
+          normalized.length,
+          normalized.slice(0, 10)
+        );
+        if (!cancelled) setUsers(normalized);
+      } catch (err) {
+        console.error("Leads: error fetching users", err);
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    fetchUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
+
+  // Fetch courses once when authToken is available so AddLeadModal receives
+  // the `courses` array (backend objects with `course_name`). Previously
+  // courses were only set by a manual `handleRefresh` path; ensure we
+  // proactively load them so the AddLeadModal dropdown is populated.
+  useEffect(() => {
+    if (!authToken) return;
+    let cancelled = false;
+    const fetchCourses = async () => {
+      try {
+        const res = await courseService.getCourses(authToken);
+        const list = Array.isArray(res) ? res : res?.results || [];
+        if (!cancelled) setCourses(list);
+        console.debug("Leads: fetched courses count=", list.length);
+      } catch (err) {
+        console.warn("Leads: failed to fetch courses", err);
+        if (!cancelled) setCourses([]);
+      }
+    };
+    fetchCourses();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
 
   const statusOptions = ["All", "Active", "Converted", "Lost"];
 
@@ -150,8 +262,17 @@ const Leads = () => {
         Array.isArray(coursesData.results)
       ) {
         setCourses(coursesData.results);
+        console.debug(
+          "Leads: setCourses from handleRefresh (results)",
+          coursesData.results
+        );
       } else {
         setCourses(Array.isArray(coursesData) ? coursesData : []);
+        console.debug(
+          "Leads: setCourses from handleRefresh (array)",
+          Array.isArray(coursesData) ? coursesData.length : 0,
+          coursesData
+        );
       }
     } catch (err) {
       setError(err.message || "Failed to refresh leads");
@@ -189,17 +310,38 @@ const Leads = () => {
           list = json.data || [];
           count = json.count ?? null;
         }
-      if (!cancelled) {
-          setAllLeads(ensureLeadIds(list));
-          setTotalCount(count);
-          if (count != null) {
-            const pages = Math.max(1, Math.ceil(count / pageSize));
-            console.log("Setting totalPages from count:", count, "=>", pages);
-            setTotalPages(pages);
+        if (!cancelled) {
+          const normalized = ensureLeadIds(list || []);
+
+          // If we have a remembered order, preserve it where possible
+          const prevOrder = leadsOrderRef.current || [];
+          if (prevOrder && prevOrder.length) {
+            const byId = new Map(
+              normalized.map((l) => [String(l.id || l._id || ""), l])
+            );
+            const ordered = [];
+            for (const pid of prevOrder) {
+              const item = byId.get(String(pid));
+              if (item) ordered.push(item);
+            }
+            // Append any server items not in the previous ordering
+            const appended = normalized.filter(
+              (l) => !prevOrder.includes(String(l.id || l._id || ""))
+            );
+            setAllLeads([...ordered, ...appended]);
           } else {
-            const pages = Math.max(1, Math.ceil(list.length / pageSize));
-            console.log("Setting totalPages from list length:", list.length, "=>", pages);
-            setTotalPages(pages);
+            setAllLeads(normalized);
+          }
+          setTotalCount(count);
+          // Note: totalPages is now handled by useLeadSearch hook
+          // Debug: log courses state when page fetch completes
+          try {
+            console.debug(
+              "Leads: page fetch completed, current courses length:",
+              courses.length
+            );
+          } catch (e) {
+            // ignore
           }
         }
       } catch (err) {
@@ -218,6 +360,17 @@ const Leads = () => {
   useEffect(() => {
     console.log("Current page:", currentPage, "Total pages:", totalPages);
   }, [currentPage, totalPages]);
+
+  // Keep the ordering ref up to date whenever visible leads change.
+  useEffect(() => {
+    try {
+      leadsOrderRef.current = (allLeads || []).map((l) =>
+        String(l.id || l._id || "")
+      );
+    } catch (e) {
+      leadsOrderRef.current = [];
+    }
+  }, [allLeads]);
 
   // listen for global import events and other runtime events (in their own effect)
 
@@ -463,8 +616,43 @@ const Leads = () => {
   // Save edits: send camelCase object; map course name -> id if needed
   const handleSaveEdit = useCallback(
     async (updatedLead) => {
+      // optimistic update: apply changes locally first
+      const prevLeadsSnapshot = (allLeads || []).slice();
       try {
+        setAllLeads((prev) =>
+          prev.map((l) =>
+            l._id === updatedLead._id ? { ...l, ...updatedLead } : l
+          )
+        );
+
         let payload = { ...updatedLead };
+        // Backend accepts only a small set of top-level statuses. If the UI
+        // provides a different value (e.g., a sub-status like 'Interested'),
+        // move it into substatus so we don't send an invalid `status` value.
+        const allowedTopStatuses = ["Active", "Converted", "Lost"];
+        if (payload.status !== undefined) {
+          if (!allowedTopStatuses.includes(payload.status)) {
+            // move to substatus and remove top-level status
+            payload.substatus = payload.status;
+            payload.sub_status = payload.status;
+            delete payload.status;
+          }
+        }
+        // If assigned_to is present, also set assigned_to_username so backend
+        // receives the username field consistently.
+        if (
+          payload.assigned_to !== undefined &&
+          !payload.assigned_to_username
+        ) {
+          payload.assigned_to_username = payload.assigned_to;
+        }
+        // Ensure both substatus naming variants are present when saving from modal
+        if (
+          payload.substatus !== undefined &&
+          payload.sub_status === undefined
+        ) {
+          payload.sub_status = payload.substatus;
+        }
         if (updatedLead.course != null) {
           const selected = courses.find(
             (c) =>
@@ -483,19 +671,38 @@ const Leads = () => {
           payload.course = parseInt(payload.course, 10);
         }
 
-        // Use backend id when available for the PATCH endpoint
-        const serverId = updatedLead.id || updatedLead._id;
-        await leadService.updateLead(serverId, payload, authToken);
+        // Resolve the true server id by looking up the existing lead in our
+        // snapshot; modal `updatedLead` may only contain a client `_id`.
+        const existing =
+          prevLeadsSnapshot.find((l) => l._id === updatedLead._id) || {};
+        const serverId =
+          existing.id || updatedLead.id || existing._id || updatedLead._id;
 
-        // Update local copy
+        // Call API and merge server response into local state so UI matches backend
+        const serverResp = await leadService.updateLead(
+          serverId,
+          payload,
+          authToken
+        );
+
         setAllLeads((prev) =>
           prev.map((l) =>
-            l._id === updatedLead._id ? { ...l, ...updatedLead } : l
+            l._id === updatedLead._id
+              ? {
+                  // merge fields returned by server, prefer server values
+                  ...l,
+                  ...serverResp,
+                  // ensure stable _id remains available to UI
+                  _id: serverResp._id || serverResp.id || l._id,
+                }
+              : l
           )
         );
 
         handleCloseEditModal();
       } catch (err) {
+        // rollback optimistic update
+        setAllLeads(prevLeadsSnapshot);
         console.error("Failed to save edit:", err);
         setToast({
           show: true,
@@ -510,51 +717,188 @@ const Leads = () => {
   // Single-field update from table cells
   const updateLeadField = useCallback(
     async (leadId, fieldName, newValue) => {
+      // Optimistic update: apply locally first, then call API.
+      const prevLeads = (allLeads || []).slice();
       try {
-        // Special behavior for status transitions
-        if (fieldName === "status") {
-          // Determine server id (backend primary key) when available.
-          // UI uses `_id` as the stable key; backend may use `id`.
-          const leadObj = allLeads.find((l) => l._id === leadId) || {};
-          const serverId = leadObj.id || leadId;
+        // First find the exact lead using the _id which is unique
+        const leadObj = allLeads.find((l) => l._id === leadId);
+        if (!leadObj) {
+          throw new Error("Lead not found");
+        }
+        const serverId = leadObj.id || leadId;
 
-          // Update the lead status first
-          await leadService.updateLead(
-            serverId,
-            { [fieldName]: newValue },
-            authToken
+        // Apply optimistic local change. Keep both naming variants in local
+        // lead object so table rendering (which may read either) updates.
+        if (
+          fieldName === "status" &&
+          (newValue === "Lost" || newValue === "Converted")
+        ) {
+          // remove locally for these statuses
+          setAllLeads((prev) => prev.filter((l) => l._id !== leadId));
+        } else {
+          setAllLeads((prev) =>
+            prev.map((lead) =>
+              lead._id === leadId
+                ? {
+                    ...lead,
+                    // keep both variants in sync
+                    ...(fieldName === "substatus" || fieldName === "sub_status"
+                      ? { substatus: newValue, sub_status: newValue }
+                      : {}),
+                    // handle assigned_to_username specifically
+                    ...(fieldName === "assigned_to_username"
+                      ? {
+                          assigned_to_username: newValue,
+                          assigned_to: newValue,
+                        }
+                      : {}),
+                    // date fields should be stored in YYYY-MM-DD for UI
+                    ...(fieldName === "last_call" || fieldName === "recentCall"
+                      ? { recentCall: newValue, last_call: newValue }
+                      : {}),
+                    ...(fieldName === "next_call" || fieldName === "nextCall"
+                      ? { nextCall: newValue, next_call: newValue }
+                      : {}),
+                    // default assignment for other fields
+                    ...(fieldName !== "substatus" &&
+                    fieldName !== "sub_status" &&
+                    fieldName !== "last_call" &&
+                    fieldName !== "recentCall" &&
+                    fieldName !== "next_call" &&
+                    fieldName !== "nextCall"
+                      ? { [fieldName]: newValue }
+                      : {}),
+                  }
+                : lead
+            )
+          );
+        }
+
+        // Map course name -> id on change
+        let updatesToSend = { [fieldName]: newValue };
+        if (fieldName === "course") {
+          const selectedCourse = courses.find(
+            (c) =>
+              c.course_name === newValue || String(c.id) === String(newValue)
+          );
+          updatesToSend.course = selectedCourse ? selectedCourse.id : newValue;
+          if (
+            typeof updatesToSend.course === "string" &&
+            /^\d+$/.test(updatesToSend.course)
+          ) {
+            updatesToSend.course = parseInt(updatesToSend.course, 10);
+          }
+        }
+
+        // If a status-like value is being applied via inline edit, ensure
+        // we only send allowed top-level statuses. Otherwise store it as a
+        // substatus so backend doesn't reject it.
+        if (fieldName === "status") {
+          const allowedTopStatuses = ["Active", "Converted", "Lost"];
+          if (!allowedTopStatuses.includes(newValue)) {
+            updatesToSend = { substatus: newValue, sub_status: newValue };
+          }
+        }
+
+        // When updating substatus directly ensure both variants are sent
+        if (fieldName === "substatus" || fieldName === "sub_status") {
+          updatesToSend = { substatus: newValue, sub_status: newValue };
+        }
+
+        // When updating assigned user, send both assigned_to and assigned_to_username
+        if (fieldName === "assigned_to") {
+          updatesToSend = {
+            assigned_to: newValue,
+            assigned_to_username: newValue,
+          };
+        }
+
+        // Date fields: ensure we send camelCase or snake_case recognized by api.updateLead
+        if (fieldName === "last_call" || fieldName === "recentCall") {
+          updatesToSend = { recentCall: newValue };
+        }
+        if (fieldName === "next_call" || fieldName === "nextCall") {
+          updatesToSend = { nextCall: newValue };
+        }
+
+        // Shift sanitization: only send if it matches allowed shift options
+        if (fieldName === "shift") {
+          const allowedShifts = [
+            "7 A.M. - 9 A.M.",
+            "8 A.M. - 10 A.M.",
+            "10 A.M. - 12 P.M.",
+            "11 A.M. - 1 P.M.",
+            "12 P.M. - 2 P.M.",
+            "2 P.M. - 4 P.M.",
+            "2:30 P.M. - 4:30 P.M.",
+            "4 P.M. - 6 P.M.",
+            "4:30 P.M. - 6:30 P.M.",
+            "5 P.M. - 7 P.M.",
+            "6 P.M. - 7 P.M.",
+            "6 P.M. - 8 P.M.",
+            "7 P.M. - 8 P.M.",
+          ];
+          if (
+            typeof newValue === "string" &&
+            allowedShifts.includes(newValue.trim())
+          ) {
+            updatesToSend.shift = newValue.trim();
+          } else {
+            // omit shift if not in allowed list to avoid backend 400
+            delete updatesToSend.shift;
+          }
+        }
+
+        // Normalize date strings that may be in old backend format 'YYYY|DD|MM'
+        const normalizePipeDateToIso = (val) => {
+          if (!val) return val;
+          if (typeof val !== "string") return val;
+          if (val.includes("|")) {
+            const p = val.split("|");
+            if (p.length === 3) {
+              const [yyyy, dd, mm] = p;
+              return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+            }
+          }
+          return val;
+        };
+        if (updatesToSend.recentCall)
+          updatesToSend.recentCall = normalizePipeDateToIso(
+            updatesToSend.recentCall
+          );
+        if (updatesToSend.nextCall)
+          updatesToSend.nextCall = normalizePipeDateToIso(
+            updatesToSend.nextCall
           );
 
-          // Remove from local list for statuses that should no longer appear
-          if (newValue === "Lost" || newValue === "Converted") {
-            setAllLeads((prevLeads) =>
-              prevLeads.filter((lead) => lead._id !== leadId)
-            );
-          }
+        // send update
+        await leadService.updateLead(serverId, updatesToSend, authToken);
 
-          // If the lead was converted, PATCH the enrollments endpoint (no POST)
+        // status side-effects (enrollment/trash) — run after successful PATCH
+        if (fieldName === "status") {
           if (newValue === "Converted") {
             try {
-              const leadObj = allLeads.find((l) => l._id === leadId) || {};
+              const leadObjAfter =
+                prevLeads.find((l) => l._id === leadId) || {};
               const resolvedCourseId =
-                leadObj.course &&
-                (typeof leadObj.course === "number" ||
-                  /^\d+$/.test(String(leadObj.course)))
-                  ? leadObj.course
-                  : leadObj.course_name
+                leadObjAfter.course &&
+                (typeof leadObjAfter.course === "number" ||
+                  /^\d+$/.test(String(leadObjAfter.course)))
+                  ? leadObjAfter.course
+                  : leadObjAfter.course_name
                   ? (
                       courses.find(
                         (c) =>
                           (c.course_name || c.name || "").toString().trim() ===
-                          String(leadObj.course_name).trim()
+                          String(leadObjAfter.course_name).trim()
                       ) || {}
                     ).id
                   : null;
 
               const enrollmentPayload = {
-                lead: leadObj.id || leadId,
+                lead: leadObjAfter.id || leadId,
                 course: resolvedCourseId || null,
-                total_payment: leadObj.value || null,
+                total_payment: leadObjAfter.value || null,
                 first_installment: null,
                 second_installment: null,
                 third_installment: null,
@@ -565,56 +909,44 @@ const Leads = () => {
                 assigned_teacher: "",
               };
 
-              const serverId = leadObj.id || leadId;
-              try {
-                const resp = await fetch(
-                  `${BASE_URL}/enrollments/${serverId}/`,
-                  {
-                    method: "PATCH",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Token ${authToken}`,
-                    },
-                    body: JSON.stringify(enrollmentPayload),
-                  }
-                );
-                if (resp.ok) {
-                  const created = await resp.json();
-                  console.log(
-                    "Enrollment PATCH succeeded for lead",
-                    leadId,
-                    created
-                  );
-                  window.dispatchEvent(
-                    new CustomEvent("crm:enrollmentCreated", {
-                      detail: { enrollment: created },
-                    })
-                  );
-                  window.dispatchEvent(
-                    new CustomEvent("crm:leadConverted", {
-                      detail: { leadId: leadId, enrollment: created },
-                    })
-                  );
-                } else {
-                  console.error("Enrollment PATCH failed:", await resp.text());
+              const serverIdAfter = leadObjAfter.id || leadId;
+              const resp = await fetch(
+                `${BASE_URL}/enrollments/${serverIdAfter}/`,
+                {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                  },
+                  body: JSON.stringify(enrollmentPayload),
                 }
-              } catch (e) {
-                console.error("Enrollment PATCH request failed:", e);
-              }
-            } catch (enrollErr) {
-              console.error(
-                "Failed to prepare enrollment PATCH for converted lead:",
-                enrollErr
               );
+              if (resp.ok) {
+                const created = await resp.json();
+                window.dispatchEvent(
+                  new CustomEvent("crm:enrollmentCreated", {
+                    detail: { enrollment: created },
+                  })
+                );
+                window.dispatchEvent(
+                  new CustomEvent("crm:leadConverted", {
+                    detail: { leadId: leadId, enrollment: created },
+                  })
+                );
+              } else {
+                console.error("Enrollment PATCH failed:", await resp.text());
+              }
+            } catch (e) {
+              console.error("Enrollment PATCH request failed:", e);
             }
           }
 
-          // If marked lost, PATCH the trash endpoint so the backend can move it
           if (newValue === "Lost") {
             try {
-              const leadObj = allLeads.find((l) => l._id === leadId) || {};
-              const serverId = leadObj.id || leadId;
-              const resp = await fetch(`${BASE_URL}/trash/${serverId}/`, {
+              const leadObjAfter =
+                prevLeads.find((l) => l._id === leadId) || {};
+              const serverIdAfter = leadObjAfter.id || leadId;
+              const resp = await fetch(`${BASE_URL}/trash/${serverIdAfter}/`, {
                 method: "PATCH",
                 headers: {
                   "Content-Type": "application/json",
@@ -630,10 +962,7 @@ const Leads = () => {
                   })
                 );
               } else {
-                console.warn(
-                  "Trash PATCH failed, dispatching basic moved event:",
-                  await resp.text()
-                );
+                console.warn("Trash PATCH failed:", await resp.text());
                 window.dispatchEvent(
                   new CustomEvent("crm:leadMovedToTrash", {
                     detail: { leadId },
@@ -647,40 +976,12 @@ const Leads = () => {
               );
             }
           }
-
-          return;
         }
 
-        // Map course name -> id on change
-        const updatesToSend = { [fieldName]: newValue };
-        if (fieldName === "course") {
-          const selectedCourse = courses.find(
-            (c) =>
-              c.course_name === newValue || String(c.id) === String(newValue)
-          );
-          updatesToSend.course = selectedCourse ? selectedCourse.id : newValue;
-          if (
-            typeof updatesToSend.course === "string" &&
-            /^\d+$/.test(updatesToSend.course)
-          ) {
-            updatesToSend.course = parseInt(updatesToSend.course, 10);
-          }
-        }
-
-        // Use backend id when available so PATCH targets the right resource
-        const leadObj = allLeads.find((l) => l._id === leadId) || {};
-        const serverId = leadObj.id || leadId;
-
-        await leadService.updateLead(serverId, updatesToSend, authToken);
-
-        // Local update
-        setAllLeads((prevLeads) =>
-          prevLeads.map((lead) =>
-            lead._id === leadId ? { ...lead, [fieldName]: newValue } : lead
-          )
-        );
         console.log(`Lead ${leadId} ${fieldName} changed to: ${newValue}`);
       } catch (err) {
+        // rollback
+        setAllLeads(prevLeads);
         console.error(`Failed to update ${fieldName}:`, err);
         setToast({
           show: true,
@@ -730,7 +1031,7 @@ const Leads = () => {
 
   const handleAssignedToChange = useCallback(
     (leadId, newAssignedTo) =>
-      updateLeadField(leadId, "assigned_to", newAssignedTo),
+      updateLeadField(leadId, "assigned_to_username", newAssignedTo),
     [updateLeadField]
   );
 
@@ -904,196 +1205,173 @@ const Leads = () => {
     [authToken]
   );
 
-  // Filtering
-  const displayedLeads = useMemo(() => {
-    // Determine admin status
-    const role = user?.role?.toString().toLowerCase();
-    const isAdmin =
-      user &&
-      (role === "admin" ||
-        role === "super admin" ||
-        role === "superadmin" ||
-        role === "super-admin");
+  // Admin status check
+  const role = user?.role?.toString().toLowerCase();
+  const isAdmin =
+    user &&
+    (role === "admin" ||
+      role === "super admin" ||
+      role === "superadmin" ||
+      role === "super-admin");
 
-    // Admins/super-admins should see all leads by default
-    // For non-admins, hide Converted/Lost/Junk except when the lead is assigned to the current user
-    let currentLeads = [...allLeads];
-    if (!isAdmin) {
-      const username =
-        (user && user.username) || localStorage.getItem("username") || "";
-      const normalizedUsername = String(username).trim().toLowerCase();
-      currentLeads = allLeads.filter((lead) => {
-        // consider the lead assigned to current user if normalized matches
-        const aNorm = (lead.assigned_to_normalized || "")
-          .toString()
-          .trim()
-          .toLowerCase();
+  // Admins/super-admins should see all leads by default
+  // For non-admins, hide Converted/Lost/Junk except when the lead is assigned to the current user
+  let currentLeads = [...allLeads];
+  if (!isAdmin) {
+    const username =
+      (user && user.username) || localStorage.getItem("username") || "";
+    const normalizedUsername = String(username).trim().toLowerCase();
+    currentLeads = allLeads.filter((lead) => {
+      // consider the lead assigned to current user if normalized matches
+      const aNorm = (lead.assigned_to_normalized || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      const auNorm = (lead.assigned_to_username_normalized || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      const isAssigned =
+        normalizedUsername &&
+        (aNorm === normalizedUsername || auNorm === normalizedUsername);
+      // keep assigned leads regardless of status; otherwise filter out Converted/Lost
+      return (
+        isAssigned || (lead.status !== "Converted" && lead.status !== "Lost")
+      );
+    });
+  }
+
+  if (filterStatus && filterStatus !== "All") {
+    currentLeads = currentLeads.filter((lead) => lead.status === filterStatus);
+  }
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    currentLeads = currentLeads.filter(
+      (lead) =>
+        (lead.student_name && lead.student_name.toLowerCase().includes(q)) ||
+        (lead.email && lead.email.toLowerCase().includes(q)) ||
+        (lead.phone_number && lead.phone_number.toLowerCase().includes(q))
+    );
+  }
+  if (filterAge) {
+    currentLeads = currentLeads.filter(
+      (lead) => lead.age && lead.age.toString().includes(filterAge)
+    );
+  }
+  if (filterGrade) {
+    currentLeads = currentLeads.filter(
+      (lead) => lead.grade && lead.grade.toString().includes(filterGrade)
+    );
+  }
+  if (filterLastCall) {
+    currentLeads = currentLeads.filter(
+      (lead) => lead.last_call && lead.last_call === filterLastCall
+    );
+  }
+  if (filterClassType && filterClassType !== "Class") {
+    currentLeads = currentLeads.filter(
+      (lead) => lead.class_type === filterClassType
+    );
+  }
+  if (filterShift && filterShift !== "Shift") {
+    currentLeads = currentLeads.filter((lead) => lead.shift === filterShift);
+  }
+  if (filterDevice && filterDevice !== "Device") {
+    currentLeads = currentLeads.filter((lead) => lead.device === filterDevice);
+  }
+  if (filterSubStatus && filterSubStatus !== "SubStatus") {
+    currentLeads = currentLeads.filter(
+      (lead) => lead.sub_status === filterSubStatus
+    );
+  }
+  if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
+    currentLeads = currentLeads.filter(
+      (lead) => lead.previous_coding_experience === filterPrevCodingExp
+    );
+  }
+
+  // Role-based visibility: non-admin users see only leads assigned to them
+  if (!isAdmin) {
+    const username =
+      (user && user.username) || localStorage.getItem("username") || "";
+    const normalizedUsername = String(username).trim().toLowerCase();
+    if (normalizedUsername) {
+      currentLeads = currentLeads.filter((lead) => {
+        // Use normalized assigned fields when available (set during fetch)
+        const aNorm = (lead.assigned_to_normalized || "").trim().toLowerCase();
         const auNorm = (lead.assigned_to_username_normalized || "")
-          .toString()
           .trim()
           .toLowerCase();
-        const isAssigned =
-          normalizedUsername &&
-          (aNorm === normalizedUsername || auNorm === normalizedUsername);
-        // keep assigned leads regardless of status; otherwise filter out Converted/Lost
+        // Fallback to raw fields
+        const aRaw = String(lead.assigned_to || "").trim();
+        const auRaw = String(lead.assigned_to_username || "").trim();
+
         return (
-          isAssigned || (lead.status !== "Converted" && lead.status !== "Lost")
+          (aNorm && aNorm === normalizedUsername) ||
+          (auNorm && auNorm === normalizedUsername) ||
+          (aRaw && aRaw === username) ||
+          (auRaw && auRaw === username)
         );
       });
     }
+  }
 
-    if (filterStatus && filterStatus !== "All") {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.status === filterStatus
-      );
-    }
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      currentLeads = currentLeads.filter(
-        (lead) =>
-          (lead.student_name && lead.student_name.toLowerCase().includes(q)) ||
-          (lead.email && lead.email.toLowerCase().includes(q)) ||
-          (lead.phone_number && lead.phone_number.toLowerCase().includes(q))
-      );
-    }
-    if (filterAge) {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.age && lead.age.toString().includes(filterAge)
-      );
-    }
-    if (filterGrade) {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.grade && lead.grade.toString().includes(filterGrade)
-      );
-    }
-    if (filterLastCall) {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.last_call && lead.last_call === filterLastCall
-      );
-    }
-    if (filterClassType && filterClassType !== "Class") {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.class_type === filterClassType
-      );
-    }
-    if (filterShift && filterShift !== "Shift") {
-      currentLeads = currentLeads.filter((lead) => lead.shift === filterShift);
-    }
-    if (filterDevice && filterDevice !== "Device") {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.device === filterDevice
-      );
-    }
-    if (filterSubStatus && filterSubStatus !== "SubStatus") {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.sub_status === filterSubStatus
-      );
-    }
-    if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
-      currentLeads = currentLeads.filter(
-        (lead) => lead.previous_coding_experience === filterPrevCodingExp
-      );
-    }
-
-    // Role-based visibility: non-admin users see only leads assigned to them
-    if (!isAdmin) {
-      const username =
-        (user && user.username) || localStorage.getItem("username") || "";
-      const normalizedUsername = String(username).trim().toLowerCase();
-      if (normalizedUsername) {
-        currentLeads = currentLeads.filter((lead) => {
-          // Use normalized assigned fields when available (set during fetch)
-          const aNorm = (lead.assigned_to_normalized || "")
-            .trim()
-            .toLowerCase();
-          const auNorm = (lead.assigned_to_username_normalized || "")
-            .trim()
-            .toLowerCase();
-          // Fallback to raw fields
-          const aRaw = String(lead.assigned_to || "").trim();
-          const auRaw = String(lead.assigned_to_username || "").trim();
-
-          return (
-            (aNorm && aNorm === normalizedUsername) ||
-            (auNorm && auNorm === normalizedUsername) ||
-            (aRaw && aRaw === username) ||
-            (auRaw && auRaw === username)
-          );
-        });
-      }
-    }
-
-    // DEBUG: print why leads may be filtered out
-    try {
-      const debugUser =
-        (user && user.username) || localStorage.getItem("username") || "";
-      const debugNorm = String(debugUser).trim().toLowerCase();
+  // DEBUG: print why leads may be filtered out
+  try {
+    const debugUser =
+      (user && user.username) || localStorage.getItem("username") || "";
+    const debugNorm = String(debugUser).trim().toLowerCase();
+    console.log(
+      "[Leads debug] current user:",
+      debugUser,
+      "normalized:",
+      debugNorm
+    );
+    console.log(
+      "[Leads debug] allLeads count:",
+      allLeads.length,
+      "-> displayed count:",
+      currentLeads.length,
+      "filterStatus:",
+      filterStatus
+    );
+    currentLeads.forEach((l) => {
+      const aNorm = (l.assigned_to_normalized || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      const auNorm = (l.assigned_to_username_normalized || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      const aRaw = String(l.assigned_to || "").trim();
+      const auRaw = String(l.assigned_to_username || "").trim();
+      const isAssigned =
+        debugNorm &&
+        (aNorm === debugNorm ||
+          auNorm === debugNorm ||
+          aRaw === debugUser ||
+          auRaw === debugUser);
       console.log(
-        "[Leads debug] current user:",
-        debugUser,
-        "normalized:",
-        debugNorm
+        "[Leads debug] lead",
+        l._id,
+        "status",
+        l.status,
+        "assigned_to:",
+        l.assigned_to,
+        "assigned_to_username:",
+        l.assigned_to_username,
+        "aNorm:",
+        aNorm,
+        "auNorm:",
+        auNorm,
+        "isAssigned:",
+        isAssigned
       );
-      console.log(
-        "[Leads debug] allLeads count:",
-        allLeads.length,
-        "-> displayed count:",
-        currentLeads.length,
-        "filterStatus:",
-        filterStatus
-      );
-      currentLeads.forEach((l) => {
-        const aNorm = (l.assigned_to_normalized || "")
-          .toString()
-          .trim()
-          .toLowerCase();
-        const auNorm = (l.assigned_to_username_normalized || "")
-          .toString()
-          .trim()
-          .toLowerCase();
-        const aRaw = String(l.assigned_to || "").trim();
-        const auRaw = String(l.assigned_to_username || "").trim();
-        const isAssigned =
-          debugNorm &&
-          (aNorm === debugNorm ||
-            auNorm === debugNorm ||
-            aRaw === debugUser ||
-            auRaw === debugUser);
-        console.log(
-          "[Leads debug] lead",
-          l._id,
-          "status",
-          l.status,
-          "assigned_to:",
-          l.assigned_to,
-          "assigned_to_username:",
-          l.assigned_to_username,
-          "aNorm:",
-          aNorm,
-          "auNorm:",
-          auNorm,
-          "isAssigned:",
-          isAssigned
-        );
-      });
-    } catch (e) {
-      console.error("Leads debug error", e);
-    }
-
-    return currentLeads;
-  }, [
-    allLeads,
-    searchTerm,
-    filterStatus,
-    filterAge,
-    filterGrade,
-    filterLastCall,
-    filterClassType,
-    filterShift,
-    filterDevice,
-    filterPrevCodingExp,
-    user,
-  ]);
+    });
+  } catch (e) {
+    console.error("Leads debug error", e);
+  }
 
   if (loading) {
     return <DelayedLoader message="Loading leads..." minMs={2000} />;
