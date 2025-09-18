@@ -4,6 +4,8 @@ import LeadTableDisplay from "../components/LeadTableDisplay";
 import LeadEditModal from "../components/LeadEditModal";
 import AddLeadModal from "../components/AddLeadModal";
 import ImportCsvButton from "../components/ImportCsvButton";
+import LeadsHeader from "../components/LeadsHeader";
+import LeadsFilters from "../components/LeadsFilters";
 import Toast from "../components/common/Toast";
 import scheduleBackground from "../utils/backgroundScheduler";
 import { BASE_URL } from "../config";
@@ -801,18 +803,17 @@ const Leads = () => {
       // Optimistic update: apply locally first, then call API.
       const prevLeads = (allLeads || []).slice();
       try {
-        // Find the lead using either backend `id` or UI `_id` via matchId
-        const leadObj = (allLeads || []).find((l) => matchId(l, leadId));
-        if (!leadObj) {
-          setToast({
-            show: true,
-            message: "Cannot update: Lead not found.",
-            type: "error",
-          });
-          return;
-        }
-        // Centralize resolution: try resolving using the lead object and
-        // previous snapshot as fallback.
+        // Try to find the lead object in local state (may be missing if the
+        // caller passed a different id variant). We'll still attempt to
+        // resolve the backend id even when the object is not present so
+        // inline edits work for rows that were re-keyed or use different id
+        // formats (numeric id vs temporary _id).
+        let leadObj = (allLeads || []).find((l) => matchId(l, leadId));
+
+        // Centralize resolution: prefer resolving from the lead object if
+        // available, otherwise resolve from the provided leadId and the
+        // previous snapshot. This returns the backend numeric id when
+        // possible.
         const serverId = resolveServerId(leadObj || leadId, prevLeads);
         if (!serverId) {
           setToast({
@@ -821,6 +822,14 @@ const Leads = () => {
             type: "error",
           });
           return;
+        }
+
+        // If we couldn't find the lead object earlier, try to recover it by
+        // matching against the resolved server id in our snapshot.
+        if (!leadObj) {
+          leadObj = (prevLeads || []).find(
+            (l) => String(l.id || l._id || "") === String(serverId)
+          );
         }
 
         // Apply optimistic local change. Keep both naming variants in local
@@ -1011,7 +1020,10 @@ const Leads = () => {
                 assigned_teacher: "",
               };
 
-              const serverIdAfter = leadObjAfter.id || leadId;
+              const serverIdAfter =
+                resolveServerId(leadObjAfter || leadId, prevLeads) ||
+                (leadObjAfter && (leadObjAfter.id || leadObjAfter._id)) ||
+                leadId;
               const resp = await fetch(
                 `${BASE_URL}/enrollments/${serverIdAfter}/`,
                 {
@@ -1047,7 +1059,10 @@ const Leads = () => {
             try {
               const leadObjAfter =
                 prevLeads.find((l) => matchId(l, leadId)) || {};
-              const serverIdAfter = leadObjAfter.id || leadId;
+              const serverIdAfter =
+                resolveServerId(leadObjAfter || leadId, prevLeads) ||
+                (leadObjAfter && (leadObjAfter.id || leadObjAfter._id)) ||
+                leadId;
               const resp = await fetch(`${BASE_URL}/trash/${serverIdAfter}/`, {
                 method: "PATCH",
                 headers: {
@@ -1525,60 +1540,44 @@ const Leads = () => {
       )}
       <h1 className="text-3xl font-bold mb-6">Leads Management</h1>
 
-      <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <PlusIcon className="h-5 w-5 inline-block mr-2" />
-            Add New Lead
-          </button>
+      <LeadsHeader
+        handleOpenAddModal={handleOpenAddModal}
+        authToken={authToken}
+        courses={courses}
+        handleRefresh={handleRefresh}
+        handleExport={handleExport}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        showFilters={showFilters}
+        setShowFilters={setShowFilters}
+      />
 
-          {/* Import CSV (posts to /leads/from/ via service) */}
-          <ImportCsvButton
-            authToken={authToken}
-            courses={courses}
-            onImported={handleRefresh}
-          />
-
-          <button
-            onClick={handleExport}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <ArrowDownTrayIcon className="h-5 w-5 inline-block mr-2" />
-            Export CSV
-          </button>
-          <button
-            onClick={handleRefresh}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <ArrowPathIcon className="h-5 w-5 inline-block mr-2" />
-            Refresh
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-auto">
-            <input
-              type="text"
-              placeholder="Search by Email, Phone, Name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full p-2 pl-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
-            />
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-          </div>
-
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <FunnelIcon className="h-5 w-5 inline-block mr-2" />
-            {showFilters ? "Hide Filters" : "Show Filters"}
-          </button>
-        </div>
-      </div>
+      <LeadsFilters
+        showFilters={showFilters}
+        filterStatus={filterStatus}
+        setFilterStatus={setFilterStatus}
+        filterAge={filterAge}
+        setFilterAge={setFilterAge}
+        filterGrade={filterGrade}
+        setFilterGrade={setFilterGrade}
+        filterLastCall={filterLastCall}
+        setFilterLastCall={setFilterLastCall}
+        filterClassType={filterClassType}
+        setFilterClassType={setFilterClassType}
+        filterShift={filterShift}
+        setFilterShift={setFilterShift}
+        filterDevice={filterDevice}
+        setFilterDevice={setFilterDevice}
+        filterSubStatus={filterSubStatus}
+        setFilterSubStatus={setFilterSubStatus}
+        filterPrevCodingExp={filterPrevCodingExp}
+        setFilterPrevCodingExp={setFilterPrevCodingExp}
+        classTypeOptions={classTypeOptions}
+        shiftOptions={shiftOptions}
+        deviceOptions={deviceOptions}
+        subStatusOptions={subStatusOptions}
+        previousCodingExpOptions={previousCodingExpOptions}
+      />
 
       {showFilters && (
         <div className="flex flex-wrap items-center justify-end mb-6 gap-3 p-4 border border-gray-200 rounded-md bg-white shadow-sm">
