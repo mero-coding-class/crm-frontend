@@ -16,6 +16,7 @@ import {
   enrollmentService,
   changeLogService,
 } from "../services/api";
+import { resolveServerId } from "../services/api";
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -746,30 +747,14 @@ const Leads = () => {
             matchId(l, updatedLead.id || updatedLead._id)
           ) || {};
 
-        // Prefer backend numeric `id` for PATCH; fall back to updatedLead.id/_id
-        let serverId = existing.id || updatedLead.id || updatedLead._id || null;
-
-        // If serverId looks like the display _id (e.g., "lead-..."), attempt
-        // to fall back to matching prevLeadsSnapshot by email/phone to find
-        // the real backend id.
-        if (
-          serverId &&
-          typeof serverId === "string" &&
-          serverId.startsWith("lead-")
-        ) {
-          const match = prevLeadsSnapshot.find(
-            (l) =>
-              l.email === updatedLead.email ||
-              l.phone_number === updatedLead.phone_number ||
-              l.phone === updatedLead.phone ||
-              l.id === updatedLead.id
-          );
-          if (match && match.id) serverId = match.id;
-        }
-
+        // Prefer backend numeric `id` for PATCH; use resolveServerId to
+        // centralize heuristics (checks id, _id, and falls back to matching
+        // by email/phone/student_name in the previous snapshot).
+        const serverId = resolveServerId(
+          updatedLead.id || updatedLead._id || existing,
+          prevLeadsSnapshot
+        );
         if (!serverId) {
-          // Still cannot determine server id — throw a helpful error so the
-          // caller can handle it (and we don't attempt a blind PATCH).
           throw new Error("Cannot update: backend lead id missing");
         }
 
@@ -816,12 +801,8 @@ const Leads = () => {
       // Optimistic update: apply locally first, then call API.
       const prevLeads = (allLeads || []).slice();
       try {
-        // Find the lead using either backend `id` or UI `_id`.
-        const normalize = (v) =>
-          v === undefined || v === null ? "" : String(v);
-        const leadObj = (allLeads || []).find(
-          (l) => normalize(l.id || l._id) === normalize(leadId)
-        );
+        // Find the lead using either backend `id` or UI `_id` via matchId
+        const leadObj = (allLeads || []).find((l) => matchId(l, leadId));
         if (!leadObj) {
           setToast({
             show: true,
@@ -830,16 +811,9 @@ const Leads = () => {
           });
           return;
         }
-
-        // Prefer backend numeric `id` for PATCH; fallback to `_id` if it looks like a real id
-        let serverId = leadObj.id || null;
-        if (
-          !serverId &&
-          leadObj._id &&
-          !String(leadObj._id).startsWith("lead-")
-        ) {
-          serverId = leadObj._id;
-        }
+        // Centralize resolution: try resolving using the lead object and
+        // previous snapshot as fallback.
+        const serverId = resolveServerId(leadObj || leadId, prevLeads);
         if (!serverId) {
           setToast({
             show: true,
@@ -856,13 +830,11 @@ const Leads = () => {
           (newValue === "Lost" || newValue === "Converted")
         ) {
           // remove locally for these statuses (normalize ids)
-          setAllLeads((prev) =>
-            prev.filter((l) => normalize(l.id || l._id) !== normalize(leadId))
-          );
+          setAllLeads((prev) => prev.filter((l) => !matchId(l, leadId)));
         } else {
           setAllLeads((prev) =>
             prev.map((lead) =>
-              normalize(lead.id || lead._id) === normalize(leadId)
+              matchId(lead, leadId)
                 ? {
                     ...lead,
                     // keep both variants in sync

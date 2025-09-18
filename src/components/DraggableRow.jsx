@@ -109,9 +109,12 @@ const DraggableRow = ({
                     <select
                       value={lead.substatus || lead.sub_status || "New"}
                       onChange={(e) => {
-                        // Update frontend state and backend
+                        // Update frontend state and backend. Prefer backend id.
                         if (onSubStatusChange) {
-                          onSubStatusChange(lead._id, e.target.value);
+                          onSubStatusChange(
+                            lead.id || lead._id,
+                            e.target.value
+                          );
                         }
                       }}
                       className="bg-transparent border-0 p-0 m-0 text-sm font-semibold appearance-none focus:outline-none text-current"
@@ -204,7 +207,7 @@ const DraggableRow = ({
                     }
                     onChange={(e) => {
                       const v = e.target.value;
-                      const leadId = lead._id || lead.id; // Use either ID format
+                      const leadId = lead.id || lead._id; // prefer backend id
                       onAgeChange(leadId, v);
                     }}
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
@@ -228,7 +231,7 @@ const DraggableRow = ({
                     }
                     onChange={(e) => {
                       const v = e.target.value;
-                      const leadId = lead._id || lead.id; // Use either ID format
+                      const leadId = lead.id || lead._id; // prefer backend id
                       onGradeChange(leadId, v);
                     }}
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
@@ -279,7 +282,7 @@ const DraggableRow = ({
                     type="text"
                     value={lead.course_duration || ""}
                     onChange={(e) =>
-                      onCourseDurationChange(lead._id, e.target.value)
+                      onCourseDurationChange(lead.id || lead._id, e.target.value)
                     }
                     className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
                   />
@@ -297,7 +300,7 @@ const DraggableRow = ({
                     <select
                       value={lead.assigned_to_username || ""}
                       onChange={(e) =>
-                        onAssignedToChange(lead._id, e.target.value)
+                        onAssignedToChange(lead.id || lead._id, e.target.value)
                       }
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -327,7 +330,7 @@ const DraggableRow = ({
                   <input
                     type="date"
                     value={lead.last_call ? lead.last_call.split("T")[0] : ""}
-                    onChange={(e) => onLastCallChange(lead._id, e.target.value)}
+                    onChange={(e) => onLastCallChange(lead.id || lead._id, e.target.value)}
                     className="block w-full p-1 border rounded-md shadow-sm text-xs font-semibold"
                   />
                 </td>
@@ -341,7 +344,7 @@ const DraggableRow = ({
                   <input
                     type="date"
                     value={lead.next_call ? lead.next_call.split("T")[0] : ""}
-                    onChange={(e) => onNextCallChange(lead._id, e.target.value)}
+                    onChange={(e) => onNextCallChange(lead.id || lead._id, e.target.value)}
                     className="block w-full p-1 border rounded-md shadow-sm text-xs font-semibold"
                   />
                 </td>
@@ -354,7 +357,7 @@ const DraggableRow = ({
                 >
                   <select
                     value={lead.status}
-                    onChange={(e) => onStatusChange(lead._id, e.target.value)}
+                    onChange={(e) => onStatusChange(lead.id || lead._id, e.target.value)}
                     className={`block w-full p-1 border rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500 appearance-none pr-6 ${getStatusClasses(
                       lead.status
                     )}`}
@@ -381,7 +384,7 @@ const DraggableRow = ({
                   <textarea
                     value={localRemarks[lead._id] || ""}
                     onChange={(e) => handleLocalRemarkChange(e.target.value)}
-                    onBlur={(e) => onRemarkChange(lead._id, e.target.value)}
+                    onBlur={(e) => onRemarkChange(lead.id || lead._id, e.target.value)}
                     rows="3"
                     className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 resize-y"
                     placeholder="Add remarks..."
