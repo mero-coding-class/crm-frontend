@@ -238,51 +238,88 @@ const LeadTableDisplay = ({
     const container = tableContainerRef.current;
     if (!container) return;
 
-    let scrollDirection = 0;
-    let animationFrameId;
+    let scrollFactor = 0; // -1..1
+    let rafId = null;
+    let isPointerOver = false;
 
-    const edgeThreshold = 100; // px from edge
-    const baseSpeed = 20; // scroll speed (increase for faster)
+    const edgeThreshold = 120; // px from edge
+    const maxSpeed = 28; // max px per frame (approx)
 
-    const handleMouseMove = (e) => {
+    const normalize = (v) => Math.max(-1, Math.min(1, v));
+
+    const updateFromPointer = (clientX) => {
       const { left, right } = container.getBoundingClientRect();
-      const mouseX = e.clientX;
+      const width = right - left;
 
-      if (mouseX < left + edgeThreshold) {
-        // Left edge → scroll left
-        const distanceFromEdge = mouseX - left;
-        const factor = (edgeThreshold - distanceFromEdge) / edgeThreshold;
-        scrollDirection = -factor; // negative = left
-      } else if (mouseX > right - edgeThreshold) {
-        // Right edge → scroll right
-        const distanceFromEdge = right - mouseX;
-        const factor = (edgeThreshold - distanceFromEdge) / edgeThreshold;
-        scrollDirection = factor; // positive = right
+      if (clientX < left + edgeThreshold) {
+        const dist = clientX - left; // 0..edgeThreshold
+        const factor = (edgeThreshold - dist) / edgeThreshold; // 0..1
+        scrollFactor = -normalize(Math.pow(factor, 1.25));
+      } else if (clientX > right - edgeThreshold) {
+        const dist = right - clientX; // 0..edgeThreshold
+        const factor = (edgeThreshold - dist) / edgeThreshold; // 0..1
+        scrollFactor = normalize(Math.pow(factor, 1.25));
       } else {
-        scrollDirection = 0;
+        scrollFactor = 0;
       }
     };
 
-    const handleMouseLeave = () => {
-      scrollDirection = 0;
+    const onPointerMove = (e) => {
+      // Support PointerEvent and MouseEvent
+      const clientX = e.clientX;
+      updateFromPointer(clientX);
     };
 
-    const smoothScroll = () => {
-      if (scrollDirection !== 0) {
-        container.scrollLeft += baseSpeed * scrollDirection;
+    const onPointerEnter = (e) => {
+      isPointerOver = true;
+      updateFromPointer(e.clientX);
+    };
+
+    const onPointerLeave = () => {
+      isPointerOver = false;
+      scrollFactor = 0;
+    };
+
+    const step = () => {
+      if (scrollFactor !== 0 && container) {
+        const maxScrollLeft = container.scrollWidth - container.clientWidth;
+        // speed per frame with easing
+        const delta =
+          Math.sign(scrollFactor) *
+          Math.min(maxSpeed, Math.abs(scrollFactor) * maxSpeed);
+        const next = container.scrollLeft + delta;
+        // clamp
+        container.scrollLeft = Math.max(0, Math.min(maxScrollLeft, next));
+        // if we've reached the bounds, stop further movement
+        if (
+          container.scrollLeft === 0 ||
+          container.scrollLeft === maxScrollLeft
+        ) {
+          // no-op (still continue to monitor pointer)
+        }
       }
-      animationFrameId = requestAnimationFrame(smoothScroll);
+      rafId = requestAnimationFrame(step);
     };
 
-    container.addEventListener("mousemove", handleMouseMove);
-    container.addEventListener("mouseleave", handleMouseLeave);
+    // Prefer pointer events where available
+    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerenter", onPointerEnter);
+    container.addEventListener("pointerleave", onPointerLeave);
+    // Fallback for older browsers: mouse events
+    container.addEventListener("mousemove", onPointerMove);
+    container.addEventListener("mouseenter", onPointerEnter);
+    container.addEventListener("mouseleave", onPointerLeave);
 
-    animationFrameId = requestAnimationFrame(smoothScroll);
+    rafId = requestAnimationFrame(step);
 
     return () => {
-      container.removeEventListener("mousemove", handleMouseMove);
-      container.removeEventListener("mouseleave", handleMouseLeave);
-      cancelAnimationFrame(animationFrameId);
+      cancelAnimationFrame(rafId);
+      container.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("pointerenter", onPointerEnter);
+      container.removeEventListener("pointerleave", onPointerLeave);
+      container.removeEventListener("mousemove", onPointerMove);
+      container.removeEventListener("mouseenter", onPointerEnter);
+      container.removeEventListener("mouseleave", onPointerLeave);
     };
   }, []);
 
