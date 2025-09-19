@@ -111,9 +111,9 @@ const ImportCsvButton = ({ authToken, onImported }) => {
   const papaParserRef = useRef(null);
 
   const handleFileChange = async (e) => {
-  const file = e.target.files[0];
+    const file = e.target.files[0];
     if (!file) return;
-  setFileName(file.name || "");
+    setFileName(file.name || "");
     // initialize progress UI
     setImporting(true);
     setProgress(0);
@@ -126,7 +126,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
     abortControllerRef.current = new AbortController();
     isCancelledRef.current = false;
 
-  if (authToken) {
+    if (authToken) {
       try {
         const formData = new FormData();
         formData.append("file", file);
@@ -138,7 +138,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           signal: abortControllerRef.current.signal,
         });
 
-  if (resp.ok) {
+        if (resp.ok) {
           // Expect backend to return created leads or a summary
           let body = null;
           try {
@@ -188,8 +188,13 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           }
         }
 
-        console.warn("Backend CSV import failed, falling back to client-side import", resp.status);
-        setStatusMessage("Backend import failed; falling back to client-side import...");
+        console.warn(
+          "Backend CSV import failed, falling back to client-side import",
+          resp.status
+        );
+        setStatusMessage(
+          "Backend import failed; falling back to client-side import..."
+        );
         setProgress(10);
       } catch (err) {
         console.warn("Backend import attempt failed:", err);
@@ -200,8 +205,6 @@ const ImportCsvButton = ({ authToken, onImported }) => {
       }
     }
 
-    // Fallback: parse and create each row client-side (existing behavior)
-    // Build a lowercase header mapping for case-insensitive mapping
     const headerMapLower = Object.fromEntries(
       Object.entries(headerMapping).map(([k, v]) => [k.trim().toLowerCase(), v])
     );
@@ -215,7 +218,9 @@ const ImportCsvButton = ({ authToken, onImported }) => {
         // store parser ref for abort
       },
       complete: async (results) => {
-        const mappedRows = results.data.map((r) => mapRowToLead(r, headerMapLower));
+        const mappedRows = results.data.map((r) =>
+          mapRowToLead(r, headerMapLower)
+        );
 
         // initialize counts
         const total = mappedRows.length;

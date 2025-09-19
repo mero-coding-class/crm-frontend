@@ -84,6 +84,55 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
   });
 
   const modalRef = useRef(null);
+  // Keep a snapshot of the original student data to detect if anything changed
+  const originalSnapshotRef = useRef(null);
+
+  const getFileNameFromUrl = (url) => {
+    if (!url) return "";
+    try {
+      const u = new URL(url);
+      const parts = u.pathname.split("/").filter(Boolean);
+      return parts.length > 0 ? parts[parts.length - 1] : url;
+    } catch (e) {
+      const parts = url.split("/");
+      return parts.length > 0 ? parts[parts.length - 1] : url;
+    }
+  };
+
+  const normalizeForCompare = (data) => {
+    const keys = [
+      "student_name",
+      "parents_name",
+      "email",
+      "phone_number",
+      "course",
+      "batch_name",
+      "assigned_teacher",
+      "course_duration",
+      "starting_date",
+      "total_payment",
+      "first_installment",
+      "second_installment",
+      "third_installment",
+      "last_pay_date",
+      "payment_completed",
+      "remarks",
+    ];
+    const obj = {};
+    keys.forEach((k) => {
+      obj[k] =
+        data && data[k] !== undefined && data[k] !== null ? data[k] : null;
+    });
+    obj.invoice = (Array.isArray(data?.invoice) ? data.invoice : []).map(
+      (i) => ({
+        name: i?.name || "",
+        url: i?.url || "",
+        date: i?.date || "",
+        hasFile: !!i?.file,
+      })
+    );
+    return obj;
+  };
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -110,62 +159,66 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
     if (authToken) fetchCourses();
   }, [authToken]);
 
+  // Update original snapshot when student prop changes
   useEffect(() => {
-    const fetchEnrollmentDetails = async () => {
-      if (!student || !student.id || !authToken) return;
-      try {
-        const res = await fetch(`${BASE_URL}/enrollments/${student.id}/`, {
-          method: "GET",
-          headers: {
-            Authorization: `Token ${authToken}`,
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        });
-        if (!res.ok)
-          throw new Error(`Failed to fetch enrollment: ${res.status}`);
-        const data = await res.json();
+    originalSnapshotRef.current = normalizeForCompare(student || {});
+  }, [student]);
 
-        // Helper to resolve course name if backend returns an id or nested object
-        const resolveCourseName = (d) => {
-          if (!d) return "";
-          if (d.course_name) return d.course_name;
-          if (d.course && typeof d.course === "object")
-            return d.course.course_name || d.course.name || "";
-          if (
-            d.course &&
-            (typeof d.course === "number" || typeof d.course === "string")
-          ) {
-            // try to find in courseOptions by id
-            const found = courseOptions.find(
-              (c) => String(c.id) === String(d.course)
-            );
-            return found
-              ? found.course_name || found.name || String(d.course)
-              : String(d.course);
-          }
-          return "";
-        };
+  // Exposed helper to load enrollment details (used on mount and after save)
+  const fetchEnrollmentDetails = async () => {
+    if (!student || !student.id || !authToken) return;
+    try {
+      const res = await fetch(`${BASE_URL}/enrollments/${student.id}/`, {
+        method: "GET",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`Failed to fetch enrollment: ${res.status}`);
+      const data = await res.json();
 
-        const resolvedStudentName =
-          data.student_name ||
-          (data.student && (data.student.student_name || data.student.name)) ||
-          (data.lead && (data.lead.student_name || data.lead.name)) ||
-          (student && student.student_name) ||
-          "";
+      // Helper to resolve course name if backend returns an id or nested object
+      const resolveCourseName = (d) => {
+        if (!d) return "";
+        if (d.course_name) return d.course_name;
+        if (d.course && typeof d.course === "object")
+          return d.course.course_name || d.course.name || "";
+        if (
+          d.course &&
+          (typeof d.course === "number" || typeof d.course === "string")
+        ) {
+          const found = courseOptions.find(
+            (c) => String(c.id) === String(d.course)
+          );
+          return found
+            ? found.course_name || found.name || String(d.course)
+            : String(d.course);
+        }
+        return "";
+      };
 
-        const resolvedParentsName =
-          data.parents_name ||
-          (data.parent_name && data.parent_name) ||
-          (data.parents && data.parents) ||
-          (data.lead && (data.lead.parents_name || data.lead.parents)) ||
-          (student && student.parents_name) ||
-          "";
+      const resolvedStudentName =
+        data.student_name ||
+        (data.student && (data.student.student_name || data.student.name)) ||
+        (data.lead && (data.lead.student_name || data.lead.name)) ||
+        (student && student.student_name) ||
+        "";
 
-        const resolvedCourseName =
-          resolveCourseName(data) || student?.course_name || "";
+      const resolvedParentsName =
+        data.parents_name ||
+        (data.parent_name && data.parent_name) ||
+        (data.parents && data.parents) ||
+        (data.lead && (data.lead.parents_name || data.lead.parents)) ||
+        (student && student.parents_name) ||
+        "";
 
-        setFormData((prev) => ({
+      const resolvedCourseName =
+        resolveCourseName(data) || student?.course_name || "";
+
+      setFormData((prev) => {
+        const merged = {
           ...prev,
           ...data,
           student_name: resolvedStudentName,
@@ -199,25 +252,44 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
             typeof data.payment_completed === "boolean"
               ? data.payment_completed
               : prev.payment_completed,
-          invoice: data.invoice
-            ? data.invoice.map((inv) => ({
+          // Normalize invoice field: backend may return an array, a single object,
+          // or a string URL. Convert all variants to an array of invoice objects.
+          invoice: (() => {
+            try {
+              if (!data.invoice) return prev.invoice || [];
+              let arr = [];
+              if (Array.isArray(data.invoice)) arr = data.invoice;
+              else if (typeof data.invoice === "string")
+                arr = [{ url: data.invoice }];
+              else if (typeof data.invoice === "object") arr = [data.invoice];
+              return arr.map((inv) => ({
                 ...inv,
                 file: null,
-                previewUrl: inv?.url || "",
-              }))
-            : prev.invoice || [],
+                previewUrl: inv?.url || inv?.previewUrl || "",
+              }));
+            } catch (e) {
+              return prev.invoice || [];
+            }
+          })(),
           remarks: data.remarks || prev.remarks || "",
           lead: { ...(data.lead || {}), ...(prev.lead || {}) },
           created_at:
             data.created_at || data.enrollment_created_at || prev.created_at,
           updated_at:
             data.updated_at || data.enrollment_updated_at || prev.updated_at,
-        }));
-      } catch (err) {
-        console.error("Error fetching enrollment details:", err);
-      }
-    };
+        };
+        // Update original snapshot to reflect the freshly fetched / merged form state
+        try {
+          originalSnapshotRef.current = normalizeForCompare(merged || {});
+        } catch (e) {}
+        return merged;
+      });
+    } catch (err) {
+      console.error("Error fetching enrollment details:", err);
+    }
+  };
 
+  useEffect(() => {
     fetchEnrollmentDetails();
   }, [student, authToken, courseOptions]);
 
@@ -330,8 +402,15 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSubmit = (e) => {
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(null);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaveError(null);
+    // We'll set isSaving only when we actually perform a network save
+
     const updatedStudentData = {
       ...formData,
       batchname: formData.batchname ?? formData.batch_name ?? "",
@@ -348,17 +427,13 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       third_installment: formData.third_installment
         ? parseFloat(formData.third_installment)
         : null,
-
-      // Fix for the date format issue:
       last_pay_date: formData.last_pay_date || null,
-
-      // accept invoices if they have a file, external url, or name
       invoice: Array.isArray(formData.invoice)
         ? formData.invoice.filter((inv) => inv.file || inv.url || inv.name)
         : [],
     };
 
-    // Coerce course id to number when possible (backend expects id)
+    // Coerce course id to number when possible
     if (
       updatedStudentData.course !== undefined &&
       updatedStudentData.course !== null &&
@@ -368,8 +443,49 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       updatedStudentData.course = parseInt(updatedStudentData.course, 10);
     }
 
-    onSave(updatedStudentData);
-    onClose();
+    try {
+      // If nothing changed and there are no new files, skip network call
+      const compareSnapshot = normalizeForCompare(updatedStudentData);
+      const original = originalSnapshotRef.current || {};
+      const snapshotsEqual =
+        JSON.stringify(compareSnapshot) === JSON.stringify(original);
+      const hasNewFiles = Array.isArray(updatedStudentData.invoice)
+        ? updatedStudentData.invoice.some(
+            (inv) => inv && inv.file instanceof File
+          )
+        : false;
+
+      if (snapshotsEqual && !hasNewFiles) {
+        setSaveSuccess("No changes to save");
+        setTimeout(() => setSaveSuccess(null), 2000);
+        return;
+      }
+
+      setIsSaving(true);
+
+      // Call parent onSave which will perform the PATCH (and handles file uploads)
+      // It returns a Promise because the parent handler is async; await it so
+      // we can refresh the enrollment details and show the uploaded invoice(s)
+      const resp = await Promise.resolve(onSave(updatedStudentData));
+
+      // After parent saved, re-fetch enrollment details so modal can show
+      // updated invoice URLs returned from the server.
+      await fetchEnrollmentDetails();
+
+      // If response has invoice urls, show success briefly
+      if (resp && Array.isArray(resp.invoice) && resp.invoice.length > 0) {
+        setSaveSuccess("Invoice uploaded");
+        setTimeout(() => setSaveSuccess(null), 3000);
+      }
+
+      // Keep the modal open so the user can immediately see the uploaded file(s).
+      // Optionally, we could close; leave it to the user to close.
+    } catch (err) {
+      console.error("Failed to save enrollment:", err);
+      setSaveError(err && err.message ? err.message : "Failed to save");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!student) return null;
@@ -397,6 +513,91 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           onSubmit={handleSubmit}
           className="grid grid-cols-1 md:grid-cols-2 gap-4"
         >
+          {/* Latest invoice preview + show more */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Latest Invoice
+            </label>
+            {formData.invoice && formData.invoice.length > 0 ? (
+              <div className="space-y-2">
+                {/* Show the newest (last) invoice prominently */}
+                {(() => {
+                  const latest = formData.invoice[formData.invoice.length - 1];
+                  return (
+                    <div className="flex items-center space-x-3">
+                      <a
+                        href={latest.previewUrl || latest.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center px-3 py-2 border rounded-md text-sm bg-white hover:bg-gray-50"
+                      >
+                        <DocumentArrowDownIcon className="h-5 w-5 mr-2 text-gray-600" />
+                        {latest.name ||
+                          getFileNameFromUrl(latest.url) ||
+                          "View file"}
+                      </a>
+                      <span className="text-sm text-gray-500">
+                        {latest.date || "--"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            showAllInvoices: !prev.showAllInvoices,
+                          }));
+                        }}
+                        className="ml-2 px-2 py-1 text-sm border rounded-md bg-white hover:bg-gray-50"
+                      >
+                        {formData.showAllInvoices ? "Hide" : "Show more"}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {formData.showAllInvoices && (
+                  <div className="mt-2 grid gap-2">
+                    {formData.invoice.map((inv, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-2 border rounded-md bg-gray-50"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <a
+                            href={inv.previewUrl || inv.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm text-blue-600 underline"
+                          >
+                            {inv.name ||
+                              getFileNameFromUrl(inv.url) ||
+                              `Invoice ${idx + 1}`}
+                          </a>
+                          <span className="text-sm text-gray-500">
+                            {inv.date || "--"}
+                          </span>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleInvoiceFileChange(idx, null) ||
+                              removeInvoiceField(idx)
+                            }
+                            className="text-red-600 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No invoices uploaded yet.</p>
+            )}
+          </div>
           {/* Student Details */}
           <div>
             <label
@@ -884,14 +1085,35 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                     <label className="block text-sm font-medium text-gray-700">
                       Upload (image / PDF)
                     </label>
+                    {/* Hidden file input triggered by the Upload button for a cleaner UI */}
                     <input
                       type="file"
                       accept="image/*,application/pdf"
+                      id={`hidden-invoice-input-${index}`}
                       onChange={(e) =>
                         handleInvoiceFileChange(index, e.target.files[0])
                       }
-                      className="mt-1"
+                      className="hidden"
                     />
+                    <div className="flex items-center space-x-2 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(
+                            `hidden-invoice-input-${index}`
+                          );
+                          if (el) el.click();
+                        }}
+                        className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors"
+                      >
+                        Choose File
+                      </button>
+                      <span className="text-sm text-gray-600">
+                        {inv.file
+                          ? inv.file.name
+                          : inv.name || "No file chosen"}
+                      </span>
+                    </div>
                     {/* Preview: prefer local previewUrl (uploaded file), else show external URL preview/link */}
                     {(() => {
                       if (inv.previewUrl) {
