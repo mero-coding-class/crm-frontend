@@ -93,9 +93,6 @@ const DraggableRow = ({
         const renderCell = () => {
           switch (key) {
             case "substatus":
-              // Read either variant (sub_status or substatus) so the UI shows
-              // the most recently-updated value regardless of naming used by
-              // upstream code or the API merge logic.
               return (
                 <td
                   key={key}

@@ -14,6 +14,8 @@ const LeadsHeader = ({
   courses,
   handleRefresh,
   handleExport,
+  handleExportAll,
+  fetchingAll,
   searchTerm,
   setSearchTerm,
   showFilters,
@@ -44,6 +46,7 @@ const LeadsHeader = ({
             <ArrowDownTrayIcon className="h-5 w-5 inline-block mr-2" />
             Export CSV
           </button>
+
           <button
             onClick={handleRefresh}
             className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
@@ -73,6 +76,11 @@ const LeadsHeader = ({
             {showFilters ? "Hide Filters" : "Show Filters"}
           </button>
         </div>
+        {fetchingAll && (
+          <div className="w-full text-sm text-center text-gray-600 mt-2">
+            Fetching full dataset — this may take a moment...
+          </div>
+        )}
       </div>
     </>
   );

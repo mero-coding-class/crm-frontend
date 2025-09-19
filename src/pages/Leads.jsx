@@ -10,6 +10,7 @@ import Toast from "../components/common/Toast";
 import scheduleBackground from "../utils/backgroundScheduler";
 import { BASE_URL } from "../config";
 import DelayedLoader from "../components/common/DelayedLoader";
+import Loader from "../components/common/Loader";
 import { useLeadSearch } from "../hooks/useLeadSearch";
 import { useLeadUpdates } from "../hooks/useLeadUpdates";
 import {
@@ -32,6 +33,8 @@ const Leads = () => {
 
   // Core state declarations
   const [allLeads, setAllLeads] = useState([]);
+  const [exportConfirmVisible, setExportConfirmVisible] = useState(false);
+  const [exportEstimateCount, setExportEstimateCount] = useState(null);
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   // Fetch users for Assigned To dropdown (inside component so hooks are initialized)
@@ -76,6 +79,7 @@ const Leads = () => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [fetchingAll, setFetchingAll] = useState(false);
   const [pageSize] = useState(50);
   const [totalCount, setTotalCount] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -137,7 +141,89 @@ const Leads = () => {
 
   // Always recalculate filters on latest allLeads
   useEffect(() => {
-    let filtered = [...allLeads];
+    let workingSet = [...allLeads];
+
+    const applyFilters = (items) => {
+      let filtered = [...items];
+      if (filterStatus && filterStatus !== "All") {
+        filtered = filtered.filter((l) => l.status === filterStatus);
+      }
+      if (searchTerm && searchTerm.trim()) {
+        const s = searchTerm.trim().toLowerCase();
+        filtered = filtered.filter(
+          (l) =>
+            (l.student_name || "").toLowerCase().includes(s) ||
+            (l.email || "").toLowerCase().includes(s) ||
+            (l.phone_number || "").toLowerCase().includes(s)
+        );
+      }
+      if (filterAge && filterAge.trim()) {
+        filtered = filtered.filter((l) => String(l.age) === String(filterAge));
+      }
+      if (filterGrade && filterGrade.trim()) {
+        filtered = filtered.filter(
+          (l) => String(l.grade) === String(filterGrade)
+        );
+      }
+      if (filterLastCall && filterLastCall.trim()) {
+        filtered = filtered.filter((l) =>
+          (l.last_call || "").startsWith(filterLastCall)
+        );
+      }
+      if (filterClassType && filterClassType !== "Class") {
+        filtered = filtered.filter((l) => l.class_type === filterClassType);
+      }
+      if (filterShift && filterShift !== "Shift") {
+        filtered = filtered.filter((l) => l.shift === filterShift);
+      }
+      if (filterDevice && filterDevice !== "Device") {
+        filtered = filtered.filter((l) => l.device === filterDevice);
+      }
+      if (filterSubStatus && filterSubStatus !== "SubStatus") {
+        filtered = filtered.filter(
+          (l) =>
+            l.substatus === filterSubStatus || l.sub_status === filterSubStatus
+        );
+      }
+      if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
+        filtered = filtered.filter(
+          (l) => l.previous_coding_experience === filterPrevCodingExp
+        );
+      }
+      return filtered;
+    };
+
+    // If any filter/search is active and we don't yet have the full dataset,
+    // fetch all pages first and then apply the filters across all data.
+    const anyFilterActive =
+      (filterStatus && filterStatus !== "All") ||
+      (searchTerm && searchTerm.trim()) ||
+      (filterAge && filterAge.trim()) ||
+      (filterGrade && filterGrade.trim()) ||
+      (filterLastCall && filterLastCall.trim()) ||
+      (filterClassType && filterClassType !== "Class") ||
+      (filterShift && filterShift !== "Shift") ||
+      (filterDevice && filterDevice !== "Device") ||
+      (filterSubStatus && filterSubStatus !== "SubStatus") ||
+      (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp");
+
+    if (anyFilterActive && !allLeadsFullRef.current) {
+      // fetch full dataset then apply filters
+      (async () => {
+        try {
+          const all = await fetchAllLeads();
+          const filteredAll = applyFilters(all);
+          setLeads(filteredAll);
+        } catch (e) {
+          // fallback to filtering current page
+          const filtered = applyFilters(workingSet);
+          setLeads(filtered);
+        }
+      })();
+      return;
+    }
+
+    let filtered = applyFilters(workingSet);
     if (filterStatus && filterStatus !== "All") {
       filtered = filtered.filter(
         (lead) => (lead.status || "") === filterStatus
@@ -240,6 +326,54 @@ const Leads = () => {
     return n(lead.id || lead._id) === n(idToMatch);
   };
 
+  // Ref to mark whether we've loaded the full dataset (all pages)
+  const allLeadsFullRef = React.useRef(false);
+
+  // Fetch all leads from the backend by paging through results.
+  // This is used for exporting and for applying filters/search across all pages.
+  const fetchAllLeads = React.useCallback(async () => {
+    if (!authToken) return [];
+    setFetchingAll(true);
+    const pageSizeForFetch = 200; // reasonable batch size
+    const baseUrl = `${BASE_URL}/leads/`;
+    let page = 1;
+    let accumulated = [];
+    try {
+      while (true) {
+        const url = `${baseUrl}?page=${page}&page_size=${pageSizeForFetch}`;
+        const resp = await fetch(url, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (!resp.ok)
+          throw new Error(`Failed to fetch leads page ${page}: ${resp.status}`);
+        const json = await resp.json();
+        let list = [];
+        if (Array.isArray(json)) list = json;
+        else if (Array.isArray(json.results)) list = json.results;
+        else list = json.data || [];
+
+        if (!list || list.length === 0) break;
+
+        const normalized = ensureLeadIds(list || []);
+        accumulated = accumulated.concat(normalized);
+
+        // If returned fewer items than page size, we reached the end
+        if (list.length < pageSizeForFetch) break;
+        page += 1;
+      }
+      // Replace allLeads with the full dataset
+      setAllLeads(accumulated);
+      allLeadsFullRef.current = true;
+      return accumulated;
+    } catch (err) {
+      console.warn("fetchAllLeads failed:", err);
+      throw err;
+    } finally {
+      setFetchingAll(false);
+    }
+  }, [authToken]);
+
   const ensureLeadIds = (arr) =>
     (Array.isArray(arr) ? arr : []).map((lead, i) => ({
       ...lead,
@@ -294,6 +428,8 @@ const Leads = () => {
 
   const handleRefresh = useCallback(async () => {
     if (!authToken) return;
+    // Invalidate cached full dataset so the next full fetch obtains fresh data
+    allLeadsFullRef.current = false;
     setLoading(true);
     setError(null);
     try {
@@ -445,6 +581,8 @@ const Leads = () => {
     const importDebounceRef = { current: null };
     const onImported = (e) => {
       console.info("Leads.jsx detected crm:imported event, scheduling refresh");
+      // Invalidate cached full dataset
+      allLeadsFullRef.current = false;
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
       importDebounceRef.current = setTimeout(() => {
         handleRefresh();
@@ -480,6 +618,8 @@ const Leads = () => {
       try {
         const restored = e?.detail?.lead;
         if (!restored) return;
+        // Invalidate cached full dataset to ensure restored lead is included next time
+        allLeadsFullRef.current = false;
         setAllLeads((prev) => {
           // Remove any existing lead that matches the restored one by id/_id
           // or by identifying fields (email/phone) to avoid duplicates.
@@ -518,6 +658,8 @@ const Leads = () => {
           enrollment.lead?.id || enrollment.lead || enrollment.student || null;
         if (leadId) {
           setAllLeads((prev) => {
+            // Invalidate full dataset cache since enrollments change may affect filters
+            allLeadsFullRef.current = false;
             const foundIndex = (prev || []).findIndex((l) =>
               matchId(l, leadId)
             );
@@ -1178,7 +1320,28 @@ const Leads = () => {
       // Preferred: ask backend to build and return the CSV file
       if (authToken) {
         try {
-          const backendExportUrl = `${BASE_URL}/leads/export-csv/export`;
+          // Build query params for current filters so backend can export filtered data
+          const params = new URLSearchParams();
+          if (filterStatus && filterStatus !== "All")
+            params.append("status", filterStatus);
+          if (searchTerm && searchTerm.trim())
+            params.append("search", searchTerm.trim());
+          if (filterAge && filterAge.trim())
+            params.append("age", filterAge.trim());
+          if (filterGrade && filterGrade.trim())
+            params.append("grade", filterGrade.trim());
+          if (filterClassType && filterClassType !== "Class")
+            params.append("class_type", filterClassType);
+          if (filterShift && filterShift !== "Shift")
+            params.append("shift", filterShift);
+          if (filterDevice && filterDevice !== "Device")
+            params.append("device", filterDevice);
+          if (filterSubStatus && filterSubStatus !== "SubStatus")
+            params.append("substatus", filterSubStatus);
+          if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp")
+            params.append("previous_coding_experience", filterPrevCodingExp);
+
+          const backendExportUrl = `${BASE_URL}/leads/export-csv/export?${params.toString()}`;
           const resp = await fetch(backendExportUrl, {
             headers: { Authorization: `Token ${authToken}` },
           });
@@ -1202,8 +1365,16 @@ const Leads = () => {
         }
       }
 
-      // Fallback: build CSV client-side so we can include all fields
-      const rows = allLeads || [];
+      // Ensure we have the full dataset so export covers all pages
+      let rows = allLeads || [];
+      if (!allLeadsFullRef.current) {
+        try {
+          rows = await fetchAllLeads();
+        } catch (e) {
+          // fallback to current allLeads
+          rows = allLeads || [];
+        }
+      }
       if (!rows.length) {
         setError("No leads to export");
         return;
@@ -1298,6 +1469,176 @@ const Leads = () => {
       setError(err.message || "Failed to export CSV");
     }
   }, [authToken, allLeads]);
+
+  // Estimate total matching leads on the server by requesting a single-item page
+  const estimateCountFromServer = useCallback(async () => {
+    if (!authToken) return null;
+    try {
+      const params = new URLSearchParams();
+      if (filterStatus && filterStatus !== "All")
+        params.append("status", filterStatus);
+      if (searchTerm && searchTerm.trim())
+        params.append("search", searchTerm.trim());
+      if (filterAge && filterAge.trim()) params.append("age", filterAge.trim());
+      if (filterGrade && filterGrade.trim())
+        params.append("grade", filterGrade.trim());
+      if (filterClassType && filterClassType !== "Class")
+        params.append("class_type", filterClassType);
+      if (filterShift && filterShift !== "Shift")
+        params.append("shift", filterShift);
+      if (filterDevice && filterDevice !== "Device")
+        params.append("device", filterDevice);
+      if (filterSubStatus && filterSubStatus !== "SubStatus")
+        params.append("substatus", filterSubStatus);
+      if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp")
+        params.append("previous_coding_experience", filterPrevCodingExp);
+
+      const url = `${BASE_URL}/leads/?page=1&page_size=1&${params.toString()}`;
+      const resp = await fetch(url, {
+        headers: { Authorization: `Token ${authToken}` },
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      if (json && typeof json.count === "number") return json.count;
+      if (Array.isArray(json) && typeof json.length === "number")
+        return json.length;
+      return null;
+    } catch (e) {
+      console.warn("estimateCountFromServer failed:", e);
+      return null;
+    }
+  }, [
+    authToken,
+    filterStatus,
+    searchTerm,
+    filterAge,
+    filterGrade,
+    filterClassType,
+    filterShift,
+    filterDevice,
+    filterSubStatus,
+    filterPrevCodingExp,
+  ]);
+
+  const openExportAllConfirm = useCallback(async () => {
+    setExportEstimateCount(null);
+    setExportConfirmVisible(true);
+    const estimate = await estimateCountFromServer();
+    setExportEstimateCount(estimate);
+  }, [estimateCountFromServer]);
+
+  const performExportAll = useCallback(async () => {
+    setExportConfirmVisible(false);
+    try {
+      // Fetch full dataset (this toggles fetchingAll state)
+      let rows = [];
+      try {
+        rows = await fetchAllLeads();
+      } catch (e) {
+        // fallback to current allLeads
+        rows = allLeads || [];
+      }
+
+      if (!rows || rows.length === 0) {
+        setError("No leads to export");
+        return;
+      }
+
+      // Build CSV client-side from rows
+      const headers = [
+        "id",
+        "student_name",
+        "parents_name",
+        "email",
+        "phone_number",
+        "whatsapp_number",
+        "age",
+        "grade",
+        "source",
+        "course_name",
+        "course",
+        "course_duration",
+        "class_type",
+        "shift",
+        "status",
+        "substatus",
+        "assigned_to",
+        "assigned_to_username",
+        "lead_type",
+        "school_college_name",
+        "previous_coding_experience",
+        "value",
+        "adset_name",
+        "remarks",
+        "payment_type",
+        "device",
+        "workshop_batch",
+        "address_line_1",
+        "address_line_2",
+        "city",
+        "county",
+        "post_code",
+        "add_date",
+        "created_by",
+        "last_call",
+        "next_call",
+      ];
+
+      const escape = (v) => {
+        if (v === null || v === undefined) return "";
+        return String(v).includes(",") || String(v).includes("\n")
+          ? `"${String(v).replace(/"/g, '""')}"`
+          : String(v);
+      };
+
+      const csv = [headers.join(",")]
+        .concat(
+          rows.map((r) =>
+            headers
+              .map((h) => {
+                switch (h) {
+                  case "substatus":
+                    return r.substatus || r.sub_status || "";
+                  case "assigned_to":
+                    return r.assigned_to || "";
+                  case "assigned_to_username":
+                    return r.assigned_to_username || r.assigned_to || "";
+                  case "course_duration":
+                    return r.course_duration || r.courseDuration || "";
+                  case "previous_coding_experience":
+                    return (
+                      r.previous_coding_experience || r.previousCodingExp || ""
+                    );
+                  case "post_code":
+                    return r.post_code || r.postCode || "";
+                  case "created_by":
+                    return r.created_by || r.assigned_to || r.createdBy || "";
+                  default:
+                    return r[h] ?? "";
+                }
+              })
+              .map(escape)
+              .join(",")
+          )
+        )
+        .join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "leads-all.csv";
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || "Failed to export CSV");
+    }
+  }, [fetchAllLeads, allLeads]);
+
+  // size warning thresholds
+  const EXPORT_WARNING_THRESHOLD = 5000;
+  const EXPORT_REQUIRE_CHECKBOX_THRESHOLD = 10000;
+  const [exportSizeConfirmed, setExportSizeConfirmed] = useState(false);
   const [leads, setLeads] = useState([]);
 
   const handleFieldChange = (id, field, value) => {
@@ -1567,11 +1908,101 @@ const Leads = () => {
         courses={courses}
         handleRefresh={handleRefresh}
         handleExport={handleExport}
+        handleExportAll={async () => {
+          // Ensure full dataset is fetched and then call handleExport
+          try {
+            if (!allLeadsFullRef.current) await fetchAllLeads();
+          } catch (e) {
+            console.warn("Failed to prefetch all leads before export:", e);
+          }
+          handleExport();
+        }}
+        fetchingAll={fetchingAll}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         showFilters={showFilters}
         setShowFilters={setShowFilters}
       />
+
+      {/* Full-screen fetching overlay when fetchingAll is true */}
+      {fetchingAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-lg p-6">
+            <Loader message={"Preparing export — fetching all leads..."} />
+          </div>
+        </div>
+      )}
+
+      {/* Export All confirmation modal */}
+      {exportConfirmVisible && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-lg p-6 w-11/12 max-w-md">
+            <h3 className="text-lg font-semibold mb-2">
+              Export all filtered leads?
+            </h3>
+            <p className="text-sm text-gray-700 mb-4">
+              {exportEstimateCount !== null
+                ? `Server reports ~${exportEstimateCount} matching leads.`
+                : "Estimating number of matching leads..."}
+            </p>
+            {/* size warning */}
+            {exportEstimateCount !== null &&
+              exportEstimateCount >= EXPORT_WARNING_THRESHOLD && (
+                <div className="mb-4 p-3 rounded-md bg-yellow-50 border-l-4 border-yellow-300 text-yellow-800">
+                  Exporting a large dataset ({exportEstimateCount} rows) may
+                  take a while and produce a large file. Consider filtering
+                  further or using the backend export endpoint if available.
+                </div>
+              )}
+            {exportEstimateCount !== null &&
+              exportEstimateCount >= EXPORT_REQUIRE_CHECKBOX_THRESHOLD && (
+                <div className="mb-4 flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="export-confirm-checkbox"
+                    checked={exportSizeConfirmed}
+                    onChange={(e) => setExportSizeConfirmed(e.target.checked)}
+                  />
+                  <label
+                    htmlFor="export-confirm-checkbox"
+                    className="text-sm text-gray-700"
+                  >
+                    I understand this will export a very large file (
+                    {exportEstimateCount} rows).
+                  </label>
+                </div>
+              )}
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => {
+                  setExportConfirmVisible(false);
+                  setExportSizeConfirmed(false);
+                }}
+                className="px-4 py-2 rounded-md border bg-white hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={performExportAll}
+                disabled={
+                  exportEstimateCount !== null &&
+                  exportEstimateCount >= EXPORT_REQUIRE_CHECKBOX_THRESHOLD &&
+                  !exportSizeConfirmed
+                }
+                className={`px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 ${
+                  exportEstimateCount !== null &&
+                  exportEstimateCount >= EXPORT_REQUIRE_CHECKBOX_THRESHOLD &&
+                  !exportSizeConfirmed
+                    ? "opacity-60 cursor-not-allowed"
+                    : ""
+                }`}
+              >
+                Confirm & Export
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LeadsFilters
         showFilters={showFilters}

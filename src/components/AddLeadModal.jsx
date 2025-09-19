@@ -386,6 +386,39 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     warnedCoursesShape.current = true;
   }
 
+  // Fields the user marked as optional — do NOT show the required star for these
+  const optionalFields = new Set([
+    "shift",
+    "previous_coding_experience",
+    "last_call",
+    "next_call",
+    "value",
+    "adset_name",
+    "course_duration",
+    "payment_type",
+    "device",
+    "school_college_name",
+    "remarks",
+    "address_line_1",
+    "address_line_2",
+    "city",
+    "county",
+    "post_code",
+    "created_by",
+    "demo_scheduled",
+  ]);
+
+  const RequiredLabel = ({ field, children }) => (
+    <>
+      {children}
+      {!optionalFields.has(field) && (
+        <span className="text-red-600 ml-1" aria-hidden>
+          *
+        </span>
+      )}
+    </>
+  );
+
   return (
     <div
       className="fixed inset-0 bg-gray-600/50 flex items-center justify-center z-50 p-4 animate-fade-in"
