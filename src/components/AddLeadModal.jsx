@@ -12,15 +12,41 @@ const getTodayDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-// Format date from 'YYYY-MM-DD' to 'YYYY|DD|MM' for backend compatibility
+// Format date for API: ensure we send YYYY-MM-DD (backend expects this)
 const formatDateForBackend = (d) => {
-  if (!d) return null;
-  // already in expected shape? accept if contains '|'
-  if (String(d).includes("|")) return d;
-  const parts = String(d).split("-");
-  if (parts.length !== 3) return d; // return as-is if unexpected format
-  const [yyyy, mm, dd] = parts;
-  return `${yyyy}|${dd}|${mm}`;
+  if (!d && d !== 0) return null;
+  // If already a Date object, format to YYYY-MM-DD
+  if (d instanceof Date) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const s = String(d).trim();
+  // If already in YYYY-MM-DD, return as-is
+  const parts = s.split("-");
+  if (parts.length === 3 && parts[0].length === 4) return s;
+
+  // If input was in legacy backend format 'YYYY|DD|MM', convert to YYYY-MM-DD
+  if (s.includes("|")) {
+    const parts2 = s.split("|");
+    if (parts2.length === 3) {
+      const [yyyy, dd, mm] = parts2;
+      return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+    }
+  }
+
+  // Fallback: try Date parse
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+    const dd = String(parsed.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return null;
 };
 
 const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
@@ -74,6 +100,8 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState(null);
+  // Validation errors for fields (key -> message)
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     // Fetch users for the Assigned To dropdown when authToken is available
@@ -122,22 +150,51 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       ...prevData,
       [name]: value,
     }));
+    // Clear validation error for this field while the user types
+    setErrors((prev) => {
+      if (!prev || !prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const requiredFields = [
-      "student_name",
-      "parents_name",
-      "phone_number",
-      "lead_type",
-    ];
-    const missingFields = requiredFields.filter(
-      (field) => !formData[field]?.trim()
+    // Determine required fields dynamically: everything in formData
+    // that is NOT in optionalFields (user provided list) is required.
+    // Also skip internal-only keys.
+    const internalSkips = new Set(["_id", "invoice"]);
+    const requiredFieldsList = Object.keys(formData).filter(
+      (k) => !optionalFields.has(k) && !internalSkips.has(k)
     );
+
+    const missingFields = requiredFieldsList.filter((field) => {
+      const v = formData[field];
+      // treat empty strings, null, undefined as missing
+      if (v === null || v === undefined) return true;
+      if (typeof v === "string" && v.trim() === "") return true;
+      return false;
+    });
+
     if (missingFields.length > 0) {
-      alert(`Please fill in required fields: ${missingFields.join(", ")}`);
+      // Build an errors map so we can show inline messages and keep the modal open
+      const newErrors = {};
+      missingFields.forEach((f) => {
+        newErrors[f] = "This field is required";
+      });
+      setErrors(newErrors);
+
+      // Focus first missing field if possible
+      try {
+        const el = document.getElementsByName(missingFields[0])[0];
+        if (el && typeof el.focus === "function") el.focus();
+      } catch (e) {
+        // ignore
+      }
+
+      // Don't proceed with API call or close the modal
       return;
     }
 
@@ -224,13 +281,12 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         // Keep course_name for optimistic UI only (resolve from selectedCourse if possible)
         course_name: selectedCourse?.course_name ?? formData.course_name,
         course_duration: formData.course_duration,
-        last_call: formatDateForBackend(formData.last_call),
-        next_call: formatDateForBackend(formData.next_call),
+    last_call: formatDateForBackend(formData.last_call),
+    next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-
       // Only include assigned_to when the creator is an admin and a value was provided
       if (
         isAdmin &&
@@ -240,11 +296,47 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         backendPayload.assigned_to = String(formData.created_by).trim();
       }
 
-      // Call onSave with the optimistic data first
-      onSave(backendPayload);
+      // Sanitize optional/nullable fields: delete keys with empty strings so backend
+      // doesn't receive incorrect scalar types (many DRF validators prefer omitted fields)
+      const optionalKeys = [
+        "grade",
+        "source",
+        "class_type",
+        "shift",
+        "course_duration",
+        "payment_type",
+        "device",
+        "previous_coding_experience",
+        "school_college_name",
+      ];
+      optionalKeys.forEach((k) => {
+        if (
+          backendPayload[k] === "" ||
+          backendPayload[k] === null ||
+          backendPayload[k] === undefined
+        ) {
+          delete backendPayload[k];
+        }
+      });
 
-      // Close the modal immediately
-      onClose();
+      // Remove null/invalid date fields to avoid backend 400 on date validation
+      if (!backendPayload.last_call) delete backendPayload.last_call;
+      if (!backendPayload.next_call) delete backendPayload.next_call;
+
+      // Call onSave with the optimistic data first (parent can decide how to merge)
+      try {
+        onSave(backendPayload);
+      } catch (e) {
+        // swallow if parent handler throws during optimistic update
+        console.debug("onSave optimistic update handler threw:", e);
+      }
+
+      // Close the modal immediately for optimistic UX
+      try {
+        onClose();
+      } catch (e) {
+        // ignore
+      }
 
       const response = await fetch(`${BASE_URL}/leads/`, {
         method: "POST",
@@ -254,15 +346,38 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         },
         body: JSON.stringify(backendPayload),
       });
+      // Debug log outgoing request for better tracing of 400 responses
+      try {
+        console.debug("POST /leads/ -> payload:", backendPayload);
+      } catch (e) {
+        // ignore
+      }
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error("API Error:", errorData);
-        alert(
-          `Failed to add lead. Status ${response.status}: ${
-            errorData.detail || "Unknown error"
-          }`
-        );
+        // Try parse JSON first, but fall back to text
+        let bodyText = null;
+        let bodyJson = null;
+        try {
+          bodyJson = await response.json();
+        } catch (e) {
+          try {
+            bodyText = await response.text();
+          } catch (e2) {
+            bodyText = `<unreadable response: ${e2}>`;
+          }
+        }
+
+        console.error("API Error POST /leads/ status", response.status, {
+          json: bodyJson,
+          text: bodyText,
+          requestPayload: backendPayload,
+        });
+
+        // Show a friendly alert with available server information
+        const userMessage = bodyJson
+          ? JSON.stringify(bodyJson)
+          : bodyText || `Status ${response.status}`;
+        alert(`Failed to add lead. ${userMessage}`);
         return;
       }
 
@@ -406,7 +521,20 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     "post_code",
     "created_by",
     "demo_scheduled",
+    // server-managed timestamps are optional on the form
+    "created_at",
+    "updated_at",
   ]);
+
+  // Small component to render inline field errors
+  const FieldError = ({ name }) => {
+    if (!errors || !errors[name]) return null;
+    return (
+      <p className="text-red-600 text-sm mt-1" role="alert">
+        {errors[name]}
+      </p>
+    );
+  };
 
   const RequiredLabel = ({ field, children }) => (
     <>
@@ -442,6 +570,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
           onSubmit={handleSubmit}
           className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4"
         >
+          {/* (optional fields legend removed) */}
           {/* Status */}
           <div>
             <label
@@ -494,7 +623,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="lead_type"
               className="block text-sm font-medium text-gray-700"
             >
-              Lead Type
+              <RequiredLabel field="lead_type">Lead Type</RequiredLabel>
             </label>
             <select
               id="lead_type"
@@ -508,6 +637,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               <option value="B2B">B2B</option>
               <option value="B2C">B2C</option>
             </select>
+            <FieldError name="lead_type" />
           </div>
 
           {/* Add Date - New Field */}
@@ -516,7 +646,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="add_date"
               className="block text-sm font-medium text-gray-700"
             >
-              Add Date
+              <RequiredLabel field="add_date">Add Date</RequiredLabel>
             </label>
             <input
               type="date"
@@ -533,7 +663,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 htmlFor="created_by"
                 className="block text-sm font-medium text-gray-700"
               >
-                Assigned To
+                <RequiredLabel field="created_by">Assigned To</RequiredLabel>
               </label>
               {usersLoading ? (
                 <div className="mt-1 p-2">Loading users...</div>
@@ -572,7 +702,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="parents_name"
               className="block text-sm font-medium text-gray-700"
             >
-              Parents' Name
+              <RequiredLabel field="parents_name">Parents' Name</RequiredLabel>
             </label>
             <input
               type="text"
@@ -584,6 +714,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               placeholder="e.g., John & Jane Doe"
               required // Added 'required' attribute
             />
+            <FieldError name="parents_name" />
           </div>
 
           {/* Student Name */}
@@ -592,7 +723,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="student_name"
               className="block text-sm font-medium text-gray-700"
             >
-              Student Name
+              <RequiredLabel field="student_name">Student Name</RequiredLabel>
             </label>
             <input
               type="text"
@@ -603,6 +734,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
             />
+            <FieldError name="student_name" />
 
             {/* School/College Name */}
             <div className="md:col-span-1">
@@ -610,7 +742,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 htmlFor="school_college_name"
                 className="block text-sm font-medium text-gray-700"
               >
-                School / College Name
+                <RequiredLabel field="school_college_name">School / College Name</RequiredLabel>
               </label>
               <input
                 type="text"
@@ -621,6 +753,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="Optional"
               />
+              <FieldError name="school_college_name" />
             </div>
           </div>
 
@@ -630,7 +763,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="email"
               className="block text-sm font-medium text-gray-700"
             >
-              Email
+              <RequiredLabel field="email">Email</RequiredLabel>
             </label>
             <input
               type="email"
@@ -641,6 +774,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
             />
+            <FieldError name="email" />
           </div>
 
           {/* Phone Number */}
@@ -649,7 +783,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="phone_number"
               className="block text-sm font-medium text-gray-700"
             >
-              Phone Number
+              <RequiredLabel field="phone_number">Phone Number</RequiredLabel>
             </label>
             <input
               type="tel"
@@ -660,6 +794,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
             />
+            <FieldError name="phone_number" />
           </div>
 
           {/* WhatsApp Number */}
@@ -668,7 +803,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="whatsapp_number"
               className="block text-sm font-medium text-gray-700"
             >
-              WhatsApp Number
+              <RequiredLabel field="whatsapp_number">WhatsApp Number</RequiredLabel>
             </label>
             <input
               type="tel"
@@ -679,6 +814,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
             />
+            <FieldError name="whatsapp_number" />
           </div>
 
           {/* Age */}
@@ -723,7 +859,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="course_name"
               className="block text-sm font-medium text-gray-700"
             >
-              Course
+              <RequiredLabel field="course_name">Course</RequiredLabel>
             </label>
             <select
               id="course_name"
@@ -735,10 +871,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               <option value="">Select a course</option>
               {coursesList.map((course) => {
                 const label =
-                  course.course_name ||
-                  course.name ||
-                  course.title ||
-                  String(course.id || "");
+                  course.course_name || course.name || course.title || String(course.id || "");
                 const value = course.id ?? label;
                 const key = course.id ?? label;
                 return (
@@ -773,7 +906,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="source"
               className="block text-sm font-medium text-gray-700"
             >
-              Source
+              <RequiredLabel field="source">Source</RequiredLabel>
             </label>
             <select
               id="source"
@@ -832,7 +965,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="class_type"
               className="block text-sm font-medium text-gray-700"
             >
-              Class Type
+              <RequiredLabel field="class_type">Class Type</RequiredLabel>
             </label>
             <select
               id="class_type"
