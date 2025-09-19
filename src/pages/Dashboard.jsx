@@ -58,6 +58,9 @@ const Dashboard = () => {
   const [enrollmentsTopCourses, setEnrollmentsTopCourses] = useState([]);
   const [enrollmentsTrendData, setEnrollmentsTrendData] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
+  const [trashedLeads, setTrashedLeads] = useState([]);
+  const [enrollmentsCount, setEnrollmentsCount] = useState(0);
+  const [trashCount, setTrashCount] = useState(0);
 
   // Pie segment colors
   const PIE_COLORS = [
@@ -80,6 +83,45 @@ const Dashboard = () => {
         if (!authToken) throw new Error("Not authenticated.");
         const leads = await leadService.getLeads(authToken);
         setAllLeads(Array.isArray(leads) ? leads : []);
+        // Also fetch enrollments and trashed leads (arrays) so charts can include them
+        try {
+          const headers = { "Content-Type": "application/json" };
+          if (authToken) headers.Authorization = `Token ${authToken}`;
+
+          const [enrRes, trashRes] = await Promise.all([
+            fetch(`${BASE_URL}/enrollments/`, { method: "GET", headers }),
+            fetch(`${BASE_URL}/trash/`, { method: "GET", headers }),
+          ]);
+
+          const normalizeList = async (res) => {
+            if (!res || !res.ok) return [];
+            try {
+              let data = await res.json();
+              if (Array.isArray(data)) return data;
+              if (Array.isArray(data.results)) return data.results;
+              if (Array.isArray(data.data)) return data.data;
+              return [];
+            } catch (e) {
+              return [];
+            }
+          };
+
+          const [enrList, trashList] = await Promise.all([
+            normalizeList(enrRes),
+            normalizeList(trashRes),
+          ]);
+
+          setEnrollmentsCount(Array.isArray(enrList) ? enrList.length : 0);
+          setTrashCount(Array.isArray(trashList) ? trashList.length : 0);
+          // keep raw arrays for chart aggregation
+          if (Array.isArray(enrList)) setEnrollments(enrList);
+          if (Array.isArray(trashList)) setTrashedLeads(trashList);
+        } catch (err) {
+          console.warn("Failed to fetch enrollments/trash lists:", err);
+          setEnrollmentsCount(0);
+          setTrashCount(0);
+          setTrashedLeads([]);
+        }
       } catch (err) {
         setError(err.message || "Failed to fetch leads");
       } finally {
@@ -138,82 +180,82 @@ const Dashboard = () => {
             headers,
             credentials: authToken ? "include" : "same-origin",
           });
-            if (enrRes.ok) {
-              let enrData = await enrRes.json();
-              // normalize common envelope shapes: {results: [...]}, {data: [...]}
-              if (!Array.isArray(enrData)) {
-                if (Array.isArray(enrData.results)) enrData = enrData.results;
-                else if (Array.isArray(enrData.data)) enrData = enrData.data;
-              }
-              // keep the raw enrollments for dashboard aggregates (enrolled students, revenue)
-              setEnrollments(Array.isArray(enrData) ? enrData : []);
-              const map2 = new Map();
-              if (Array.isArray(enrData)) {
-                enrData.forEach((e) => {
-                  const cname =
-                    e.course_name ||
-                    e.course?.course_name ||
-                    e.course ||
-                    "Unknown";
-                  const rev = Number(e.value) || 0;
-                  const prev = map2.get(cname) || {
-                    enrollments: 0,
-                    revenue: 0,
-                  };
-                  map2.set(cname, {
-                    enrollments: prev.enrollments + 1,
-                    revenue: prev.revenue + rev,
-                  });
-                });
-              }
-              const fallback = Array.from(map2.entries())
-                .map(([name, data]) => ({
-                  name,
-                  enrollments: data.enrollments,
-                  revenue: `Rs ${data.revenue.toLocaleString()}`,
-                }))
-                .sort((a, b) => b.enrollments - a.enrollments)
-                .slice(0, 7);
-              setEnrollmentsTopCourses(fallback);
-
-              // Build enrollment trends fallback (monthly counts) from enrollment records
-              try {
-                const trendMap = new Map();
-                const parseDate = (d) => {
-                  if (!d) return null;
-                  const dt = new Date(d);
-                  return isNaN(dt.getTime()) ? null : dt;
-                };
-                enrData.forEach((e) => {
-                  const d =
-                    e.add_date ||
-                    e.addDate ||
-                    e.created_at ||
-                    e.created_on ||
-                    e.createdAt ||
-                    e.createdOn ||
-                    null;
-                  const dt = parseDate(d);
-                  if (!dt) return;
-                  const key = `${dt.getFullYear()}-${String(
-                    dt.getMonth() + 1
-                  ).padStart(2, "0")}`;
-                  trendMap.set(key, (trendMap.get(key) || 0) + 1);
-                });
-                const trendArr = Array.from(trendMap.entries())
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([monthYear, cnt]) => ({
-                    month: monthYear.substring(5),
-                    students: cnt,
-                  }));
-                setEnrollmentsTrendData(trendArr);
-              } catch (err) {
-                console.warn(
-                  "Failed to build enrollment trends from enrollments:",
-                  err
-                );
-              }
+          if (enrRes.ok) {
+            let enrData = await enrRes.json();
+            // normalize common envelope shapes: {results: [...]}, {data: [...]}
+            if (!Array.isArray(enrData)) {
+              if (Array.isArray(enrData.results)) enrData = enrData.results;
+              else if (Array.isArray(enrData.data)) enrData = enrData.data;
             }
+            // keep the raw enrollments for dashboard aggregates (enrolled students, revenue)
+            setEnrollments(Array.isArray(enrData) ? enrData : []);
+            const map2 = new Map();
+            if (Array.isArray(enrData)) {
+              enrData.forEach((e) => {
+                const cname =
+                  e.course_name ||
+                  e.course?.course_name ||
+                  e.course ||
+                  "Unknown";
+                const rev = Number(e.value) || 0;
+                const prev = map2.get(cname) || {
+                  enrollments: 0,
+                  revenue: 0,
+                };
+                map2.set(cname, {
+                  enrollments: prev.enrollments + 1,
+                  revenue: prev.revenue + rev,
+                });
+              });
+            }
+            const fallback = Array.from(map2.entries())
+              .map(([name, data]) => ({
+                name,
+                enrollments: data.enrollments,
+                revenue: `Rs ${data.revenue.toLocaleString()}`,
+              }))
+              .sort((a, b) => b.enrollments - a.enrollments)
+              .slice(0, 7);
+            setEnrollmentsTopCourses(fallback);
+
+            // Build enrollment trends fallback (monthly counts) from enrollment records
+            try {
+              const trendMap = new Map();
+              const parseDate = (d) => {
+                if (!d) return null;
+                const dt = new Date(d);
+                return isNaN(dt.getTime()) ? null : dt;
+              };
+              enrData.forEach((e) => {
+                const d =
+                  e.add_date ||
+                  e.addDate ||
+                  e.created_at ||
+                  e.created_on ||
+                  e.createdAt ||
+                  e.createdOn ||
+                  null;
+                const dt = parseDate(d);
+                if (!dt) return;
+                const key = `${dt.getFullYear()}-${String(
+                  dt.getMonth() + 1
+                ).padStart(2, "0")}`;
+                trendMap.set(key, (trendMap.get(key) || 0) + 1);
+              });
+              const trendArr = Array.from(trendMap.entries())
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([monthYear, cnt]) => ({
+                  month: monthYear.substring(5),
+                  students: cnt,
+                }));
+              setEnrollmentsTrendData(trendArr);
+            } catch (err) {
+              console.warn(
+                "Failed to build enrollment trends from enrollments:",
+                err
+              );
+            }
+          }
         } catch (err) {
           console.warn(
             "Failed to fetch enrollments for fallback top courses:",
@@ -230,9 +272,36 @@ const Dashboard = () => {
 
   // Helper: parse date safely
   const toDate = (d) => {
-    if (!d) return null;
-    const t = new Date(d);
-    return isNaN(t.getTime()) ? null : t;
+    if (!d && d !== 0) return null;
+    // If already a Date
+    if (d instanceof Date) return d;
+
+    const s = String(d).trim();
+
+    // Legacy backend format: 'YYYY|DD|MM' -> convert to YYYY-MM-DD
+    if (s.includes("|")) {
+      const parts = s.split("|");
+      if (parts.length === 3) {
+        const [yyyy, dd, mm] = parts;
+        const norm = `${yyyy}-${String(mm).padStart(2, "0")}-${String(
+          dd
+        ).padStart(2, "0")}`;
+        const parsed = new Date(norm);
+        return isNaN(parsed.getTime()) ? null : parsed;
+      }
+    }
+
+    // Numeric timestamp in seconds or ms
+    if (/^\d+$/.test(s)) {
+      const n = Number(s);
+      // guess: if seconds (10 digits), multiply by 1000
+      const parsed = new Date(s.length === 10 ? n * 1000 : n);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    // Fallback: try ISO / browser parsing
+    const parsed = new Date(s);
+    return isNaN(parsed.getTime()) ? null : parsed;
   };
 
   // Helper: resolve possible add/created date fields from lead objects
@@ -273,7 +342,11 @@ const Dashboard = () => {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const totalLeads = allLeads.length;
+    // totalLeads should include leads + enrollments + trashed leads (counts)
+    const totalLeads =
+      allLeads.length +
+      (Number(enrollmentsCount) || 0) +
+      (Number(trashCount) || 0);
 
     // Define "enrolled" as status === Converted
     // Prefer authoritative enrollments endpoint for enrolled students count
@@ -349,10 +422,17 @@ const Dashboard = () => {
       return dt && dt >= today && dt <= sevenDaysFromNow;
     }).length;
 
-    // Chart: status distribution
+    // Chart: status distribution — include leads, enrollments (count as Converted), and trashed leads
     const statusCounts = new Map();
-    allLeads.forEach((lead) => {
-      const s = lead.status || "Unknown";
+    const combined = [
+      ...(Array.isArray(allLeads) ? allLeads : []),
+      ...(Array.isArray(enrollments)
+        ? enrollments.map((e) => ({ ...e, status: "Converted" }))
+        : []),
+      ...(Array.isArray(trashedLeads) ? trashedLeads : []),
+    ];
+    combined.forEach((lead) => {
+      const s = lead.status || lead.state || "Unknown";
       statusCounts.set(s, (statusCounts.get(s) || 0) + 1);
     });
     const leadStatusDistribution = Array.from(statusCounts.entries()).map(
@@ -557,12 +637,19 @@ const Dashboard = () => {
           colorClass="text-purple-600 bg-purple-100"
         />
         <StatCard
+          title="Trash Students"
+          value={trashCount}
+          icon={GlobeAltIcon}
+          description="Leads in Trash"
+          colorClass="text-red-600 bg-red-100"
+        />
+        {/* <StatCard
           title="New Leads This Month"
           value={dashboardData.stats.newLeadsThisMonth}
           icon={PlusIcon}
           description="Leads added in current month"
           colorClass="text-green-600 bg-green-100"
-        />
+        /> */}
         <StatCard
           title="Revenue This Month"
           value={dashboardData.stats.revenueThisMonth}
@@ -570,13 +657,7 @@ const Dashboard = () => {
           description='Sum of "value" for Converted leads'
           colorClass="text-teal-600 bg-teal-100"
         />
-        <StatCard
-          title="Upcoming Classes/Calls"
-          value={dashboardData.stats.upcomingClassesCalls}
-          icon={CalendarDaysIcon}
-          description="Next 7 days"
-          colorClass="text-orange-600 bg-orange-100"
-        />
+        {/* Upcoming Classes/Calls intentionally removed (replaced by Trash Students) */}
       </div>
 
       {/* Charts */}
