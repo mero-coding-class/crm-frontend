@@ -104,6 +104,7 @@ const Leads = () => {
   const [filterDevice, setFilterDevice] = useState("Device");
   const [filterSubStatus, setFilterSubStatus] = useState("SubStatus");
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("CodingExp");
+  const [filterAssignedTo, setFilterAssignedTo] = useState("");
 
   // Refs
   const leadsOrderRef = React.useRef([]);
@@ -190,6 +191,12 @@ const Leads = () => {
           (l) => l.previous_coding_experience === filterPrevCodingExp
         );
       }
+      if (filterAssignedTo && filterAssignedTo !== "") {
+        filtered = filtered.filter(
+          (l) =>
+            (l.assigned_to_username || l.assigned_to || "") === filterAssignedTo
+        );
+      }
       return filtered;
     };
 
@@ -205,7 +212,8 @@ const Leads = () => {
       (filterShift && filterShift !== "Shift") ||
       (filterDevice && filterDevice !== "Device") ||
       (filterSubStatus && filterSubStatus !== "SubStatus") ||
-      (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp");
+      (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") ||
+      (filterAssignedTo && filterAssignedTo !== "");
 
     if (anyFilterActive && !allLeadsFullRef.current) {
       // fetch full dataset then apply filters
@@ -273,6 +281,13 @@ const Leads = () => {
         (lead) => (lead.sub_status || lead.substatus || "") === filterSubStatus
       );
     }
+    if (filterAssignedTo && filterAssignedTo !== "") {
+      filtered = filtered.filter(
+        (lead) =>
+          (lead.assigned_to_username || lead.assigned_to || "") ===
+          filterAssignedTo
+      );
+    }
     if (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") {
       filtered = filtered.filter(
         (lead) =>
@@ -292,6 +307,7 @@ const Leads = () => {
     filterDevice,
     filterSubStatus,
     filterPrevCodingExp,
+    filterAssignedTo,
   ]);
 
   // Fetch courses once when authToken is available so AddLeadModal receives
@@ -396,6 +412,7 @@ const Leads = () => {
     "Average",
     "Interested",
     "Junk",
+    "NextBatch",
   ];
   const shiftOptions = [
     "Shift",
@@ -1085,31 +1102,10 @@ const Leads = () => {
           updatesToSend = { nextCall: newValue };
         }
 
-        // Shift sanitization: only send if it matches allowed shift options
+        // Shift: accept free-text values (trimmed). Sending empty string will clear.
         if (fieldName === "shift") {
-          const allowedShifts = [
-            "7 A.M. - 9 A.M.",
-            "8 A.M. - 10 A.M.",
-            "10 A.M. - 12 P.M.",
-            "11 A.M. - 1 P.M.",
-            "12 P.M. - 2 P.M.",
-            "2 P.M. - 4 P.M.",
-            "2:30 P.M. - 4:30 P.M.",
-            "4 P.M. - 6 P.M.",
-            "4:30 P.M. - 6:30 P.M.",
-            "5 P.M. - 7 P.M.",
-            "6 P.M. - 7 P.M.",
-            "6 P.M. - 8 P.M.",
-            "7 P.M. - 8 P.M.",
-          ];
-          if (
-            typeof newValue === "string" &&
-            allowedShifts.includes(newValue.trim())
-          ) {
+          if (typeof newValue === "string") {
             updatesToSend.shift = newValue.trim();
-          } else {
-            // omit shift if not in allowed list to avoid backend 400
-            delete updatesToSend.shift;
           }
         }
 
@@ -1306,6 +1302,16 @@ const Leads = () => {
   const handleCourseDurationChange = useCallback(
     (leadId, newDuration) =>
       updateLeadField(leadId, "course_duration", newDuration),
+    [updateLeadField]
+  );
+
+  const handleShiftChange = useCallback(
+    (leadId, newShift) => updateLeadField(leadId, "shift", newShift),
+    [updateLeadField]
+  );
+
+  const handleDemoScheduledChange = useCallback(
+    (leadId, newVal) => updateLeadField(leadId, "demo_scheduled", newVal),
     [updateLeadField]
   );
 
@@ -2024,6 +2030,23 @@ const Leads = () => {
         setFilterSubStatus={setFilterSubStatus}
         filterPrevCodingExp={filterPrevCodingExp}
         setFilterPrevCodingExp={setFilterPrevCodingExp}
+        filterAssignedTo={filterAssignedTo}
+        setFilterAssignedTo={setFilterAssignedTo}
+        onClearFilters={() => {
+          setFilterStatus("All");
+          setFilterAge("");
+          setFilterGrade("");
+          setFilterLastCall("");
+          setFilterClassType("Class");
+          setFilterShift("");
+          setFilterDevice("Device");
+          setFilterSubStatus("SubStatus");
+          setFilterPrevCodingExp("CodingExp");
+          setFilterAssignedTo("");
+          setSearchTerm("");
+        }}
+        users={users}
+        usersLoading={usersLoading}
         classTypeOptions={classTypeOptions}
         shiftOptions={shiftOptions}
         deviceOptions={deviceOptions}
@@ -2051,6 +2074,8 @@ const Leads = () => {
             onAgeChange={handleAgeChange}
             onGradeChange={handleGradeChange}
             onCourseDurationChange={handleCourseDurationChange}
+            onShiftChange={handleShiftChange}
+            onDemoScheduledChange={handleDemoScheduledChange}
             onAssignedToChange={handleAssignedToChange}
             authToken={authToken}
             changeLogService={changeLogService}

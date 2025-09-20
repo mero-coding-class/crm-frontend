@@ -31,6 +31,8 @@ const DraggableRow = ({
   onGradeChange,
   onCourseDurationChange,
   onAssignedToChange,
+  onShiftChange,
+  onDemoScheduledChange,
   authToken,
   changeLogService,
 }) => {
@@ -124,6 +126,7 @@ const DraggableRow = ({
                         "Average",
                         "Interested",
                         "Junk",
+                        "NextBatch",
                       ].map((opt) => (
                         <option key={opt} value={opt}>
                           {opt}
@@ -133,43 +136,7 @@ const DraggableRow = ({
                   </div>
                 </td>
               );
-            case "student_name":
-              return (
-                <td
-                  key={key}
-                  className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
-                >
-                  {lead.student_name || "N/A"}
-                </td>
-              );
-            case "id":
-              return (
-                <td
-                  key={key}
-                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
-                >
-                  {/* Display actual backend ID */}
-                  {lead.id || "-"}
-                </td>
-              );
-            case "parents_name":
-              return (
-                <td
-                  key={key}
-                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
-                >
-                  {lead.parents_name || "N/A"}
-                </td>
-              );
-            case "email":
-              return (
-                <td
-                  key={key}
-                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
-                >
-                  {lead.email || ""}
-                </td>
-              );
+            /* assigned_to is rendered later (single, canonical case). */
             case "phone_number":
               return (
                 <td
@@ -271,11 +238,50 @@ const DraggableRow = ({
                   />
                 </td>
               );
+            case "shift":
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[160px]"
+                >
+                  <TextCommitInput
+                    initialValue={lead.shift || ""}
+                    onCommit={(val) => {
+                      const leadId = lead.id || lead._id;
+                      if (typeof onShiftChange === "function") {
+                        onShiftChange(leadId, val);
+                      }
+                    }}
+                    // override default input sizing via className prop
+                  />
+                </td>
+              );
+
+            case "demo_scheduled":
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[140px]"
+                >
+                  <select
+                    value={lead.demo_scheduled || ""}
+                    onChange={(e) =>
+                      typeof onDemoScheduledChange === "function" &&
+                      onDemoScheduledChange(lead.id || lead._id, e.target.value)
+                    }
+                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm font-semibold"
+                  >
+                    <option value="">Select</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </td>
+              );
             case "assigned_to":
               return (
                 <td
                   key={key}
-                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[160px]"
                 >
                   {lead._usersLoading ? (
                     <div className="mt-1 p-1 text-sm">Loading users...</div>
@@ -287,7 +293,7 @@ const DraggableRow = ({
                       }
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
+                      className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm font-semibold focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">
                         {Array.isArray(lead._users) && lead._users.length > 0

@@ -106,7 +106,7 @@ const ColumnToggler = ({ columns, setColumns }) => {
 };
 
 // Editable text cell
-const EditableTextCell = ({ value, field, onSave }) => {
+const EditableTextCell = ({ value, field, onSave, cellClass = "" }) => {
   const [text, setText] = useState(value || "");
   const [editing, setEditing] = useState(false);
 
@@ -136,7 +136,7 @@ const EditableTextCell = ({ value, field, onSave }) => {
   };
 
   return (
-    <td className={`px-3 py-4 whitespace-nowrap text-sm`}>
+    <td className={`px-3 py-4 whitespace-nowrap text-sm ${cellClass}`}>
       <input
         type="text"
         value={text}
@@ -182,6 +182,7 @@ const EnrolledStudentsTable = ({
     batchname: { label: "Batch Name", visible: true },
     assigned_teacher: { label: "Assigned Teacher", visible: true },
     course_duration: { label: "Course Duration", visible: true },
+    demo_scheduled: { label: "Demo Taken", visible: true },
     starting_date: { label: "Starting Date", visible: true },
     total_payment: { label: "Total Payment", visible: true },
     first_installment: { label: "1st Installment", visible: false },
@@ -196,7 +197,7 @@ const EnrolledStudentsTable = ({
     city: { label: "City", visible: false },
     county: { label: "County", visible: false },
     post_code: { label: "Post Code", visible: false },
-    demo_scheduled: { label: "Demo Scheduled", visible: false },
+
     // Enrollment-level metadata
     actions: { label: "Actions", visible: true },
     created_at: { label: "Enrollment Created", visible: false },
@@ -558,6 +559,27 @@ const SortableStudentRow = ({
               </td>
             );
           }
+          // Render demo_scheduled as a select (nested lead field)
+          if (leadKey === "demo_scheduled") {
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <select
+                  value={val || ""}
+                  onChange={(e) =>
+                    onUpdateField(student.id, `lead.${leadKey}`, e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  <option value="">Select</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </td>
+            );
+          }
           // Render text input for all other fields
           return (
             <td
@@ -655,7 +677,25 @@ const SortableStudentRow = ({
               </td>
             );
           case "batchname":
+            return (
+              <EditableTextCell
+                key={key}
+                field={key}
+                cellClass="min-w-[130px]"
+                value={student[key] ?? (student.lead ? student.lead[key] : "")}
+                onSave={(v) => onUpdateField(student.id, key, v)}
+              />
+            );
           case "assigned_teacher":
+            return (
+              <EditableTextCell
+                key={key}
+                field={key}
+                cellClass="min-w-[130px]"
+                value={student[key] ?? (student.lead ? student.lead[key] : "")}
+                onSave={(v) => onUpdateField(student.id, key, v)}
+              />
+            );
           case "course_duration":
             return (
               <EditableTextCell
@@ -778,6 +818,30 @@ const SortableStudentRow = ({
                 >
                   <TrashIcon className="h-5 w-5" />
                 </button>
+              </td>
+            );
+          case "demo_scheduled":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[100px]"
+              >
+                <select
+                  value={resolveField(student, "demo_scheduled") || ""}
+                  onChange={(e) =>
+                    // send nested lead field update so enrollment's lead.demo_scheduled is updated
+                    onUpdateField(
+                      student.id,
+                      `lead.demo_scheduled`,
+                      e.target.value
+                    )
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  <option value="">Select</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
               </td>
             );
           default:

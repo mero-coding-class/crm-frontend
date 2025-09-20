@@ -487,6 +487,24 @@ const SortableTrashRow = ({
           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
         />
       </td>
+      {columns.actions.visible && (
+        <td className="px-3 py-4 whitespace-nowrap text-left text-sm font-medium">
+          <button
+            onClick={() => onRestoreLead(lead.id)}
+            className="text-green-600 hover:text-green-900 mr-2 p-1 rounded-md hover:bg-green-50 transition-colors"
+            title="Restore Lead"
+          >
+            <ArrowUturnLeftIcon className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => onPermanentDelete(lead.id)}
+            className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
+            title="Permanently Delete"
+          >
+            <TrashIcon className="h-5 w-5" />
+          </button>
+        </td>
+      )}
       {columns.student_name.visible && (
         <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
           {lead.student_name}
@@ -581,24 +599,6 @@ const SortableTrashRow = ({
               </button>
             )}
           </div>
-        </td>
-      )}
-      {columns.actions.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-left text-sm font-medium">
-          <button
-            onClick={() => onRestoreLead(lead.id)}
-            className="text-green-600 hover:text-green-900 mr-2 p-1 rounded-md hover:bg-green-50 transition-colors"
-            title="Restore Lead"
-          >
-            <ArrowUturnLeftIcon className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => onPermanentDelete(lead.id)}
-            className="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50 transition-colors"
-            title="Permanently Delete"
-          >
-            <TrashIcon className="h-5 w-5" />
-          </button>
         </td>
       )}
     </tr>

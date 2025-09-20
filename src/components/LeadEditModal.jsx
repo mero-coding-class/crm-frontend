@@ -68,6 +68,10 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     workshopBatch: "",
     assigned_to: "",
     assigned_to_username: "",
+    // Backend fields the server expects
+    school_college_name: "",
+    lead_type: "",
+    demo_scheduled: "",
   };
 
   const [formData, setFormData] = useState(DEFAULT_FORM);
@@ -145,7 +149,11 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       device: lead.device || "",
       previousCodingExp:
         lead.previousCodingExp || lead.previous_coding_experience || "",
-      workshopBatch: lead.workshopBatch || lead.workshop_batch || "",
+      // Map backend fields if present on the lead
+      school_college_name:
+        lead.school_college_name || lead.school || lead.school_college || "",
+      lead_type: lead.lead_type || lead.leadType || "",
+      demo_scheduled: lead.demo_scheduled || "",
     };
 
     // Enforce backend-level semantics: backend only accepts these top-level
@@ -282,7 +290,13 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
             updated.previousCodingExp ||
             updated.previous_coding_experience ||
             "",
-          workshopBatch: updated.workshopBatch || updated.workshop_batch || "",
+          school_college_name:
+            updated.school_college_name ||
+            updated.school ||
+            updated.school_college ||
+            "",
+          lead_type: updated.lead_type || updated.leadType || "",
+          demo_scheduled: updated.demo_scheduled || "",
         };
 
         // Preserve backend-level semantics as in the lead prop mapping
@@ -324,7 +338,6 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
         const res = await fetch(`${BASE_URL}/users/`, {
           headers: { Authorization: `Token ${authToken}` },
         });
-        if (!res.ok) throw new Error("Failed to fetch users");
         const data = await res.json();
         const list = Array.isArray(data) ? data : data.results || [];
         if (!cancelled) setUsers(list);
@@ -375,8 +388,18 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       ...formData,
       // Send only substatus (no underscore) as that's what backend expects
       substatus: formData.substatus || "New",
+      // Send the exact selected source label so it matches backend choices
+      source:
+        formData.source && formData.source !== "Select" ? formData.source : "",
+      // Keep course_duration in payload (empty string clears it)
+      course_duration:
+        formData.courseDuration || formData.course_duration || "",
       // Remove sub_status to avoid confusion
       sub_status: undefined,
+      // Ensure backend fields are present
+      school_college_name: formData.school_college_name || "",
+      lead_type: formData.lead_type || "",
+      demo_scheduled: formData.demo_scheduled || "",
     };
     onSave(updatedData);
   };
@@ -392,6 +415,9 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     "Email",
     "Office Visit",
     "Direct call",
+    "TikTok",
+    "Instagram",
+    "Other",
   ];
   const classTypeOptions = ["Select", "Physical", "Online"];
   const shiftOptions = [
@@ -437,19 +463,14 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     >
       <div
         ref={modalRef}
-        // Increased max-w for better horizontal space, adjusted max-h and overflow for scrollability
-        className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[95vh] overflow-y-auto transform transition-all animate-scale-up"
+        className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-auto p-4"
       >
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-semibold text-gray-800">
-            Edit Lead: {formData.studentName || "N/A"}
-          </h2>
+        <div className="flex justify-end">
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 transition-colors duration-200"
-            aria-label="Close"
+            className="p-2 rounded-md hover:bg-gray-100"
           >
-            <XMarkIcon className="h-6 w-6" />
+            <XMarkIcon className="h-5 w-5 text-gray-600" />
           </button>
         </div>
         <LeadEditForm

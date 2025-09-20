@@ -151,11 +151,15 @@ const allowedShifts = [
   "Flexible",
 ];
 
+// Accept free-text shift values from the UI. Backend may validate against
+// allowed choices, but the UI should be able to send arbitrary text (or
+// an empty string to clear). Return undefined only when the incoming value
+// is strictly undefined or null; otherwise return the trimmed string.
 const sanitizeShift = (s) => {
   if (s === undefined || s === null) return undefined;
   const str = String(s).trim();
-  if (!str) return undefined;
-  return allowedShifts.includes(str) ? str : undefined;
+  // Return empty string if user cleared the value
+  return str;
 };
 
 export const leadService = {
@@ -314,6 +318,11 @@ export const leadService = {
       backendUpdates.course_duration = updates.course_duration;
     if (updates.courseDuration !== undefined)
       backendUpdates.course_duration = updates.courseDuration;
+    // demo_scheduled should be sent when provided (UI may use camelCase or snake_case)
+    if (updates.demo_scheduled !== undefined)
+      backendUpdates.demo_scheduled = updates.demo_scheduled;
+    if (updates.demoScheduled !== undefined)
+      backendUpdates.demo_scheduled = updates.demoScheduled;
     // Support updating assigned user (username) or assigned_to field
     if (updates.assigned_to !== undefined)
       backendUpdates.assigned_to = updates.assigned_to;

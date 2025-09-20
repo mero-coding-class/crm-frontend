@@ -93,6 +93,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     city: "",
     county: "",
     post_code: "",
+    demo_scheduled: "",
     add_date: getTodayDate(),
   });
 
@@ -161,14 +162,18 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Debug: confirm the submit handler was invoked and show a small snapshot
+    console.debug("AddLeadModal.handleSubmit called", {
+      student_name: formData.student_name,
+      parents_name: formData.parents_name,
+      email: formData.email,
+    });
 
-    // Determine required fields dynamically: everything in formData
-    // that is NOT in optionalFields (user provided list) is required.
-    // Also skip internal-only keys.
+    // Use a minimal, explicit set of required fields for the Add form so
+    // users aren't blocked by many backend-only or optional fields.
+    const requiredFieldsList = ["student_name", "parents_name", "email"];
+
     const internalSkips = new Set(["_id", "invoice"]);
-    const requiredFieldsList = Object.keys(formData).filter(
-      (k) => !optionalFields.has(k) && !internalSkips.has(k)
-    );
 
     const missingFields = requiredFieldsList.filter((field) => {
       const v = formData[field];
@@ -203,9 +208,10 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       ...formData,
       last_call: formData.last_call === "" ? null : formData.last_call,
       next_call: formData.next_call === "" ? null : formData.next_call,
+      // Send the exact selected source label so it matches backend choice list
       source: formData.source === "Select" ? "" : formData.source,
       class_type: formData.class_type === "Select" ? "" : formData.class_type,
-      shift: formData.shift === "Select" ? "" : formData.shift,
+      shift: formData.shift || "",
       payment_type:
         formData.payment_type === "Select" ? "" : formData.payment_type,
       previous_coding_experience:
@@ -213,6 +219,8 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
           ? ""
           : formData.previous_coding_experience,
       device: formData.device === "Select" ? "" : formData.device,
+      // Keep course_duration in payload even when empty so backend can clear it
+      course_duration: formData.course_duration || "",
     };
 
     // Remove frontend-only fields
@@ -276,13 +284,14 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         // Lead type (B2B / B2C)
         lead_type: formData.lead_type,
         school_college_name: formData.school_college_name || "",
+        demo_scheduled: formData.demo_scheduled || "",
         // Important: send course id under `course` so backend links correctly
         course: selectedCourseId,
         // Keep course_name for optimistic UI only (resolve from selectedCourse if possible)
         course_name: selectedCourse?.course_name ?? formData.course_name,
         course_duration: formData.course_duration,
-    last_call: formatDateForBackend(formData.last_call),
-    next_call: formatDateForBackend(formData.next_call),
+        last_call: formatDateForBackend(formData.last_call),
+        next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -298,16 +307,19 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
 
       // Sanitize optional/nullable fields: delete keys with empty strings so backend
       // doesn't receive incorrect scalar types (many DRF validators prefer omitted fields)
+      // We intentionally do not strip out course_duration so an empty value
+      // will clear the backend field when saved. Other optional keys can be
+      // removed if empty to avoid sending unnecessary fields.
       const optionalKeys = [
         "grade",
         "source",
         "class_type",
         "shift",
-        "course_duration",
         "payment_type",
         "device",
         "previous_coding_experience",
         "school_college_name",
+        "demo_scheduled",
       ];
       optionalKeys.forEach((k) => {
         if (
@@ -433,28 +445,16 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     "Email",
     "Office Visit",
     "Direct call",
+    "TikTok",
+    "Instagram",
+    "Other",
   ];
   const classTypeOptions = ["Select", "Physical", "Online"];
-  const shiftOptions = [
-    "Select",
-    "7 A.M. - 9 A.M.",
-    "8 A.M. - 10 A.M.",
-    "10 A.M. - 12 P.M.",
-    "11 A.M. - 1 P.M.",
-    "12 P.M. - 2 P.M.",
-    "2 P.M. - 4 P.M.",
-    "2:30 P.M. - 4:30 P.M.",
-    "4 P.M. - 6 P.M.",
-    "4:30 P.M. - 6:30 P.M.",
-    "5 P.M. - 7 P.M.",
-    "6 P.M. - 7 P.M.",
-    "6 P.M. - 8 P.M.",
-    "7 P.M. - 8 P.M.",
-  ];
+
   const paymentTypeOptions = [
     "Select",
     "Cash",
-    "Online",
+    "Office QR",
     "Bank Transfer",
     "Cheque",
   ];
@@ -640,6 +640,27 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
             <FieldError name="lead_type" />
           </div>
 
+          {/* Demo Scheduled */}
+          <div>
+            <label
+              htmlFor="demo_scheduled"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Demo Scheduled
+            </label>
+            <select
+              id="demo_scheduled"
+              name="demo_scheduled"
+              value={formData.demo_scheduled}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              <option value="">Select</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </div>
+
           {/* Add Date - New Field */}
           <div>
             <label
@@ -742,7 +763,9 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 htmlFor="school_college_name"
                 className="block text-sm font-medium text-gray-700"
               >
-                <RequiredLabel field="school_college_name">School / College Name</RequiredLabel>
+                <RequiredLabel field="school_college_name">
+                  School / College Name
+                </RequiredLabel>
               </label>
               <input
                 type="text"
@@ -803,7 +826,9 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               htmlFor="whatsapp_number"
               className="block text-sm font-medium text-gray-700"
             >
-              <RequiredLabel field="whatsapp_number">WhatsApp Number</RequiredLabel>
+              <RequiredLabel field="whatsapp_number">
+                WhatsApp Number
+              </RequiredLabel>
             </label>
             <input
               type="tel"
@@ -871,7 +896,10 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               <option value="">Select a course</option>
               {coursesList.map((course) => {
                 const label =
-                  course.course_name || course.name || course.title || String(course.id || "");
+                  course.course_name ||
+                  course.name ||
+                  course.title ||
+                  String(course.id || "");
                 const value = course.id ?? label;
                 const key = course.id ?? label;
                 return (
@@ -1018,7 +1046,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
             />
           </div>
 
-          {/* Shift */}
+          {/* Shift (free text) */}
           <div>
             <label
               htmlFor="shift"
@@ -1026,19 +1054,15 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
             >
               Shift
             </label>
-            <select
+            <input
+              type="text"
               id="shift"
               name="shift"
               value={formData.shift}
               onChange={handleChange}
+              placeholder="e.g. 6 P.M. - 8 P.M. or Evening"
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              {shiftOptions.map((option) => (
-                <option key={option} value={option === "Select" ? "" : option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* Payment Type */}
@@ -1109,23 +1133,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
             </select>
           </div>
 
-          {/* Workshop Batch (if applicable) */}
-          <div>
-            <label
-              htmlFor="workshop_batch"
-              className="block text-sm font-medium text-gray-700"
-            >
-              School/College
-            </label>
-            <input
-              type="text"
-              id="workshop_batch"
-              name="workshop_batch"
-              value={formData.workshop_batch}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
+          {/* (Duplicate Workshop/School field removed - use `school_college_name` above) */}
 
           {/* Remarks (full width) */}
           <div className="md:col-span-3">

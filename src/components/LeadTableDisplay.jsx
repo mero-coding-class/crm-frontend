@@ -118,6 +118,8 @@ const LeadTableDisplay = ({
   onAgeChange,
   onGradeChange,
   onCourseDurationChange,
+  onShiftChange,
+  onDemoScheduledChange,
   onAssignedToChange,
   authToken,
   changeLogService,
@@ -638,6 +640,8 @@ const LeadTableDisplay = ({
                         onAgeChange={onAgeChange}
                         onGradeChange={onGradeChange}
                         onCourseDurationChange={onCourseDurationChange}
+                        onShiftChange={onShiftChange}
+                        onDemoScheduledChange={onDemoScheduledChange}
                         onAssignedToChange={onAssignedToChange}
                         authToken={authToken}
                         changeLogService={changeLogService}
