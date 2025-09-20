@@ -88,8 +88,38 @@ const LeadLogDisplay = ({
     };
 
     window.addEventListener("crm:remarkUpdated", onRemarkUpdated);
+    // Listen for generic lead update events (non-remark) to show synthetic logs
+    const onLeadUpdated = (e) => {
+      try {
+        const { id, field_changed, old_value, new_value } = e?.detail || {};
+        if (!id || String(id) !== String(leadId)) return;
+
+        const now = new Date().toISOString();
+        const synthetic = {
+          id: `local-update-${Date.now()}`,
+          timestamp: now,
+          changed_by_name: "You",
+          field_changed: field_changed || "unknown",
+          old_value: old_value ?? null,
+          new_value: new_value ?? null,
+          description: `${field_changed} updated to '${new_value}'.`,
+          __synthetic: true,
+        };
+
+        syntheticRef.current = [
+          synthetic,
+          ...(syntheticRef.current || []),
+        ].slice(0, 3);
+        setLogs((prev) => [synthetic, ...(prev || [])]);
+      } catch (err) {
+        console.warn("LeadLogDisplay: failed to handle crm:leadUpdated", err);
+      }
+    };
+
+    window.addEventListener("crm:leadUpdated", onLeadUpdated);
     return () =>
       window.removeEventListener("crm:remarkUpdated", onRemarkUpdated);
+    window.removeEventListener("crm:leadUpdated", onLeadUpdated);
   }, [leadId]);
 
   const toggleExpansion = useCallback(() => setIsExpanded((p) => !p), []);

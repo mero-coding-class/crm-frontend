@@ -162,6 +162,9 @@ const sanitizeShift = (s) => {
   return str;
 };
 
+// No aggressive normalization is performed for shift — backend expects free-text.
+// We only trim the incoming value via `sanitizeShift` and send it as-is.
+
 export const leadService = {
   getLeads: async (authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
@@ -329,27 +332,32 @@ export const leadService = {
     if (updates.assigned_to_username !== undefined)
       backendUpdates.assigned_to_username = updates.assigned_to_username;
 
-    const response = await fetch(`${BASE_URL}/leads/${id}/`, {
-      method: "PATCH",
-      headers: {
-        Authorization: `Token ${authToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(backendUpdates),
-    });
-
-    // Debug: log outgoing request details so we can trace missing updates
-    try {
-      console.debug("leadService.updateLead -> PATCH", `${BASE_URL}/leads/${id}/`, {
-        id,
-        payload: backendUpdates,
+    const doPatch = async (payload) => {
+      const resp = await fetch(`${BASE_URL}/leads/${id}/`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       });
-    } catch (e) {
-      // ignore
-    }
 
-    // Wait for the parsed JSON so we can broadcast the updated lead to the app
-    const data = await handleResponse(response);
+      // Debug: log outgoing request details so we can trace missing updates
+      try {
+        console.debug("leadService.updateLead -> PATCH", `${BASE_URL}/leads/${id}/`, {
+          id,
+          payload,
+        });
+      } catch (e) {
+        // ignore
+      }
+
+      return await handleResponse(resp);
+    };
+
+    // Send the PATCH once with the sanitized values. The backend should accept
+    // free-text shift values; do not attempt to map to a predefined choice here.
+    const data = await doPatch(backendUpdates);
 
     // Debug: log server response for visibility during dev
     try {
@@ -378,9 +386,30 @@ export const leadService = {
   merged.assigned_to = merged.assigned_to || merged.assigned_to_username || backendUpdates.assigned_to || backendUpdates.assigned_to_username || "";
   merged.assigned_to_username = merged.assigned_to_username || merged.assigned_to || "";
 
-  // Normalize course_duration variants
-  merged.course_duration = merged.course_duration || merged.courseDuration || backendUpdates.course_duration || backendUpdates.courseDuration || "";
-  merged.courseDuration = merged.courseDuration || merged.course_duration || "";
+  // Normalize course_duration variants — preserve empty string if present
+  if (serverData.course_duration !== undefined) {
+    merged.course_duration = serverData.course_duration;
+  } else if (serverData.courseDuration !== undefined) {
+    merged.course_duration = serverData.courseDuration;
+  } else if (backendUpdates.course_duration !== undefined) {
+    merged.course_duration = backendUpdates.course_duration;
+  } else if (backendUpdates.courseDuration !== undefined) {
+    merged.course_duration = backendUpdates.courseDuration;
+  } else {
+    merged.course_duration = merged.course_duration !== undefined ? merged.course_duration : "";
+  }
+
+  if (serverData.courseDuration !== undefined) {
+    merged.courseDuration = serverData.courseDuration;
+  } else if (serverData.course_duration !== undefined) {
+    merged.courseDuration = serverData.course_duration;
+  } else if (backendUpdates.courseDuration !== undefined) {
+    merged.courseDuration = backendUpdates.courseDuration;
+  } else if (backendUpdates.course_duration !== undefined) {
+    merged.courseDuration = backendUpdates.course_duration;
+  } else {
+    merged.courseDuration = merged.courseDuration !== undefined ? merged.courseDuration : merged.course_duration || "";
+  }
 
     try {
       // Broadcast a global event so other pages/components can update optimistically

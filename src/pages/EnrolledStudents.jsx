@@ -591,9 +591,59 @@ const EnrolledStudents = () => {
         backendField = "course_duration";
       }
 
-      // Do NOT update local state until backend confirms success
+      // We'll apply an optimistic local update so the table reflects the
+      // user's change immediately. If the PATCH fails we'll roll back.
 
       try {
+        const prevStudents = (allStudents || []).slice();
+
+        // Apply optimistic update locally so UI updates immediately.
+        setAllStudents((prev) =>
+          (prev || []).map((s) => {
+            if (String(s.id) !== String(studentId)) return s;
+            // clone
+            const next = JSON.parse(JSON.stringify(s || {}));
+            // Modal full-object update
+            if (field === null && value && typeof value === "object") {
+              // Merge allowed fields into enrollment and nested lead
+              for (const [k, v] of Object.entries(value || {})) {
+                if (k === "lead" && typeof v === "object") {
+                  next.lead = { ...(next.lead || {}), ...v };
+                } else if (k === "batch_name") {
+                  next.batchname = v;
+                } else {
+                  // coerce numeric-like strings to numbers for payment fields
+                  if (
+                    [
+                      "total_payment",
+                      "first_installment",
+                      "second_installment",
+                      "third_installment",
+                    ].includes(k) &&
+                    (typeof v === "string" || typeof v === "number")
+                  ) {
+                    const n = Number(v);
+                    next[k] = Number.isFinite(n) ? n : v;
+                  } else {
+                    next[k] = v;
+                  }
+                }
+              }
+            } else {
+              // Single-field update
+              if (field && field.startsWith("lead.")) {
+                const leadKey = backendField;
+                next.lead = { ...(next.lead || {}) };
+                next.lead[leadKey] = value;
+              } else {
+                next[backendField] = value;
+              }
+            }
+            return next;
+          })
+        );
+
+        const prevSnapshot = prevStudents;
         let payload = {};
         if (field === null && value && typeof value === "object") {
           // When modal sends a whole object, sanitize to only include
@@ -902,6 +952,8 @@ const EnrolledStudents = () => {
           } catch (e) {
             errorData = { detail: errorText };
           }
+          // rollback optimistic update
+          setAllStudents(prevSnapshot);
           // Show error in UI and log full response
           setError(
             `Failed to update enrollment: ${
@@ -918,11 +970,70 @@ const EnrolledStudents = () => {
         }
         // Refetch enrollment data after successful update
         const respJson = await response.json().catch(() => null);
-        fetchEnrolledStudents(currentPage);
+        // Merge server response into local state so UI reflects server-normalized values
+        if (respJson) {
+          setAllStudents((prev) =>
+            (prev || []).map((s) =>
+              String(s.id) === String(studentId)
+                ? {
+                    ...s,
+                    ...respJson,
+                    // keep nested lead merged when server returned enrollment-only fields
+                    lead: {
+                      ...(s.lead || {}),
+                      ...(respJson.lead || {}),
+                    },
+                  }
+                : s
+            )
+          );
+
+          // Emit events so other parts of app (leads changelog, leads list)
+          // can update immediately.
+          try {
+            window.dispatchEvent(
+              new CustomEvent("crm:enrollmentUpdated", {
+                detail: { enrollment: respJson },
+              })
+            );
+
+            // Emit crm:leadUpdated with both shapes (lead object + meta) for compatibility
+            const emittedLead = respJson.lead || null;
+            const meta = {
+              id: emittedLead?.id || respJson?.id || studentId,
+              field_changed: backendField,
+              old_value: undefined,
+              new_value: undefined,
+              lead: emittedLead || undefined,
+            };
+            // try to infer old/new for this field from payload
+            try {
+              meta.old_value = prevSnapshot.find(
+                (x) => String(x.id) === String(studentId)
+              )?.[backendField];
+              meta.new_value =
+                respJson[backendField] ??
+                (respJson.lead && respJson.lead[backendField]) ??
+                payload[backendField] ??
+                value;
+            } catch (e) {}
+
+            window.dispatchEvent(
+              new CustomEvent("crm:leadUpdated", { detail: meta })
+            );
+          } catch (e) {
+            console.debug("Failed to emit enrollment/lead updated events", e);
+          }
+        }
+
         setError(null);
         // Return parsed JSON so callers (modal) can react to updated invoice URLs
         return respJson;
       } catch (err) {
+        // rollback optimistic update
+        try {
+          setAllStudents((prev) => prevStudents || prev);
+        } catch (e) {}
         setError(`Error updating student: ${err.message}`);
         console.error(`Error updating student ${field}:`, err);
       }
@@ -1116,7 +1227,7 @@ const EnrolledStudents = () => {
                 fetchEnrolledStudents(1);
               }}
               disabled={loading}
-              className={`ml-3 px-4 py-2 rounded-md border bg-white text-gray-700 hover:bg-gray-50 transition-opacity duration-200 ${
+              className={`ml-3 px-4 py-2 rounded-md border bg-blue-700 text-white hover:bg-blue-600 transition-opacity duration-200 ${
                 loading ? "opacity-60 cursor-not-allowed" : ""
               }`}
             >
