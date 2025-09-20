@@ -156,7 +156,7 @@ const LeadsFilters = ({
         <button
           type="button"
           onClick={onClearFilters}
-          className="w-full p-2 border border-gray-200 rounded-md bg-white hover:bg-gray-50"
+          className="w-full p-2 border border-gray-200 rounded-md bg-blue-700 text-white hover:bg-blue-600"
         >
           Clear Filters
         </button>

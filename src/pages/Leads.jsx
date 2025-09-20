@@ -1135,8 +1135,69 @@ const Leads = () => {
         if (updatesToSend.age === null) updatesToSend.age = "";
         if (updatesToSend.grade === null) updatesToSend.grade = "";
 
-        // send update
-        await leadService.updateLead(serverId, updatesToSend, authToken);
+        // send update and merge server response into local state so the
+        // table reflects any server-side normalizations immediately.
+        const serverResp = await leadService.updateLead(
+          serverId,
+          updatesToSend,
+          authToken
+        );
+
+        // Merge server response into local leads (preserve UI _id when present)
+        setAllLeads((prev) =>
+          prev.map((l) =>
+            matchId(l, leadId)
+              ? {
+                  ...l,
+                  ...serverResp,
+                  // keep a stable _id for UI use (prefer existing)
+                  _id: l._id || serverResp._id || serverResp.id || l._id,
+                }
+              : l
+          )
+        );
+
+        // Dispatch a global event so changelog components can show an
+        // immediate synthetic log entry without waiting for a full refresh.
+        try {
+          const emittedId =
+            serverResp?.id || serverResp?._id || serverId || leadId;
+          // compute a best-effort old/new value for the event
+          const oldVal = leadObj ? leadObj[fieldName] : undefined;
+          const newVal =
+            serverResp &&
+            (serverResp[fieldName] ??
+              serverResp.substatus ??
+              serverResp.sub_status)
+              ? serverResp[fieldName] ??
+                serverResp.substatus ??
+                serverResp.sub_status
+              : updatesToSend[fieldName] ?? newValue;
+
+          // generic leadUpdated event for most fields
+          window.dispatchEvent(
+            new CustomEvent("crm:leadUpdated", {
+              detail: {
+                id: emittedId,
+                field_changed: fieldName,
+                old_value: oldVal,
+                new_value: newVal,
+              },
+            })
+          );
+
+          // preserve existing remark-specific event so existing handlers keep working
+          if (fieldName === "remarks") {
+            window.dispatchEvent(
+              new CustomEvent("crm:remarkUpdated", {
+                detail: { id: emittedId, remarks: newVal },
+              })
+            );
+          }
+        } catch (e) {
+          // don't let synthetic event emission break the edit flow
+          console.debug("Failed to emit crm:leadUpdated event", e);
+        }
         // If course_duration was updated, refresh leads table
         if (fieldName === "course_duration") {
           if (typeof handleRefresh === "function") {

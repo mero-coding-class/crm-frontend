@@ -262,7 +262,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         grade: formData.grade,
         source: formData.source === "Select" ? "" : formData.source,
         class_type: formData.class_type === "Select" ? "" : formData.class_type,
-        shift: formData.shift === "Select" ? "" : formData.shift,
+        shift: formData.shift ? String(formData.shift).trim() : "",
         status: formData.status || "New",
         substatus: formData.sub_status || "New",
         device: formData.device === "Select" ? "" : formData.device,

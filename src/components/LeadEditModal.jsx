@@ -375,10 +375,20 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
+    setFormData((prevData) => {
+      // Keep snake_case/camelCase variants in sync for fields like course_duration
+      if (name === "courseDuration") {
+        return { ...prevData, courseDuration: value, course_duration: value };
+      }
+      if (name === "course_duration") {
+        return { ...prevData, course_duration: value, courseDuration: value };
+      }
+
+      return {
+        ...prevData,
+        [name]: value,
+      };
+    });
   };
 
   const handleSubmit = (e) => {
@@ -391,9 +401,15 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       // Send the exact selected source label so it matches backend choices
       source:
         formData.source && formData.source !== "Select" ? formData.source : "",
-      // Keep course_duration in payload (empty string clears it)
+      // Keep course_duration in payload. IMPORTANT: allow empty string to clear the field.
       course_duration:
-        formData.courseDuration || formData.course_duration || "",
+        formData.courseDuration !== undefined &&
+        formData.courseDuration !== null
+          ? formData.courseDuration
+          : formData.course_duration !== undefined &&
+            formData.course_duration !== null
+          ? formData.course_duration
+          : "",
       // Remove sub_status to avoid confusion
       sub_status: undefined,
       // Ensure backend fields are present

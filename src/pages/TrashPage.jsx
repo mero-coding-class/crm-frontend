@@ -9,7 +9,7 @@ import {
   FunnelIcon,
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
-import { trashService, leadService } from "../services/api.js";
+import { trashService, leadService, courseService } from "../services/api.js";
 import { BASE_URL } from "../config";
 import DelayedLoader from "../components/common/DelayedLoader";
 
@@ -35,11 +35,7 @@ const downloadCsv = (rows, filename = "export.csv") => {
   };
 
   const csv = [headers.join(",")]
-    .concat(
-      rows.map((row) =>
-        headers.map((h) => escapeCell(row[h])).join(",")
-      )
-    )
+    .concat(rows.map((row) => headers.map((h) => escapeCell(row[h])).join(",")))
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -71,29 +67,16 @@ const TrashPage = () => {
   const [filterGrade, setFilterGrade] = useState("");
   const [filterLastCall, setFilterLastCall] = useState("");
   const [filterClassType, setFilterClassType] = useState("All");
-  const [filterShift, setFilterShift] = useState("All");
+  const [filterShift, setFilterShift] = useState("");
   const [filterDevice, setFilterDevice] = useState("All");
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("All");
+  const [filterCourse, setFilterCourse] = useState("All");
+  const [courses, setCourses] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
 
   const statusOptions = ["All", "Lost", "Junk"];
-  const classTypeOptions = ["All", "Online", "Physical", "Class"];
-  const shiftOptions = [
-    "All",
-    "7 A.M. - 9 A.M.",
-    "8 A.M. - 10 A.M.",
-    "10 A.M. - 12 P.M.",
-    "11 A.M. - 1 P.M.",
-    "12 P.M. - 2 P.M.",
-    "2 P.M. - 4 P.M.",
-    "2:30 P.M. - 4:30 P.M.",
-    "4 P.M. - 6 P.M.",
-    "4:30 P.M. - 6:30 P.M.",
-    "5 P.M. - 7 P.M.",
-    "6 P.M. - 7 P.M.",
-    "6 P.M. - 8 P.M.",
-    "7 P.M. - 8 P.M.",
-  ];
+  const classTypeOptions = ["All", "Online", "Physical"];
+
   const deviceOptions = ["All", "Yes", "No"];
   const previousCodingExpOptions = [
     "All",
@@ -163,6 +146,25 @@ const TrashPage = () => {
       fetchLeads(currentPage);
     }
   }, [authToken, fetchLeads, currentPage]);
+
+  // Fetch course list so we can show a Course dropdown in filters
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!authToken) return;
+      try {
+        const res = await courseService.getCourses(authToken);
+        const list = Array.isArray(res) ? res : res?.results || [];
+        if (!cancelled) setCourses(list);
+      } catch (e) {
+        console.warn("TrashPage: failed to load courses", e);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken]);
 
   // Listen for leads moved to trash elsewhere in the app and insert them at top
   useEffect(() => {
@@ -240,6 +242,29 @@ const TrashPage = () => {
     },
     [authToken, handleCloseEditModal]
   );
+
+  // Clear all filters and reload first page
+  const handleClearFilters = useCallback(() => {
+    // Reset filter state to defaults used by the UI
+    setSearchTerm("");
+    setFilterStatus("All");
+    setFilterAge("");
+    setFilterGrade("");
+    setFilterLastCall("");
+    setFilterClassType("All");
+    setFilterShift("");
+    setFilterDevice("All");
+    setFilterPrevCodingExp("All");
+    setFilterCourse("All");
+    setShowFilters(false);
+
+    // Reset pagination to first page but DO NOT refetch from server.
+    // This makes clearing filters instantaneous and smooth because
+    // the component will re-render using the already-fetched `allLeads`
+    // and `filteredTrashedLeads` memoized selector. If the user wants
+    // a full reload they can click Refresh.
+    setCurrentPage(1);
+  }, []);
 
   const handlePermanentDeleteLead = useCallback(
     async (id) => {
@@ -548,7 +573,6 @@ const TrashPage = () => {
     fetchLeads(currentPage);
   }, [fetchLeads]);
 
-
   const filteredTrashedLeads = useMemo(() => {
     let currentLeads = allLeads;
 
@@ -604,6 +628,16 @@ const TrashPage = () => {
       );
     }
 
+    // Filter by course if selected
+    if (filterCourse && filterCourse !== "All") {
+      currentLeads = currentLeads.filter((lead) => {
+        // Match by course id or course_name (string compare)
+        if (lead.course && String(lead.course) === filterCourse) return true;
+        if (lead.course_name && String(lead.course_name) === filterCourse)
+          return true;
+        return false;
+      });
+    }
     return currentLeads;
   }, [
     allLeads,
@@ -616,6 +650,7 @@ const TrashPage = () => {
     filterShift,
     filterDevice,
     filterPrevCodingExp,
+    filterCourse,
   ]);
 
   // Export current filtered leads to CSV (client-side, no backend)
@@ -635,7 +670,8 @@ const TrashPage = () => {
           source: lead.source || "",
           course_name: lead.course_name || lead.course || "",
           status: lead.status || "",
-          deleted_by: lead.deleted_by_name || lead.deleted_by || lead.deleter_name || "",
+          deleted_by:
+            lead.deleted_by_name || lead.deleted_by || lead.deleter_name || "",
           deleted_at: lead.deleted_at || lead.deleted_on || lead.deleted || "",
           last_call: lead.last_call || "",
           next_call: lead.next_call || "",
@@ -689,8 +725,29 @@ const TrashPage = () => {
           >
             Export CSV
           </button>
+          <button
+            onClick={handleClearFilters}
+            className="flex items-center px-4 py-2 border border-gray-300 cursor-pointer rounded-md bg-blue-700 text-white hover:bg-blue-600 transition-colors shadow-sm"
+          >
+            Clear Filters
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Course</label>
+            <select
+              value={filterCourse}
+              onChange={(e) => setFilterCourse(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 bg-white"
+            >
+              <option value="All">All Courses</option>
+              {courses.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.course_name || c.name || `Course ${c.id}`}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="relative w-full sm:w-auto">
             <input
               type="text"
@@ -714,42 +771,52 @@ const TrashPage = () => {
         <div className="flex flex-wrap items-center justify-end mb-6 gap-3 p-4 border border-gray-200 rounded-md bg-white shadow-sm">
           <h3 className="text-lg font-semibold mr-4">Advanced Filters:</h3>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Filter by Lead Status</label>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
+              aria-label="Filter by Lead Status"
               className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
             >
               {statusOptions.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {status === "All"
+                    ? "All Lead Statuses"
+                    : `Lead Status: ${status}`}
                 </option>
               ))}
             </select>
             <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
           </div>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Filter by Age</label>
             <input
               type="text"
-              placeholder="Filter by Age..."
+              placeholder="Age (e.g., 12 or 12-15)"
               value={filterAge}
               onChange={(e) => setFilterAge(e.target.value)}
+              aria-label="Filter by Age"
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
             />
           </div>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Filter by Grade</label>
             <input
               type="text"
-              placeholder="Filter by Grade..."
+              placeholder="Grade (e.g., 8 or 9th)"
               value={filterGrade}
               onChange={(e) => setFilterGrade(e.target.value)}
+              aria-label="Filter by Grade"
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
             />
           </div>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Filter by Last Call Date</label>
             <input
               type="date"
               value={filterLastCall}
               onChange={(e) => setFilterLastCall(e.target.value)}
+              aria-label="Filter by Last Call Date"
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
             />
           </div>
@@ -761,44 +828,52 @@ const TrashPage = () => {
             >
               {classTypeOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {option === "All" ? "Class" : option}
                 </option>
               ))}
             </select>
             <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
           </div>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Filter by Shift Time</label>
             <input
               type="text"
-              placeholder="Filter by Shift..."
+              placeholder="Shift"
               value={filterShift}
               onChange={(e) => setFilterShift(e.target.value)}
+              aria-label="Filter by Shift Time"
               className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
             />
           </div>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">Filter by Device Available</label>
             <select
               value={filterDevice}
               onChange={(e) => setFilterDevice(e.target.value)}
+              aria-label="Filter by Device Available"
               className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
             >
               {deviceOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {option === "All" ? "Any Device" : `Device: ${option}`}
                 </option>
               ))}
             </select>
             <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
           </div>
           <div className="relative w-full sm:w-auto">
+            <label className="sr-only">
+              Filter by Previous Coding Experience
+            </label>
             <select
               value={filterPrevCodingExp}
               onChange={(e) => setFilterPrevCodingExp(e.target.value)}
+              aria-label="Filter by Previous Coding Experience"
               className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
             >
               {previousCodingExpOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {option === "All" ? "Any Experience" : option}
                 </option>
               ))}
             </select>
