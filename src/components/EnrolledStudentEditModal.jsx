@@ -24,12 +24,18 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       batchname: student?.batchname ?? "", // backend field
       assigned_teacher: student?.assigned_teacher ?? "",
       course_duration: student?.course_duration ?? lead.course_duration ?? "",
-      starting_date: student?.starting_date ?? "",
+      starting_date:
+        student?.starting_date || ""
+          ? String(student.starting_date || "").split("T")[0]
+          : "",
       total_payment: student?.total_payment ?? "",
       first_installment: student?.first_installment ?? "",
       second_installment: student?.second_installment ?? "",
       third_installment: student?.third_installment ?? "",
-      last_pay_date: student?.last_pay_date ?? "",
+      last_pay_date:
+        student?.last_pay_date || ""
+          ? String(student.last_pay_date || "").split("T")[0]
+          : "",
       payment_completed: student?.payment_completed ?? false,
       created_at: student?.created_at ?? student?.enrollment_created_at ?? "",
       updated_at: student?.updated_at ?? student?.enrollment_updated_at ?? "",
@@ -106,6 +112,8 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       "email",
       "phone_number",
       "course",
+      // accept both batch_name and batchname variants
+      "batchname",
       "batch_name",
       "assigned_teacher",
       "course_duration",
@@ -120,8 +128,39 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
     ];
     const obj = {};
     keys.forEach((k) => {
-      obj[k] =
+      let val =
         data && data[k] !== undefined && data[k] !== null ? data[k] : null;
+      // normalize dates to YYYY-MM-DD strings for comparison
+      if (val && (k === "starting_date" || k === "last_pay_date")) {
+        try {
+          val = String(val).split("T")[0];
+        } catch (e) {}
+      }
+      // normalize numeric-like payment fields to numbers or null
+      if (
+        val !== null &&
+        [
+          "total_payment",
+          "first_installment",
+          "second_installment",
+          "third_installment",
+        ].includes(k)
+      ) {
+        const n = Number(val);
+        val = Number.isFinite(n) ? n : null;
+      }
+      // normalize payment_completed to boolean or null
+      if (k === "payment_completed") {
+        if (val === null) {
+          val = null;
+        } else if (typeof val === "string") {
+          const s = val.toLowerCase();
+          val = s === "true" || s === "yes" || s === "1";
+        } else {
+          val = !!val;
+        }
+      }
+      obj[k] = val;
     });
     obj.invoice = (Array.isArray(data?.invoice) ? data.invoice : []).map(
       (i) => ({
@@ -239,7 +278,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
             (data.lead && data.lead.course_duration) ||
             prev.course_duration ||
             "",
-          starting_date: data.starting_date || prev.starting_date || "",
+          starting_date: data.starting_date
+            ? String(data.starting_date).split("T")[0]
+            : prev.starting_date || "",
           total_payment: data.total_payment ?? prev.total_payment ?? "",
           first_installment:
             data.first_installment ?? prev.first_installment ?? "",
@@ -247,7 +288,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
             data.second_installment ?? prev.second_installment ?? "",
           third_installment:
             data.third_installment ?? prev.third_installment ?? "",
-          last_pay_date: data.last_pay_date || prev.last_pay_date || "",
+          last_pay_date: data.last_pay_date
+            ? String(data.last_pay_date).split("T")[0]
+            : prev.last_pay_date || "",
           payment_completed:
             typeof data.payment_completed === "boolean"
               ? data.payment_completed
@@ -413,6 +456,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
 
     const updatedStudentData = {
       ...formData,
+      // prefer batchname field (table uses 'batchname')
       batchname: formData.batchname ?? formData.batch_name ?? "",
       course_duration: formData.course_duration ?? "",
       total_payment: formData.total_payment
@@ -427,11 +471,33 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       third_installment: formData.third_installment
         ? parseFloat(formData.third_installment)
         : null,
-      last_pay_date: formData.last_pay_date || null,
+      // Ensure dates are sent as YYYY-MM-DD (input[type=date] produces this format)
+      last_pay_date: formData.last_pay_date
+        ? String(formData.last_pay_date).split("T")[0]
+        : null,
+      // normalize starting_date for comparison/send
+      starting_date: formData.starting_date
+        ? String(formData.starting_date).split("T")[0]
+        : null,
       invoice: Array.isArray(formData.invoice)
         ? formData.invoice.filter((inv) => inv.file || inv.url || inv.name)
         : [],
     };
+
+    // Normalize payment_completed to boolean/null (table sends booleans)
+    if (
+      updatedStudentData.payment_completed === "" ||
+      updatedStudentData.payment_completed === null
+    ) {
+      updatedStudentData.payment_completed = null;
+    } else if (typeof updatedStudentData.payment_completed === "string") {
+      const s = updatedStudentData.payment_completed.toLowerCase();
+      updatedStudentData.payment_completed =
+        s === "true" || s === "yes" || s === "1";
+    } else {
+      updatedStudentData.payment_completed =
+        !!updatedStudentData.payment_completed;
+    }
 
     // Coerce course id to number when possible
     if (
@@ -802,21 +868,24 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
             />
           </div>
 
-          <div className="flex items-center">
-            <label className="block text-sm font-medium text-gray-700 mr-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
               Device
             </label>
-            <input
-              type="checkbox"
+            <select
               name="device"
-              checked={!!(formData.device || formData.lead?.device)}
+              value={formData.device || formData.lead?.device || ""}
               onChange={(e) => {
-                const val = e.target.checked ? "Yes" : "No";
+                const val = e.target.value;
                 setFormData((prev) => ({ ...prev, device: val }));
                 handleLeadChange({ target: { name: "device", value: val } });
               }}
-              className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-            />
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">Select</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
           </div>
 
           <div>
@@ -1362,27 +1431,28 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
             />
           </div>
 
-          <div className="flex items-center">
-            <label className="block text-sm font-medium text-gray-700 mr-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
               Demo Scheduled
             </label>
-            <input
-              type="checkbox"
+            <select
               name="demo_scheduled"
-              checked={
-                !!(formData.demo_scheduled || formData.lead?.demo_scheduled)
+              value={
+                formData.demo_scheduled || formData.lead?.demo_scheduled || ""
               }
               onChange={(e) => {
-                setFormData((prev) => ({
-                  ...prev,
-                  demo_scheduled: e.target.checked,
-                }));
+                const val = e.target.value;
+                setFormData((prev) => ({ ...prev, demo_scheduled: val }));
                 handleLeadChange({
-                  target: { name: "demo_scheduled", value: e.target.checked },
+                  target: { name: "demo_scheduled", value: val },
                 });
               }}
-              className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-            />
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            >
+              <option value="">Select</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
           </div>
 
           {/* Metadata (read-only) */}

@@ -116,10 +116,12 @@ const EnrolledStudents = () => {
   const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
   const [filterPaymentNotCompleted, setFilterPaymentNotCompleted] =
     useState(false);
+  const [filterDemoTaken, setFilterDemoTaken] = useState("");
   // Refs to hold latest filter values so fetchEnrolledStudents can be stable
   const searchQueryRef = React.useRef(searchQuery);
   const searchLastPaymentDateRef = React.useRef(searchLastPaymentDate);
   const filterPaymentNotCompletedRef = React.useRef(filterPaymentNotCompleted);
+  const filterDemoTakenRef = React.useRef(filterDemoTaken);
 
   // keep refs in sync with state
   useEffect(() => {
@@ -131,6 +133,9 @@ const EnrolledStudents = () => {
   useEffect(() => {
     filterPaymentNotCompletedRef.current = filterPaymentNotCompleted;
   }, [filterPaymentNotCompleted]);
+  useEffect(() => {
+    filterDemoTakenRef.current = filterDemoTaken;
+  }, [filterDemoTaken]);
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
@@ -161,6 +166,25 @@ const EnrolledStudents = () => {
           if (lpDate !== dateFilter) return false;
         }
 
+        // Demo taken filter (client-side). Accepts "" (all), "Yes", "No"
+        if (filterDemoTaken) {
+          const demoVal =
+            s.demo_scheduled ?? (s.lead && s.lead.demo_scheduled) ?? "";
+          const normalized = String(demoVal).toLowerCase();
+          if (
+            filterDemoTaken === "Yes" &&
+            normalized !== "yes" &&
+            normalized !== "true"
+          )
+            return false;
+          if (
+            filterDemoTaken === "No" &&
+            normalized !== "no" &&
+            normalized !== "false"
+          )
+            return false;
+        }
+
         if (!q) return true;
         const fields = [
           s.student_name,
@@ -183,6 +207,7 @@ const EnrolledStudents = () => {
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
+    filterDemoTaken,
   ]);
 
   // Server-driven pagination: fetch enrollments for a page
@@ -202,9 +227,13 @@ const EnrolledStudents = () => {
         const sq = searchQueryRef.current;
         const slp = searchLastPaymentDateRef.current;
         const fNotCompleted = filterPaymentNotCompletedRef.current;
+        const fDemo = filterDemoTakenRef.current;
         if (sq && sq.trim()) params.append("search", sq.trim());
         if (slp && slp.trim()) params.append("last_pay_date", slp.trim());
         if (fNotCompleted) params.append("payment_completed", "false");
+        if (fDemo && (fDemo === "Yes" || fDemo === "No")) {
+          params.append("demo_scheduled", fDemo === "Yes" ? "true" : "false");
+        }
 
         const url = `${BASE_URL}/enrollments/?${params.toString()}`;
         const resp = await fetch(url, {
@@ -376,6 +405,7 @@ const EnrolledStudents = () => {
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
+    filterDemoTaken,
     authToken,
     fetchEnrolledStudents,
     currentPage,
@@ -395,6 +425,14 @@ const EnrolledStudents = () => {
         baseParams.append("last_pay_date", searchLastPaymentDate.trim());
       if (filterPaymentNotCompleted)
         baseParams.append("payment_completed", "false");
+      if (
+        filterDemoTaken &&
+        (filterDemoTaken === "Yes" || filterDemoTaken === "No")
+      )
+        baseParams.append(
+          "demo_scheduled",
+          filterDemoTaken === "Yes" ? "true" : "false"
+        );
 
       // Fetch all pages from the enrollments endpoint
       let page = 1;
@@ -502,6 +540,7 @@ const EnrolledStudents = () => {
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
+    filterDemoTaken,
   ]);
 
   // Instant field update (sends PATCH to backend immediately)
@@ -513,6 +552,24 @@ const EnrolledStudents = () => {
         "second_installment",
         "third_installment",
       ]);
+
+      // Temporarily disable demo_scheduled edits from both inline table and modal.
+      // Show a friendly alert and do not send a PATCH.
+      try {
+        const isSingleDemo =
+          field === "demo_scheduled" || field === "lead.demo_scheduled";
+        const isModalWithDemo =
+          field === null &&
+          value &&
+          (value.demo_scheduled !== undefined ||
+            (value.lead && value.lead.demo_scheduled !== undefined));
+        if (isSingleDemo || isModalWithDemo) {
+          window.alert("Working on it. It will be soon available");
+          return;
+        }
+      } catch (e) {
+        // ignore any alert errors and continue
+      }
 
       // Map frontend field to backend field
       let backendField = field;
@@ -561,6 +618,9 @@ const EnrolledStudents = () => {
             "last_pay_date",
             "payment_completed",
             "remarks",
+            // allow enrollment/lead-level demo scheduling and shift edits
+            "demo_scheduled",
+            "shift",
             "invoice",
           ]);
           const obj = { ...(value || {}) };
@@ -613,6 +673,25 @@ const EnrolledStudents = () => {
               }
             }
             payload[k] = v;
+          }
+          // If the modal passed nested lead fields (lead.demo_scheduled/lead.device/lead.shift),
+          // mirror them to top-level payload fields because the enrollments API
+          // commonly expects these at the enrollment root.
+          try {
+            const leadObj = value.lead || {};
+            if (leadObj.demo_scheduled !== undefined) {
+              payload.demo_scheduled = leadObj.demo_scheduled;
+            }
+            if (leadObj.shift !== undefined) {
+              payload.shift = leadObj.shift;
+            }
+            if (leadObj.device !== undefined) {
+              // device may be "Yes"/"No" or boolean; preserve string for now and
+              // let the outer normalization convert it before sending.
+              payload.device = leadObj.device;
+            }
+          } catch (e) {
+            // ignore
           }
         } else {
           // Single-field updates
@@ -701,6 +780,52 @@ const EnrolledStudents = () => {
         }
 
         let response;
+
+        // Normalize demo_scheduled values: backend commonly expects boolean
+        // Convert "Yes"/"No" (or case variants) to true/false where present
+        try {
+          const normalizeYesNo = (v) => {
+            if (v === undefined || v === null) return v;
+            if (typeof v === "boolean") return v;
+            const s = String(v).trim().toLowerCase();
+            if (s === "yes") return true;
+            if (s === "no") return false;
+            // If it's an empty string, return null so backend will treat as cleared
+            if (s === "") return null;
+            return v;
+          };
+
+          if (payload && payload.demo_scheduled !== undefined) {
+            payload.demo_scheduled = normalizeYesNo(payload.demo_scheduled);
+          }
+          if (
+            payload &&
+            payload.lead &&
+            payload.lead.demo_scheduled !== undefined
+          ) {
+            payload.lead.demo_scheduled = normalizeYesNo(
+              payload.lead.demo_scheduled
+            );
+            // Mirror to top-level if backend expects enrollment-level field instead
+            if (
+              payload.lead.demo_scheduled !== null &&
+              payload.lead.demo_scheduled !== undefined
+            ) {
+              payload.demo_scheduled = payload.lead.demo_scheduled;
+            }
+          }
+        } catch (e) {
+          // normalization should not block saving; ignore on error
+          console.debug("demo_scheduled normalization failed:", e);
+        }
+
+        // Debug log outgoing payload and target URL to help trace 400 responses
+        try {
+          console.debug("EnrolledStudents -> PATCH payload", {
+            url: `${BASE_URL}/enrollments/${studentId}/`,
+            payload,
+          });
+        } catch (e) {}
         const hasInvoiceFiles =
           payload &&
           Array.isArray(payload.invoice) &&
@@ -954,6 +1079,20 @@ const EnrolledStudents = () => {
               Payment Not Completed
             </label>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Demo Taken
+            </label>
+            <select
+              value={filterDemoTaken}
+              onChange={(e) => setFilterDemoTaken(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+            >
+              <option value="">All</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </div>
           <div className="flex items-end">
             <button
               onClick={handleExportEnrollments}
@@ -963,6 +1102,25 @@ const EnrolledStudents = () => {
               }`}
             >
               Export CSV
+            </button>
+            <button
+              onClick={() => {
+                // smooth clear: reset filter states and go to page 1
+                setSearchQuery("");
+                setSearchLastPaymentDate("");
+                setFilterPaymentNotCompleted(false);
+                setFilterDemoTaken("");
+                // set page to 1 and fetch fresh data
+                setCurrentPage(1);
+                // call fetch directly for immediate feedback
+                fetchEnrolledStudents(1);
+              }}
+              disabled={loading}
+              className={`ml-3 px-4 py-2 rounded-md border bg-white text-gray-700 hover:bg-gray-50 transition-opacity duration-200 ${
+                loading ? "opacity-60 cursor-not-allowed" : ""
+              }`}
+            >
+              Clear Filters
             </button>
           </div>
         </div>

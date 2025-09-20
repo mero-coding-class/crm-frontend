@@ -32,66 +32,74 @@ export const SearchAndFilterBar = ({
         {/* Status Filter */}
         <select
           value={filters.status}
-          onChange={(e) => onFilterChange('status', e.target.value)}
+          onChange={(e) => onFilterChange("status", e.target.value)}
           className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         >
-          {statusOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
+          {statusOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
           ))}
         </select>
 
         {/* Class Type Filter */}
         <select
           value={filters.classType}
-          onChange={(e) => onFilterChange('classType', e.target.value)}
+          onChange={(e) => onFilterChange("classType", e.target.value)}
           className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         >
-          {classTypeOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
+          {classTypeOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
           ))}
         </select>
 
-        {/* Shift Filter */}
-        <select
+        {/* Shift Filter (free text) */}
+        <input
+          type="text"
+          placeholder="Shift..."
           value={filters.shift}
-          onChange={(e) => onFilterChange('shift', e.target.value)}
+          onChange={(e) => onFilterChange("shift", e.target.value)}
           className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          {shiftOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
+        />
 
         {/* Device Filter */}
         <select
           value={filters.device}
-          onChange={(e) => onFilterChange('device', e.target.value)}
+          onChange={(e) => onFilterChange("device", e.target.value)}
           className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         >
-          {deviceOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
+          {deviceOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
           ))}
         </select>
 
         {/* Sub Status Filter */}
         <select
           value={filters.subStatus}
-          onChange={(e) => onFilterChange('subStatus', e.target.value)}
+          onChange={(e) => onFilterChange("subStatus", e.target.value)}
           className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         >
-          {subStatusOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
+          {subStatusOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
           ))}
         </select>
 
         {/* Previous Coding Experience Filter */}
         <select
           value={filters.prevCodingExp}
-          onChange={(e) => onFilterChange('prevCodingExp', e.target.value)}
+          onChange={(e) => onFilterChange("prevCodingExp", e.target.value)}
           className="p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
         >
-          {codingExpOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
+          {codingExpOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
           ))}
         </select>
       </div>

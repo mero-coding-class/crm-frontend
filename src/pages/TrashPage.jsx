@@ -13,6 +13,46 @@ import { trashService, leadService } from "../services/api.js";
 import { BASE_URL } from "../config";
 import DelayedLoader from "../components/common/DelayedLoader";
 
+// Helper: convert array of objects to CSV and trigger download
+const downloadCsv = (rows, filename = "export.csv") => {
+  if (!rows || rows.length === 0) {
+    window.alert("No data to export.");
+    return;
+  }
+
+  // Collect headers from union of keys
+  const headersSet = new Set();
+  rows.forEach((r) => Object.keys(r || {}).forEach((k) => headersSet.add(k)));
+  const headers = Array.from(headersSet);
+
+  const escapeCell = (val) => {
+    if (val === null || val === undefined) return "";
+    const s = typeof val === "string" ? val : String(val);
+    // Escape quotes by doubling, wrap cell in quotes if it contains comma/newline/quote
+    const needsQuotes = /[",\n]/.test(s);
+    const escaped = s.replace(/"/g, '""');
+    return needsQuotes ? `"${escaped}"` : escaped;
+  };
+
+  const csv = [headers.join(",")]
+    .concat(
+      rows.map((row) =>
+        headers.map((h) => escapeCell(row[h])).join(",")
+      )
+    )
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
 const TrashPage = () => {
   const { authToken, currentUser } = useAuth();
   const [allLeads, setAllLeads] = useState([]);
@@ -508,6 +548,7 @@ const TrashPage = () => {
     fetchLeads(currentPage);
   }, [fetchLeads]);
 
+
   const filteredTrashedLeads = useMemo(() => {
     let currentLeads = allLeads;
 
@@ -577,6 +618,55 @@ const TrashPage = () => {
     filterPrevCodingExp,
   ]);
 
+  // Export current filtered leads to CSV (client-side, no backend)
+  const handleExportCsv = useCallback(() => {
+    try {
+      // Map leads into flat objects suitable for CSV
+      const rows = filteredTrashedLeads.map((lead) => {
+        return {
+          id: lead.id,
+          student_name: lead.student_name || "",
+          parents_name: lead.parents_name || "",
+          email: lead.email || "",
+          phone_number: lead.phone_number || "",
+          whatsapp_number: lead.whatsapp_number || "",
+          age: lead.age || "",
+          grade: lead.grade || "",
+          source: lead.source || "",
+          course_name: lead.course_name || lead.course || "",
+          status: lead.status || "",
+          deleted_by: lead.deleted_by_name || lead.deleted_by || lead.deleter_name || "",
+          deleted_at: lead.deleted_at || lead.deleted_on || lead.deleted || "",
+          last_call: lead.last_call || "",
+          next_call: lead.next_call || "",
+          city: lead.city || "",
+          county: lead.county || "",
+          post_code: lead.post_code || "",
+          class_type: lead.class_type || "",
+          shift: lead.shift || "",
+          device: lead.device || "",
+          previous_coding_experience: lead.previous_coding_experience || "",
+          remarks: lead.remarks || "",
+          // Flatten changeLog to a short summary string
+          change_log_summary: (lead.changeLog || lead.change_log || [])
+            .map((c) => {
+              const t = c.timestamp || c.time || "";
+              const name = c.updaterName || c.updater_name || c.user || "";
+              const msg = c.message || c.msg || "";
+              return `${t} by ${name}: ${msg}`;
+            })
+            .join(" | "),
+        };
+      });
+
+      const filename = `trashed_leads_page_${currentPage || 1}.csv`;
+      downloadCsv(rows, filename);
+    } catch (err) {
+      console.error("Export CSV failed:", err);
+      window.alert("Failed to export CSV. Check console for details.");
+    }
+  }, [filteredTrashedLeads, currentPage]);
+
   if (loading) {
     return <DelayedLoader message="Loading trashed leads..." minMs={2000} />;
   }
@@ -592,6 +682,12 @@ const TrashPage = () => {
           >
             <ArrowPathIcon className="h-5 w-5 inline-block mr-2" />
             Refresh Trash
+          </button>
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center px-4 py-2 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            Export CSV
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -672,18 +768,13 @@ const TrashPage = () => {
             <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
           </div>
           <div className="relative w-full sm:w-auto">
-            <select
+            <input
+              type="text"
+              placeholder="Filter by Shift..."
               value={filterShift}
               onChange={(e) => setFilterShift(e.target.value)}
-              className="appearance-none w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white"
-            >
-              {shiftOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <FunnelIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" />
+              className="w-full p-2 pl-3 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
+            />
           </div>
           <div className="relative w-full sm:w-auto">
             <select
