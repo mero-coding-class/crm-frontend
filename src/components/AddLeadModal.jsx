@@ -227,7 +227,6 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     delete payload._id;
     delete payload.invoice;
 
-    // --- 3️⃣ Log Payload and Token ---
     console.log("Auth Token:", authToken);
     console.log("Payload to send:", payload);
 

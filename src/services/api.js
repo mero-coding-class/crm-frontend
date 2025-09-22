@@ -352,6 +352,32 @@ export const leadService = {
         // ignore
       }
 
+      // If server returned an error (e.g., 400), read the body and log full details
+      if (!resp.ok) {
+        let text;
+        try {
+          text = await resp.text();
+        } catch (e) {
+          text = `<could not read response body: ${e.message}>`;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = text;
+        }
+        console.error("leadService.updateLead -> PATCH failed", {
+          url: `${BASE_URL}/leads/${id}/`,
+          id,
+          payload,
+          status: resp.status,
+          responseBody: parsed,
+        });
+        // Throw an Error with server-provided message when possible
+        const errMsg = (parsed && parsed.detail) || (typeof parsed === "string" && parsed) || JSON.stringify(parsed);
+        throw new Error(errMsg || `HTTP ${resp.status}`);
+      }
+
       return await handleResponse(resp);
     };
 
