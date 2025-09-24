@@ -184,6 +184,7 @@ const EnrolledStudentsTable = ({
     assigned_teacher: { label: "Assigned Teacher", visible: true },
     course_duration: { label: "Course Duration", visible: true },
     scheduled_taken: { label: "Demo Taken", visible: true },
+    payment_type: { label: "Payment Type", visible: true },
     starting_date: { label: "Starting Date", visible: true },
     total_payment: { label: "Total Payment", visible: true },
     first_installment: { label: "1st Installment", visible: false },
@@ -905,6 +906,27 @@ const SortableStudentRow = ({
                   <option value="">Select</option>
                   <option value="Yes">Yes</option>
                   <option value="No">No</option>
+                </select>
+              </td>
+            );
+          case "payment_type":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[120px]"
+              >
+                <select
+                  value={resolveField(student, "payment_type") || ""}
+                  onChange={(e) =>
+                    onUpdateField(student.id, "payment_type", e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                >
+                  <option value="">Select</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Office QR">Office QR</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cheque">Cheque</option>
                 </select>
               </td>
             );
