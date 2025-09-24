@@ -295,6 +295,14 @@ export const leadService = {
     if (updates.source !== undefined) backendUpdates.source = updates.source;
     if (updates.classType !== undefined)
       backendUpdates.class_type = updates.classType;
+    // Accept direct snake_case for class_type from inline table editors
+    if (updates.class_type !== undefined)
+      backendUpdates.class_type = updates.class_type;
+    // Support course_type (snake and camel)
+    if (updates.course_type !== undefined)
+      backendUpdates.course_type = updates.course_type;
+    if (updates.courseType !== undefined)
+      backendUpdates.course_type = updates.courseType;
     if (updates.value !== undefined) backendUpdates.value = updates.value;
     if (updates.adsetName !== undefined)
       backendUpdates.adset_name = updates.adsetName;
@@ -321,11 +329,18 @@ export const leadService = {
       backendUpdates.course_duration = updates.course_duration;
     if (updates.courseDuration !== undefined)
       backendUpdates.course_duration = updates.courseDuration;
-    // demo_scheduled should be sent when provided (UI may use camelCase or snake_case)
-    if (updates.demo_scheduled !== undefined)
-      backendUpdates.demo_scheduled = updates.demo_scheduled;
-    if (updates.demoScheduled !== undefined)
-      backendUpdates.demo_scheduled = updates.demoScheduled;
+    // scheduled_taken (new) replaces legacy demo_scheduled. Accept either and send scheduled_taken.
+    if (updates.scheduled_taken !== undefined)
+      backendUpdates.scheduled_taken = updates.scheduled_taken;
+    if (updates.scheduledTaken !== undefined)
+      backendUpdates.scheduled_taken = updates.scheduledTaken;
+    // Legacy support: still accept demo_scheduled fields if present
+    if (backendUpdates.scheduled_taken === undefined) {
+      if (updates.demo_scheduled !== undefined)
+        backendUpdates.scheduled_taken = updates.demo_scheduled;
+      if (updates.demoScheduled !== undefined)
+        backendUpdates.scheduled_taken = updates.demoScheduled;
+    }
     // Support updating assigned user (username) or assigned_to field
     if (updates.assigned_to !== undefined)
       backendUpdates.assigned_to = updates.assigned_to;

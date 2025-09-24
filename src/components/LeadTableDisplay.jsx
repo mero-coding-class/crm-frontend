@@ -1,68 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
-import DraggableRow from "./DraggableRow";
-import ColumnToggler from "./ColumnToggler";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { DndContext, closestCenter } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
+  TrashIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  TrashIcon,
 } from "@heroicons/react/24/outline";
+import DraggableRow from "./DraggableRow";
+import ColumnToggler from "./ColumnToggler";
+import { leadService } from "../services/api";
 
-// Editable inputs that commit on blur or Enter
-const EditableNumberCell = ({ initialValue, onCommit }) => {
-  const [text, setText] = useState(
-    initialValue === null || initialValue === undefined ? "" : String(initialValue)
-  );
-
-  useEffect(() => {
-    setText(initialValue === null || initialValue === undefined ? "" : String(initialValue));
-  }, [initialValue]);
-
-  const commit = () => {
-    onCommit(text === "" ? "" : text);
-  };
-
-  const onKey = (e) => {
-    if (e.key === "Enter") e.currentTarget.blur();
-  };
-
-  return (
-    <input
-      type="text"
-      value={text}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (v === "" || /^\d*$/.test(v)) setText(v);
-      }}
-      onBlur={commit}
-      onKeyDown={onKey}
-      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
-    />
-  );
-};
-
-const EditableTextCell = ({ initialValue, onCommit }) => {
-  const [text, setText] = useState(initialValue || "");
-  useEffect(() => setText(initialValue || ""), [initialValue]);
-  const commit = () => onCommit(text);
-  const onKey = (e) => {
-    if (e.key === "Enter") e.currentTarget.blur();
-  };
-  return (
-    <input
-      type="text"
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={commit}
-      onKeyDown={onKey}
-      className="block w-full p-1 border border-gray-300 rounded-md shadow-sm text-xs font-semibold focus:ring-blue-500 focus:border-blue-500"
-    />
-  );
-};
+// NOTE: This file was rebuilt to remove syntax errors and provide
+// reliable inline update handlers for course_type, class_type, and scheduled_taken.
+// Keep this component focused on display + delegating updates; heavy logic
+// (like change log diffing) should remain in services or row component.
 
 // Initial column configuration
 const initialColumns = {
@@ -77,6 +31,7 @@ const initialColumns = {
   grade: { label: "Grade", visible: true },
   course_name: { label: "Course", visible: true },
   course_duration: { label: "Course Duration", visible: true },
+  course_type: { label: "Course Type", visible: true },
   status: { label: "Status", visible: true },
   substatus: { label: "Sub Status", visible: true },
   source: { label: "Source", visible: true },
@@ -89,7 +44,7 @@ const initialColumns = {
   payment_type: { label: "Payment Type", visible: false },
   device: { label: "Device", visible: false },
   school_college_name: { label: "School/College", visible: false },
-  demo_scheduled: { label: "Demo Scheduled", visible: true },
+  scheduled_taken: { label: "Scheduled Taken", visible: true },
   last_call: { label: "Last Call", visible: true },
   next_call: { label: "Next Call", visible: true },
   created_at: { label: "Created At", visible: false },
@@ -106,7 +61,7 @@ const initialColumns = {
 };
 
 const LeadTableDisplay = ({
-  leads,
+  leads = [],
   handleEdit,
   handleDelete,
   handleBulkDelete,
@@ -123,10 +78,9 @@ const LeadTableDisplay = ({
   onAssignedToChange,
   authToken,
   changeLogService,
-  users,
-  usersLoading,
+  users = [],
+  usersLoading = false,
   currentUserRole,
-  // pagination control (optional): parent may drive pagination
   currentPage: parentCurrentPage,
   totalPages: parentTotalPages,
   onPageChange: parentOnPageChange,
@@ -137,9 +91,7 @@ const LeadTableDisplay = ({
   const [savedRemarks, setSavedRemarks] = useState({});
   const [columns, setColumns] = useState(initialColumns);
   const [internalPage, setInternalPage] = useState(1);
-  const leadsPerPage = parentLeadsPerPage || 20;
-  // Controlled pagination props: if parent passes currentPage/totalPages/onPageChange
-  // use them; otherwise fall back to internal pagination state
+  const pageSize = parentLeadsPerPage || 20;
 
   const tableContainerRef = useRef(null);
 
@@ -149,139 +101,114 @@ const LeadTableDisplay = ({
     tableContainerRef.current.scrollBy({ left: distance, behavior: "smooth" });
   };
 
-  // Pointer-aware auto-scroll (requestAnimationFrame): matches the enrolled
-  // students table behavior. When the pointer moves near left/right edges
-  // of the container we compute an eased scroll factor and run a single
-  // rAF loop to update scrollLeft. Falls back to mouse events when
-  // pointer events are not supported.
+  // Edge-hover horizontal auto-scroll ONLY.
+  // Mouse wheel should remain vertical (no conversion). Horizontal scroll happens
+  // only when pointer is near left/right edges.
   useEffect(() => {
     const container = tableContainerRef.current;
     if (!container) return;
 
-    let pointerX = null;
-    let isPointerOver = false;
-    let rafId = null;
+    const hasOverflow = () => container.scrollWidth > container.clientWidth + 2;
+    if (!hasOverflow()) return; // no need to attach handlers
 
-    const edgeThreshold = 120; // px from edge to start scrolling
-    const baseSpeed = 18; // base scroll speed multiplier
+    let direction = 0; // -1..1
+    let rafId;
+    const EDGE = 100;
+    const SPEED = 18; // px per frame at full edge pressure
 
-    const getScrollFactor = () => {
-      if (pointerX === null) return 0;
-      const rect = container.getBoundingClientRect();
-      const leftDist = pointerX - rect.left;
-      const rightDist = rect.right - pointerX;
-      if (leftDist < edgeThreshold) {
-        const t = Math.max(0, (edgeThreshold - leftDist) / edgeThreshold);
-        return -Math.pow(t, 1.8) * baseSpeed; // ease-in curve
-      }
-      if (rightDist < edgeThreshold) {
-        const t = Math.max(0, (edgeThreshold - rightDist) / edgeThreshold);
-        return Math.pow(t, 1.8) * baseSpeed;
-      }
-      return 0;
+    const updateDirection = (x) => {
+      const { left, right } = container.getBoundingClientRect();
+      if (x < left + EDGE) {
+        const dist = x - left;
+        const factor = (EDGE - dist) / EDGE; // 0..1
+        direction = -factor;
+      } else if (x > right - EDGE) {
+        const dist = right - x;
+        const factor = (EDGE - dist) / EDGE;
+        direction = factor;
+      } else direction = 0;
     };
 
+    const onPointerMove = (e) => updateDirection(e.clientX);
+    const onPointerLeave = () => (direction = 0);
+
     const step = () => {
-      const factor = getScrollFactor();
-      if (Math.abs(factor) > 0.01 && container) {
-        // clamp within scroll bounds
-        const max = container.scrollWidth - container.clientWidth;
-        const next = Math.max(0, Math.min(max, container.scrollLeft + factor));
-        if (next !== container.scrollLeft) container.scrollLeft = next;
+      if (direction !== 0) {
+        container.scrollLeft += direction * SPEED;
       }
       rafId = requestAnimationFrame(step);
     };
+    rafId = requestAnimationFrame(step);
 
-    const onPointerMove = (e) => {
-      pointerX = e.clientX;
-    };
-    const onPointerEnter = (e) => {
-      isPointerOver = true;
-      pointerX = e.clientX;
-      if (!rafId) rafId = requestAnimationFrame(step);
-    };
-    const onPointerLeave = () => {
-      isPointerOver = false;
-      pointerX = null;
-    };
-
-    // Use pointer events when available
-    if (window.PointerEvent) {
-      container.addEventListener("pointermove", onPointerMove);
-      container.addEventListener("pointerenter", onPointerEnter);
-      container.addEventListener("pointerleave", onPointerLeave);
-    } else {
-      // Fallback to mouse events
-      container.addEventListener("mousemove", onPointerMove);
-      container.addEventListener("mouseenter", onPointerEnter);
-      container.addEventListener("mouseleave", onPointerLeave);
-    }
-
-    // start rAF loop if pointer is already over (rare) to ensure responsiveness
-    // eslint-disable-next-line no-unused-expressions
-    isPointerOver && (rafId = requestAnimationFrame(step));
+    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerleave", onPointerLeave);
+    container.addEventListener("mousemove", onPointerMove); // fallback
+    container.addEventListener("mouseleave", onPointerLeave);
 
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
-      if (window.PointerEvent) {
-        container.removeEventListener("pointermove", onPointerMove);
-        container.removeEventListener("pointerenter", onPointerEnter);
-        container.removeEventListener("pointerleave", onPointerLeave);
-      } else {
-        container.removeEventListener("mousemove", onPointerMove);
-        container.removeEventListener("mouseenter", onPointerEnter);
-        container.removeEventListener("mouseleave", onPointerLeave);
-      }
+      container.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("pointerleave", onPointerLeave);
+      container.removeEventListener("mousemove", onPointerMove);
+      container.removeEventListener("mouseleave", onPointerLeave);
     };
-  }, [tableContainerRef.current]);
+  }, [leads, columns]);
 
   // Normalize lead data to avoid undefined and match backend field names
   // Ensure a stable, unique `_id` for each lead so per-row state (remarks,
   // selection, change-log) doesn't collide when backend uses different id
   // fields or omits them.
-  const normalizedLeads = leads.map((lead, _idx) => ({
-    ...lead,
-    // guarantee a unique id: prefer _id, then id, then email/phone, then index
-    _id:
-      lead._id || lead.id || lead.email || lead.phone_number || `lead-${_idx}`,
-    // Use the actual backend ID without modification
-    id: lead.id || "",
-    student_name: lead.student_name || "N/A",
-    parents_name: lead.parents_name || "N/A",
-    email: lead.email || "",
-    phone_number: lead.phone_number || "",
-    whatsapp_number: lead.whatsapp_number || "",
-    age: lead.age || "",
-    grade: lead.grade || "",
-    source: lead.source || "",
-    course_name: lead.course_name || "N/A",
-    class_type: lead.class_type || "",
-    lead_type: lead.lead_type || lead.leadType || "",
-    shift: lead.shift || "",
-    last_call: lead.last_call || "",
-    next_call: lead.next_call || "",
-    status: lead.status || lead.status || "New",
-    // backend may use `substatus` or `sub_status`
-    // Ensure both variants match by using the most recently provided value
-    sub_status: lead.substatus || lead.sub_status || "New",
-    substatus: lead.substatus || lead.sub_status || "New",
-    remarks: lead.remarks || "",
-    previous_coding_experience: lead.previous_coding_experience || "",
-    value: lead.value || "",
-    device: lead.device || "",
-    payment_type: lead.payment_type || "",
-    // school/college name normalize
-    school_college_name:
-      lead.school_college_name || lead.school_college_name || "",
-    // assigned username
-    assigned_to_username:
-      lead.assigned_to_username ||
-      lead.assigned_to ||
-      lead.assigned_to_username ||
-      "",
-    // ensure assigned_to is present for the editable input (prefer assigned_to, fallback to username)
-    assigned_to: lead.assigned_to || lead.assigned_to_username || "",
-  }));
+  const normalizedLeads = useMemo(
+    () =>
+      leads.map((lead, _idx) => ({
+        ...lead,
+        // guarantee a unique id: prefer _id, then id, then email/phone, then index
+        _id:
+          lead._id ||
+          lead.id ||
+          lead.email ||
+          lead.phone_number ||
+          `lead-${_idx}`,
+        // Use the actual backend ID without modification
+        id: lead.id || "",
+        student_name: lead.student_name || "N/A",
+        parents_name: lead.parents_name || "N/A",
+        email: lead.email || "",
+        phone_number: lead.phone_number || "",
+        whatsapp_number: lead.whatsapp_number || "",
+        age: lead.age || "",
+        grade: lead.grade || "",
+        source: lead.source || "",
+        course_name: lead.course_name || "N/A",
+        class_type: lead.class_type || "",
+        lead_type: lead.lead_type || lead.leadType || "",
+        shift: lead.shift || "",
+        last_call: lead.last_call || "",
+        next_call: lead.next_call || "",
+        status: lead.status || lead.status || "New",
+        // backend may use `substatus` or `sub_status`
+        // Ensure both variants match by using the most recently provided value
+        sub_status: lead.substatus || lead.sub_status || "New",
+        substatus: lead.substatus || lead.sub_status || "New",
+        remarks: lead.remarks || "",
+        previous_coding_experience: lead.previous_coding_experience || "",
+        value: lead.value || "",
+        device: lead.device || "",
+        payment_type: lead.payment_type || "",
+        // school/college name normalize
+        school_college_name:
+          lead.school_college_name || lead.school_college_name || "",
+        // assigned username
+        assigned_to_username:
+          lead.assigned_to_username ||
+          lead.assigned_to ||
+          lead.assigned_to_username ||
+          "",
+        // ensure assigned_to is present for the editable input (prefer assigned_to, fallback to username)
+        assigned_to: lead.assigned_to || lead.assigned_to_username || "",
+      })),
+    [leads]
+  );
 
   // Initialize remarks and selection on lead changes
   useEffect(() => {
@@ -292,20 +219,14 @@ const LeadTableDisplay = ({
     setLocalRemarks(initialRemarks);
     setSavedRemarks(initialRemarks);
     setSelectedLeads(new Set());
-    // Reset to first page when data changes.
-    // If the parent controls pagination, notify it; otherwise reset internal
-    // pagination state to page 1. IMPORTANT: only reset internal page when
-    // the PARENT does NOT control pagination. If the parent controls
-    // pagination (it passed numeric `currentPage` and a handler), do not
-    // call the parent's handler here — that would force the app back to
-    // page 1 whenever `leads` changes (breaking server-driven pagination).
+
     if (parentControlsPagination) {
       // Parent is authoritative; don't change parent's page here.
     } else {
       // Reset internal page to 1 for client-side pagination updates.
       setInternalPage(1);
     }
-  }, [leads]);
+  }, [normalizedLeads]);
 
   // Keep localRemarks in sync when a remark is updated elsewhere (or from server)
   useEffect(() => {
@@ -335,103 +256,11 @@ const LeadTableDisplay = ({
       window.removeEventListener("crm:remarkUpdated", onRemarkUpdated);
   }, [normalizedLeads]);
 
-  // Mouse horizontal scroll
-  // Smooth horizontal scroll on mouse move
-  useEffect(() => {
-    const container = tableContainerRef.current;
-    if (!container) return;
+  // (Removed previous advanced scroll behaviors: wheel vertical->horizontal translation, drag inertia, and duplicate pointer edge logic)
 
-    let scrollFactor = 0; // -1..1
-    let rafId = null;
-    let isPointerOver = false;
-
-    const edgeThreshold = 120; // px from edge
-    const maxSpeed = 28; // max px per frame (approx)
-
-    const normalize = (v) => Math.max(-1, Math.min(1, v));
-
-    const updateFromPointer = (clientX) => {
-      const { left, right } = container.getBoundingClientRect();
-      const width = right - left;
-
-      if (clientX < left + edgeThreshold) {
-        const dist = clientX - left; // 0..edgeThreshold
-        const factor = (edgeThreshold - dist) / edgeThreshold; // 0..1
-        scrollFactor = -normalize(Math.pow(factor, 1.25));
-      } else if (clientX > right - edgeThreshold) {
-        const dist = right - clientX; // 0..edgeThreshold
-        const factor = (edgeThreshold - dist) / edgeThreshold; // 0..1
-        scrollFactor = normalize(Math.pow(factor, 1.25));
-      } else {
-        scrollFactor = 0;
-      }
-    };
-
-    const onPointerMove = (e) => {
-      // Support PointerEvent and MouseEvent
-      const clientX = e.clientX;
-      updateFromPointer(clientX);
-    };
-
-    const onPointerEnter = (e) => {
-      isPointerOver = true;
-      updateFromPointer(e.clientX);
-    };
-
-    const onPointerLeave = () => {
-      isPointerOver = false;
-      scrollFactor = 0;
-    };
-
-    const step = () => {
-      if (scrollFactor !== 0 && container) {
-        const maxScrollLeft = container.scrollWidth - container.clientWidth;
-        // speed per frame with easing
-        const delta =
-          Math.sign(scrollFactor) *
-          Math.min(maxSpeed, Math.abs(scrollFactor) * maxSpeed);
-        const next = container.scrollLeft + delta;
-        // clamp
-        container.scrollLeft = Math.max(0, Math.min(maxScrollLeft, next));
-        // if we've reached the bounds, stop further movement
-        if (
-          container.scrollLeft === 0 ||
-          container.scrollLeft === maxScrollLeft
-        ) {
-          // no-op (still continue to monitor pointer)
-        }
-      }
-      rafId = requestAnimationFrame(step);
-    };
-
-    // Prefer pointer events where available
-    container.addEventListener("pointermove", onPointerMove);
-    container.addEventListener("pointerenter", onPointerEnter);
-    container.addEventListener("pointerleave", onPointerLeave);
-    // Fallback for older browsers: mouse events
-    container.addEventListener("mousemove", onPointerMove);
-    container.addEventListener("mouseenter", onPointerEnter);
-    container.addEventListener("mouseleave", onPointerLeave);
-
-    rafId = requestAnimationFrame(step);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      container.removeEventListener("pointermove", onPointerMove);
-      container.removeEventListener("pointerenter", onPointerEnter);
-      container.removeEventListener("pointerleave", onPointerLeave);
-      container.removeEventListener("mousemove", onPointerMove);
-      container.removeEventListener("mouseenter", onPointerEnter);
-      container.removeEventListener("mouseleave", onPointerLeave);
-    };
-  }, []);
-
-  // Pagination (support parent-controlled pagination)
-  const computedTotalPages = Math.ceil(normalizedLeads.length / leadsPerPage);
+  const computedTotalPages = Math.ceil(normalizedLeads.length / pageSize) || 1;
   const totalPages = parentTotalPages || computedTotalPages;
-  // Consider pagination controlled by parent only when parent provides a
-  // numeric `currentPage` and a handler. This avoids treating null/undefined
-  // as a signal that parent is in control.
+
   const parentControlsPagination =
     typeof parentCurrentPage === "number" &&
     typeof parentOnPageChange === "function";
@@ -440,7 +269,6 @@ const LeadTableDisplay = ({
     ? parentCurrentPage
     : internalPage;
 
-  // Sort leads with newest first (based on createdAt/addDate if available)
   const sortedLeads = [...normalizedLeads].sort((a, b) => {
     const dateA = new Date(a.created_at || a.addDate || 0);
     const dateB = new Date(b.created_at || b.addDate || 0);
@@ -451,10 +279,7 @@ const LeadTableDisplay = ({
   // appropriate subset of `leads`. Otherwise slice the sorted leads by internal pagination.
   const currentLeads = parentControlsPagination
     ? sortedLeads
-    : sortedLeads.slice(
-        (currentPage - 1) * leadsPerPage,
-        currentPage * leadsPerPage
-      );
+    : sortedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Scroll table container to top when currentPage changes
   useEffect(() => {
@@ -524,7 +349,46 @@ const LeadTableDisplay = ({
   };
 
   // Debug log to check incoming leads data
-  console.log("Incoming leads data:", leads);
+  // Inline update handlers for course_type & class_type
+  const handleCourseTypeChange = async (leadId, value) => {
+    try {
+      await leadService.updateLead(leadId, { course_type: value }, authToken);
+    } catch (e) {
+      console.warn("Failed to update course_type", e);
+    }
+  };
+
+  const handleClassTypeChange = async (leadId, value) => {
+    try {
+      await leadService.updateLead(leadId, { class_type: value }, authToken);
+    } catch (e) {
+      console.warn("Failed to update class_type", e);
+    }
+  };
+
+  // Forward scheduled_taken changes (legacy prop name kept for row component)
+  const handleScheduledTakenChange = async (leadId, value) => {
+    try {
+      await leadService.updateLead(
+        leadId,
+        { scheduled_taken: value },
+        authToken
+      );
+      if (typeof onDemoScheduledChange === "function") {
+        onDemoScheduledChange(leadId, value);
+      }
+    } catch (e) {
+      console.warn("Failed to update scheduled_taken", e);
+    }
+  };
+
+  const visibleKeys = useMemo(
+    () =>
+      Object.entries(columns)
+        .filter(([, c]) => c.visible)
+        .map(([k]) => k),
+    [columns]
+  );
 
   if (!leads || leads.length === 0) {
     return (
@@ -567,7 +431,10 @@ const LeadTableDisplay = ({
           <ChevronRightIcon className="h-5 w-5 text-gray-600" />
         </button>
 
-        <div className="overflow-x-auto" ref={tableContainerRef}>
+        <div
+          className="overflow-x-auto custom-scrollbar"
+          ref={tableContainerRef}
+        >
           <DndContext collisionDetection={closestCenter}>
             <SortableContext
               items={currentLeads.map((l) => l._id)}
@@ -609,10 +476,6 @@ const LeadTableDisplay = ({
                 <tbody className="bg-white divide-y divide-gray-200">
                   {(() => {
                     // Recompute the visible keys in the exact same order used above
-                    const visibleKeys = Object.entries(columns)
-                      .filter(([, { visible }]) => visible)
-                      .map(([k]) => k);
-
                     return currentLeads.map((lead, index) => (
                       <DraggableRow
                         key={lead._id}
@@ -622,6 +485,10 @@ const LeadTableDisplay = ({
                           _users: users || [],
                           _usersLoading: usersLoading,
                           _currentUserRole: currentUserRole,
+                          class_type: lead.class_type || "",
+                          course_type: lead.course_type || "",
+                          scheduled_taken:
+                            lead.scheduled_taken || lead.demo_scheduled || "No",
                         }}
                         columns={columns}
                         columnOrder={visibleKeys}
@@ -641,10 +508,14 @@ const LeadTableDisplay = ({
                         onGradeChange={onGradeChange}
                         onCourseDurationChange={onCourseDurationChange}
                         onShiftChange={onShiftChange}
-                        onDemoScheduledChange={onDemoScheduledChange}
+                        // onDemoScheduledChange prop name retained for backward compatibility.
+                        // Internally this updates canonical scheduled_taken field.
+                        onDemoScheduledChange={handleScheduledTakenChange}
                         onAssignedToChange={onAssignedToChange}
                         authToken={authToken}
                         changeLogService={changeLogService}
+                        onCourseTypeChange={handleCourseTypeChange}
+                        onClassTypeChange={handleClassTypeChange}
                       />
                     ));
                   })()}

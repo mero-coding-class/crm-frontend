@@ -23,7 +23,8 @@ const LeadEditForm = ({
     "Instagram",
     "Other",
   ];
-  const classTypeOptions = ["Select", "Physical", "Online"];
+  const classTypeOptions = ["Select", "One to One", "Group"];
+  const courseTypeOptions = ["Select", "Physical", "Online"];
   const shiftOptions = [
     "Select",
     "7 A.M. - 9 A.M.",
@@ -225,18 +226,18 @@ const LeadEditForm = ({
         </select>
       </div>
 
-      {/* Demo Scheduled */}
+      {/* Scheduled Taken (replaces legacy Demo Scheduled) */}
       <div className="flex flex-col">
         <label
-          htmlFor="demo_scheduled"
+          htmlFor="scheduled_taken"
           className="block text-sm font-medium text-gray-700 mb-1"
         >
-          Demo Scheduled
+          Scheduled Taken
         </label>
         <select
-          id="demo_scheduled"
-          name="demo_scheduled"
-          value={formData.demo_scheduled || ""}
+          id="scheduled_taken"
+          name="scheduled_taken"
+          value={formData.scheduled_taken || formData.demo_scheduled || ""}
           onChange={onChange}
           className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
         >
@@ -448,19 +449,41 @@ const LeadEditForm = ({
       {/* Class Type */}
       <div className="flex flex-col">
         <label
-          htmlFor="classType"
+          htmlFor="class_type"
           className="block text-sm font-medium text-gray-700 mb-1"
         >
           Class Type
         </label>
         <select
-          id="classType"
-          name="classType"
-          value={formData.classType}
+          id="class_type"
+          name="class_type"
+          value={formData.class_type}
           onChange={onChange}
           className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
         >
           {classTypeOptions.map((option) => (
+            <option key={option} value={option === "Select" ? "" : option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col">
+        <label
+          htmlFor="course_type"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          Course Type
+        </label>
+        <select
+          id="course_type"
+          name="course_type"
+          value={formData.course_type}
+          onChange={onChange}
+          className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        >
+          {courseTypeOptions.map((option) => (
             <option key={option} value={option === "Select" ? "" : option}>
               {option}
             </option>
