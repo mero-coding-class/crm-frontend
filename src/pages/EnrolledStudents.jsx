@@ -1,6 +1,12 @@
 // src/pages/EnrolledStudents.jsx
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import Loader from "../components/common/Loader";
 import DelayedLoader from "../components/common/DelayedLoader";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -24,108 +30,79 @@ async function safeFetchWithRetries(
   backoff = 300,
   timeoutMs = 8000
 ) {
-  // Reuse in-flight request if present
-  if (_ongoingRequests.has(url)) {
-    try {
-      return await _ongoingRequests.get(url);
-    } catch (e) {
-      // previous request failed; fall through to new attempt
-    }
-  }
-
   const controller = new AbortController();
   const mergedOpts = { ...opts, signal: controller.signal };
 
-  const attemptFetch = async () => {
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      let timeoutHandle;
-      try {
-        // apply a per-attempt timeout
-        const p = fetch(url, mergedOpts);
-        const race = new Promise((_, rej) => {
-          timeoutHandle = setTimeout(() => {
-            try {
-              controller.abort();
-            } catch (e) {}
-            rej(new Error("timeout"));
-          }, timeoutMs);
-        });
-        const resp = await Promise.race([p, race]);
-        clearTimeout(timeoutHandle);
-        return resp;
-      } catch (e) {
-        clearTimeout(timeoutHandle);
-        const isLast = attempt === retries;
-        // Only warn on the final failure to avoid noisy repeated logs.
-        if (isLast) {
-          console.warn(
-            `safeFetch: network error when fetching ${url} (attempt ${
-              attempt + 1
-            }/${retries + 1})`,
-            e && e.message ? e.message : e
-          );
-          console.error(`safeFetch: exhausted retries for ${url}`);
-        } else {
-          // debug-level message for intermediate attempts (keeps console cleaner)
-          if (typeof console.debug === "function") {
-            console.debug(
-              `safeFetch: retrying ${url} (attempt ${attempt + 1}/${
-                retries + 1
-              })`
-            );
-          }
-        }
-        if (isLast) return null;
-        // exponential backoff
-        await new Promise((res) =>
-          setTimeout(res, backoff * Math.pow(2, attempt))
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let timeoutHandle;
+    try {
+      const p = fetch(url, mergedOpts);
+      const race = new Promise((_, rej) => {
+        timeoutHandle = setTimeout(() => {
+          try {
+            controller.abort();
+          } catch (e) {}
+          rej(new Error("timeout"));
+        }, timeoutMs);
+      });
+      const resp = await Promise.race([p, race]);
+      clearTimeout(timeoutHandle);
+      return resp;
+    } catch (e) {
+      clearTimeout(timeoutHandle);
+      const isLast = attempt === retries;
+      if (isLast) {
+        console.warn(
+          `safeFetch: network error when fetching ${url} (attempt ${
+            attempt + 1
+          }/${retries + 1})`,
+          e && e.message ? e.message : e
+        );
+        console.error(`safeFetch: exhausted retries for ${url}`);
+      } else if (typeof console.debug === "function") {
+        console.debug(
+          `safeFetch: retrying ${url} (attempt ${attempt + 1}/$${retries + 1})`
         );
       }
+      if (isLast) return null;
+      await new Promise((res) =>
+        setTimeout(res, backoff * Math.pow(2, attempt))
+      );
     }
-    return null;
-  };
-
-  const prom = attemptFetch().finally(() => {
-    // ensure we don't keep the promise around after completion
-    try {
-      _ongoingRequests.delete(url);
-    } catch (e) {}
-  });
-  _ongoingRequests.set(url, prom);
-  return prom;
+  }
+  return null;
 }
 
 const EnrolledStudents = () => {
   const { authToken } = useAuth();
   const [allStudents, setAllStudents] = useState([]);
   const [loading, setLoading] = useState(true);
-  // `initialLoad` tracks the very first load; we show the full-page loader
-  // only for the initial load to avoid replacing the table while the user
-  // is typing and background debounced fetches occur. Use `loading` for
-  // ongoing fetches but don't hide table on subsequent loads.
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
+  const [filterPaymentNotCompleted, setFilterPaymentNotCompleted] =
+    useState(false);
+  const [filterScheduledTaken, setFilterScheduledTaken] = useState(""); // "", "Yes", "No"
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+  const [totalPages, setTotalPages] = useState(1);
+  const [teachers, setTeachers] = useState([]);
+  const [courses, setCourses] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState({
     show: false,
     message: "",
     type: "success",
   });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
-  const [filterPaymentNotCompleted, setFilterPaymentNotCompleted] =
-    useState(false);
-  // New scheduled_taken filter (replaces demo_scheduled). Keep legacy filterDemoTaken temporarily for UI label reuse.
-  const [filterScheduledTaken, setFilterScheduledTaken] = useState("");
-  const [filterDemoTaken, setFilterDemoTaken] = useState("");
-  // Refs to hold latest filter values so fetchEnrolledStudents can be stable
-  const searchQueryRef = React.useRef(searchQuery);
-  const searchLastPaymentDateRef = React.useRef(searchLastPaymentDate);
-  const filterPaymentNotCompletedRef = React.useRef(filterPaymentNotCompleted);
-  const filterScheduledTakenRef = React.useRef(filterScheduledTaken);
 
-  // keep refs in sync with state
+  // Refs for debounced server filter fetching
+  const searchQueryRef = useRef(searchQuery);
+  const searchLastPaymentDateRef = useRef(searchLastPaymentDate);
+  const filterPaymentNotCompletedRef = useRef(filterPaymentNotCompleted);
+  const filterScheduledTakenRef = useRef(filterScheduledTaken);
+
   useEffect(() => {
     searchQueryRef.current = searchQuery;
   }, [searchQuery]);
@@ -138,15 +115,11 @@ const EnrolledStudents = () => {
   useEffect(() => {
     filterScheduledTakenRef.current = filterScheduledTaken;
   }, [filterScheduledTaken]);
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 20;
-  const [totalPages, setTotalPages] = useState(1);
-  const [courses, setCourses] = useState([]);
-  // Teachers for assigned_teacher dropdown
-  const [teachers, setTeachers] = useState([]);
 
   const TEACHERS_LIST_URL = `${BASE_URL}/teachers/`;
+  // Explicit absolute API base required for enrollment updates (PUT/PATCH)
+  const ENROLLMENTS_API_BASE =
+    "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/";
 
   const fetchTeachers = useCallback(async () => {
     if (!authToken) return;
@@ -579,6 +552,8 @@ const EnrolledStudents = () => {
         "course",
         "batchname",
         "assigned_teacher",
+        "scheduled_taken",
+        "payment_type",
         "total_payment",
         "first_installment",
         "second_installment",
@@ -755,6 +730,8 @@ const EnrolledStudents = () => {
             "remarks",
             // allow enrollment/lead-level demo scheduling and shift edits
             "demo_scheduled",
+            "scheduled_taken",
+            "payment_type",
             "shift",
             "invoice",
           ]);
@@ -830,6 +807,23 @@ const EnrolledStudents = () => {
           } catch (e) {
             // ignore
           }
+          // Legacy top-level demo_scheduled mapping if present
+          if (
+            payload.demo_scheduled !== undefined &&
+            payload.scheduled_taken === undefined
+          ) {
+            payload.scheduled_taken = payload.demo_scheduled;
+          }
+          // If payment_type provided inside nested lead (unlikely) mirror up
+          try {
+            const leadObj = value.lead || {};
+            if (
+              leadObj.payment_type !== undefined &&
+              payload.payment_type === undefined
+            ) {
+              payload.payment_type = leadObj.payment_type;
+            }
+          } catch (e) {}
         } else {
           // Single-field updates
           // If this was a lead.* field, send nested lead object to the server
@@ -972,10 +966,63 @@ const EnrolledStudents = () => {
           console.debug("scheduled_taken normalization failed:", e);
         }
 
-        // Debug log outgoing payload and target URL to help trace 400 responses
+        // Decide method: if full-object (modal) update and touching any of key fields, use PUT
+        let method = "PATCH";
+        if (
+          field === null &&
+          (Object.prototype.hasOwnProperty.call(payload, "scheduled_taken") ||
+            Object.prototype.hasOwnProperty.call(payload, "payment_type") ||
+            Object.prototype.hasOwnProperty.call(payload, "course_duration"))
+        ) {
+          method = "PUT";
+        }
+
+        // If using PUT, build a full representation to avoid unintentionally clearing fields
+        if (method === "PUT") {
+          try {
+            const current = prevSnapshot.find(
+              (s) => String(s.id) === String(studentId)
+            );
+            if (current) {
+              const editable = [
+                "student_name",
+                "parents_name",
+                "email",
+                "phone_number",
+                "course",
+                "batchname",
+                "assigned_teacher",
+                "course_duration",
+                "starting_date",
+                "total_payment",
+                "first_installment",
+                "second_installment",
+                "third_installment",
+                "last_pay_date",
+                "payment_completed",
+                "remarks",
+                "scheduled_taken",
+                "payment_type",
+                "shift",
+              ];
+              const fullPayload = {};
+              editable.forEach((k) => {
+                if (payload[k] !== undefined) fullPayload[k] = payload[k];
+                else if (current[k] !== undefined) fullPayload[k] = current[k];
+                else if (current.lead && current.lead[k] !== undefined)
+                  fullPayload[k] = current.lead[k];
+              });
+              payload = fullPayload;
+            }
+          } catch (e) {
+            console.warn("Failed to construct full PUT payload", e);
+          }
+        }
+
         try {
-          console.debug("EnrolledStudents -> PATCH payload", {
-            url: `${BASE_URL}/enrollments/${studentId}/`,
+          console.debug("Enrollment update outgoing", {
+            method,
+            url: `${ENROLLMENTS_API_BASE}${studentId}/`,
             payload,
           });
         } catch (e) {}
@@ -1037,8 +1084,8 @@ const EnrolledStudents = () => {
             credentials: "include",
           });
         } else {
-          response = await fetch(`${BASE_URL}/enrollments/${studentId}/`, {
-            method: "PATCH",
+          response = await fetch(`${ENROLLMENTS_API_BASE}${studentId}/`, {
+            method,
             headers: {
               "Content-Type": "application/json",
               Authorization: `Token ${authToken}`,
@@ -1046,6 +1093,97 @@ const EnrolledStudents = () => {
             body: JSON.stringify(payload),
             credentials: "include",
           });
+        }
+        if (!response.ok) {
+          // Retry 1: scheduled_taken boolean -> "Yes" / "No"
+          if (
+            response.status === 400 &&
+            payload &&
+            Object.prototype.hasOwnProperty.call(payload, "scheduled_taken") &&
+            typeof payload.scheduled_taken === "boolean"
+          ) {
+            try {
+              const retryPayload = {
+                ...payload,
+                scheduled_taken: payload.scheduled_taken ? "Yes" : "No",
+              };
+              const retryResp = await fetch(
+                `${ENROLLMENTS_API_BASE}${studentId}/`,
+                {
+                  method,
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                  },
+                  body: JSON.stringify(retryPayload),
+                  credentials: "include",
+                }
+              );
+              if (retryResp.ok) response = retryResp;
+            } catch (e) {
+              console.debug("scheduled_taken retry failed", e);
+            }
+          }
+          // Retry 2: payment_type needs nested lead
+          if (
+            !response.ok &&
+            response.status === 400 &&
+            payload &&
+            Object.prototype.hasOwnProperty.call(payload, "payment_type") &&
+            !payload.lead
+          ) {
+            try {
+              const retryPayload = {
+                ...payload,
+                lead: { payment_type: payload.payment_type },
+              };
+              const retryResp = await fetch(
+                `${ENROLLMENTS_API_BASE}${studentId}/`,
+                {
+                  method,
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                  },
+                  body: JSON.stringify(retryPayload),
+                  credentials: "include",
+                }
+              );
+              if (retryResp.ok) response = retryResp;
+            } catch (e) {
+              console.debug("payment_type nested retry failed", e);
+            }
+          }
+          // Retry 3: course_duration needs nested lead
+          if (
+            !response.ok &&
+            response.status === 400 &&
+            payload &&
+            Object.prototype.hasOwnProperty.call(payload, "course_duration") &&
+            !payload.lead
+          ) {
+            try {
+              const retryPayload = {
+                ...payload,
+                lead: { course_duration: payload.course_duration },
+              };
+              const retryResp = await fetch(
+                `${ENROLLMENTS_API_BASE}${studentId}/`,
+                {
+                  method,
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                  },
+                  body: JSON.stringify(retryPayload),
+                  credentials: "include",
+                }
+              );
+              if (retryResp.ok) response = retryResp;
+            } catch (e) {
+              console.debug("course_duration nested retry failed", e);
+            }
+          }
         }
         if (!response.ok) {
           let errorText = await response.text();
@@ -1063,8 +1201,9 @@ const EnrolledStudents = () => {
               errorData.detail || response.statusText
             }`
           );
-          console.error("PATCH error details:", {
-            url: `${BASE_URL}/enrollments/${studentId}/`,
+          console.error("Enrollment update error details:", {
+            method,
+            url: `${ENROLLMENTS_API_BASE}${studentId}/`,
             payload,
             status: response.status,
             response: errorData,
@@ -1318,8 +1457,8 @@ const EnrolledStudents = () => {
               Demo Taken
             </label>
             <select
-              value={filterDemoTaken}
-              onChange={(e) => setFilterDemoTaken(e.target.value)}
+              value={filterScheduledTaken}
+              onChange={(e) => setFilterScheduledTaken(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
             >
               <option value="">All</option>
@@ -1343,7 +1482,7 @@ const EnrolledStudents = () => {
                 setSearchQuery("");
                 setSearchLastPaymentDate("");
                 setFilterPaymentNotCompleted(false);
-                setFilterDemoTaken("");
+                setFilterScheduledTaken("");
                 // set page to 1 and fetch fresh data
                 setCurrentPage(1);
                 // call fetch directly for immediate feedback

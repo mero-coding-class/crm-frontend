@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 import { useAuth } from "../context/AuthContext";
 import { BASE_URL } from "../config";
 import { XMarkIcon } from "@heroicons/react/24/outline";
@@ -480,13 +481,7 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     "6 P.M. - 8 P.M.",
     "7 P.M. - 8 P.M.",
   ];
-  const paymentTypeOptions = [
-    "Select",
-    "Cash",
-    "Online",
-    "Bank Transfer",
-    "Cheque",
-  ];
+  const paymentTypeOptions = PAYMENT_TYPE_OPTIONS; // centralized list
   const deviceOptions = ["Select", "Yes", "No"];
   const previousCodingExpOptions = [
     "Select",

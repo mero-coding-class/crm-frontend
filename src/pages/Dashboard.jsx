@@ -1,6 +1,6 @@
 // C:/Users/aryal/Desktop/EDU_CRM/client/src/pages/Dashboard.jsx
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import Loader from "../components/common/Loader";
 import DelayedLoader from "../components/common/DelayedLoader";
@@ -8,7 +8,6 @@ import DelayedLoader from "../components/common/DelayedLoader";
 import StatCard from "../components/dashboard/StatCard";
 import LatestLeadsTable from "../components/dashboard/LatestLeadsTable";
 import TopCoursesTable from "../components/dashboard/TopCoursesTable";
-
 
 import { leadService } from "../services/api";
 import { BASE_URL } from "../config";
@@ -50,7 +49,19 @@ const ChartContainer = ({ title, description, children }) => (
 );
 
 const Dashboard = () => {
-  const { authToken } = useAuth();
+  const { authToken, user } = useAuth();
+  // Determine role (prefer auth context; fallback to localStorage)
+  const userRole = (
+    user?.role ||
+    localStorage.getItem("role") ||
+    ""
+  ).toLowerCase();
+  const isAdminLike = [
+    "admin",
+    "superadmin",
+    "super admin",
+    "super-admin",
+  ].includes(userRole);
   const [allLeads, setAllLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -61,6 +72,48 @@ const Dashboard = () => {
   const [trashedLeads, setTrashedLeads] = useState([]);
   const [enrollmentsCount, setEnrollmentsCount] = useState(0);
   const [trashCount, setTrashCount] = useState(0);
+
+  // Helper to fetch ALL pages for a paginated endpoint that returns either
+  // an array or an object with `results` & optional `next` (Django DRF style).
+  const fetchAllPaginated = useCallback(
+    async (baseUrl) => {
+      let url = baseUrl;
+      const out = [];
+      const headers = { "Content-Type": "application/json" };
+      if (authToken) headers.Authorization = `Token ${authToken}`;
+      const seenUrls = new Set();
+      while (url && !seenUrls.has(url)) {
+        seenUrls.add(url);
+        try {
+          const res = await fetch(url, {
+            headers,
+            credentials: authToken ? "include" : "same-origin",
+          });
+          if (!res.ok) break;
+          const json = await res.json().catch(() => null);
+          if (!json) break;
+          if (Array.isArray(json)) {
+            out.push(...json);
+            break; // no pagination metadata
+          }
+          if (Array.isArray(json.results)) out.push(...json.results);
+          else if (Array.isArray(json.data)) out.push(...json.data);
+          else if (Array.isArray(json.items)) out.push(...json.items);
+          else if (Array.isArray(json.leads)) out.push(...json.leads);
+          else if (Array.isArray(json.enrollments))
+            out.push(...json.enrollments);
+          // Follow typical DRF 'next' link if present
+          if (json.next) url = json.next;
+          else break;
+        } catch (e) {
+          console.warn("Pagination fetch failed for", url, e);
+          break;
+        }
+      }
+      return out;
+    },
+    [authToken]
+  );
 
   // Pie segment colors
   const PIE_COLORS = [
@@ -81,57 +134,26 @@ const Dashboard = () => {
       setError(null);
       try {
         if (!authToken) throw new Error("Not authenticated.");
-        const leads = await leadService.getLeads(authToken);
-        setAllLeads(Array.isArray(leads) ? leads : []);
-        // Also fetch enrollments and trashed leads (arrays) so charts can include them
-        try {
-          const headers = { "Content-Type": "application/json" };
-          if (authToken) headers.Authorization = `Token ${authToken}`;
-
-          const [enrRes, trashRes] = await Promise.all([
-            fetch(`${BASE_URL}/enrollments/`, { method: "GET", headers }),
-            fetch(`${BASE_URL}/trash/`, { method: "GET", headers }),
-          ]);
-
-          const normalizeList = async (res) => {
-            if (!res || !res.ok) return [];
-            try {
-              let data = await res.json();
-              if (Array.isArray(data)) return data;
-              if (Array.isArray(data.results)) return data.results;
-              if (Array.isArray(data.data)) return data.data;
-              return [];
-            } catch (e) {
-              return [];
-            }
-          };
-
-          const [enrList, trashList] = await Promise.all([
-            normalizeList(enrRes),
-            normalizeList(trashRes),
-          ]);
-
-          setEnrollmentsCount(Array.isArray(enrList) ? enrList.length : 0);
-          setTrashCount(Array.isArray(trashList) ? trashList.length : 0);
-          // keep raw arrays for chart aggregation
-          if (Array.isArray(enrList)) setEnrollments(enrList);
-          if (Array.isArray(trashList)) setTrashedLeads(trashList);
-        } catch (err) {
-          console.warn("Failed to fetch enrollments/trash lists:", err);
-          setEnrollmentsCount(0);
-          setTrashCount(0);
-          setTrashedLeads([]);
-        }
+        // Fetch all pages for each source so monthly chart & totals are accurate
+        const [leadsAll, enrollmentsAll, trashAll] = await Promise.all([
+          fetchAllPaginated(`${BASE_URL}/leads/`),
+          fetchAllPaginated(`${BASE_URL}/enrollments/`),
+          fetchAllPaginated(`${BASE_URL}/trash/`),
+        ]);
+        setAllLeads(leadsAll);
+        setEnrollments(enrollmentsAll);
+        setTrashedLeads(trashAll);
+        setEnrollmentsCount(enrollmentsAll.length);
+        setTrashCount(trashAll.length);
       } catch (err) {
         setError(err.message || "Failed to fetch leads");
       } finally {
         setLoading(false);
       }
     };
-    fetchLeadsData();
-  }, [authToken]);
+    if (authToken) fetchLeadsData();
+  }, [authToken, fetchAllPaginated]);
 
-  // Fetch courses so we can resolve course names for dashboard tables
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -611,8 +633,12 @@ const Dashboard = () => {
       monthLabels[mObj.key] = mObj.label;
     });
     enrollments.forEach((enr) => {
+      // Prefer explicit add_date (user requested) then enrollment_date then created_at
       const mObj = getMonth(
-        enr.enrollment_date || enr.created_at || enr.add_date
+        enr.add_date ||
+          enr.enrollment_date ||
+          enr.starting_date ||
+          enr.created_at
       );
       if (!mObj || !mObj.key) return;
       enrollmentsByMonth[mObj.key] = (enrollmentsByMonth[mObj.key] || 0) + 1;
@@ -717,13 +743,15 @@ const Dashboard = () => {
           description="Leads added in current month"
           colorClass="text-green-600 bg-green-100"
         /> */}
-        <StatCard
-          title="Revenue This Month"
-          value={dashboardData.stats.revenueThisMonth}
-          icon={CurrencyDollarIcon}
-          description='Sum of "value" for Converted leads'
-          colorClass="text-teal-600 bg-teal-100"
-        />
+        {isAdminLike && (
+          <StatCard
+            title="Revenue This Month"
+            value={dashboardData.stats.revenueThisMonth}
+            icon={CurrencyDollarIcon}
+            description='Sum of "value" for Converted leads'
+            colorClass="text-teal-600 bg-teal-100"
+          />
+        )}
         {/* Upcoming Classes/Calls intentionally removed (replaced by Trash Students) */}
       </div>
 

@@ -344,11 +344,7 @@ const RegisterUser = () => {
           Authorization: `Token ${authToken}`,
           "Content-Type": "application/json",
         },
-        // Send both possible field names for compatibility (backend may expect either)
-        body: JSON.stringify({
-          name: teacherName.trim(),
-          teacher_name: teacherName.trim(),
-        }),
+        body: JSON.stringify({ name: teacherName.trim() }),
       });
       if (!res.ok) {
         let err = await res.text();
@@ -384,10 +380,7 @@ const RegisterUser = () => {
           Authorization: `Token ${authToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name: editTeacherName.trim(),
-          teacher_name: editTeacherName.trim(),
-        }),
+        body: JSON.stringify({ name: editTeacherName.trim() }),
       });
       if (!res.ok) {
         let err = await res.text();

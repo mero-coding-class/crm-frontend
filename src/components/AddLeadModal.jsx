@@ -2,10 +2,11 @@ import {
   statusOptions,
   subStatusOptions,
 } from "../constants/leadStatusOptions";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";``
 import { useAuth } from "../context/AuthContext";
 import { BASE_URL } from "../config";
 import { XMarkIcon } from "@heroicons/react/24/outline";
+import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 
 // Helper function to get current date in YYYY-MM-DD format
 const getTodayDate = () => {
@@ -478,13 +479,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     </select>
   </div>;
 
-  const paymentTypeOptions = [
-    "Select",
-    "Cash",
-    "Office QR",
-    "Bank Transfer",
-    "Cheque",
-  ];
+  const paymentTypeOptions = PAYMENT_TYPE_OPTIONS; // centralized constant
   const previousCodingExpOptions = [
     "Select",
     "None",

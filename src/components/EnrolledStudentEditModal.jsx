@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 import {
   XMarkIcon,
   DocumentArrowDownIcon,
@@ -29,6 +30,7 @@ const EnrolledStudentEditModal = ({
       batchname: student?.batchname ?? "", // backend field
       assigned_teacher: student?.assigned_teacher ?? "",
       course_duration: student?.course_duration ?? lead.course_duration ?? "",
+      payment_type: student?.payment_type ?? lead.payment_type ?? "",
       starting_date:
         student?.starting_date || ""
           ? String(student.starting_date || "").split("T")[0]
@@ -134,6 +136,7 @@ const EnrolledStudentEditModal = ({
       "last_pay_date",
       "next_pay_date",
       "payment_completed",
+      "payment_type",
       "remarks",
     ];
     const obj = {};
@@ -1033,6 +1036,32 @@ const EnrolledStudentEditModal = ({
               onChange={handleChange}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
+          </div>
+          <div>
+            <label
+              htmlFor="payment_type"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Payment Type
+            </label>
+            <select
+              name="payment_type"
+              id="payment_type"
+              value={formData.payment_type || formData.lead?.payment_type || ""}
+              onChange={(e) => {
+                handleChange(e);
+                handleLeadChange({
+                  target: { name: "payment_type", value: e.target.value },
+                });
+              }}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              <option value="">Select</option>
+              <option value="Cash">Cash</option>
+              <option value="Office QR">Office QR</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cheque">Cheque</option>
+            </select>
           </div>
 
           <div>

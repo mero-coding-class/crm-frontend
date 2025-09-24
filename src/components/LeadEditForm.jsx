@@ -1,4 +1,5 @@
 import React from "react";
+import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 
 const LeadEditForm = ({
   formData,
@@ -41,13 +42,8 @@ const LeadEditForm = ({
     "6 P.M. - 8 P.M.",
     "7 P.M. - 8 P.M.",
   ];
-  const paymentTypeOptions = [
-    "Select",
-    "Cash",
-    "Online",
-    "Bank Transfer",
-    "Cheque",
-  ];
+  // Centralized payment type options (kept in src/constants/paymentOptions.js)
+  const paymentTypeOptions = PAYMENT_TYPE_OPTIONS;
   const deviceOptions = ["Select", "Yes", "No"];
   const previousCodingExpOptions = [
     "Select",
