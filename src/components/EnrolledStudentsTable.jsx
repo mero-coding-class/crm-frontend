@@ -159,6 +159,7 @@ const EnrolledStudentsTable = ({
   onUpdatePaymentStatus,
   onUpdateField,
   courses = [],
+  teachers = [],
   currentPage = 1,
   totalPages = 1,
   onPageChange,
@@ -182,13 +183,14 @@ const EnrolledStudentsTable = ({
     batchname: { label: "Batch Name", visible: true },
     assigned_teacher: { label: "Assigned Teacher", visible: true },
     course_duration: { label: "Course Duration", visible: true },
-    demo_scheduled: { label: "Demo Taken", visible: true },
+    scheduled_taken: { label: "Demo Taken", visible: true },
     starting_date: { label: "Starting Date", visible: true },
     total_payment: { label: "Total Payment", visible: true },
     first_installment: { label: "1st Installment", visible: false },
     second_installment: { label: "2nd Installment", visible: false },
     third_installment: { label: "3rd Installment", visible: false },
     last_pay_date: { label: "Last Pay Date", visible: true },
+    next_pay_date: { label: "Next Pay Date", visible: true },
     payment_completed: { label: "Payment Completed", visible: true },
     adset_name: { label: "Adset Name", visible: false },
     remarks: { label: "Remarks", visible: false },
@@ -407,6 +409,7 @@ const EnrolledStudentsTable = ({
                       handlePaymentStatusChange={onUpdatePaymentStatus}
                       onUpdateField={onUpdateField}
                       courses={courses}
+                      teachers={teachers}
                     />
                   );
                 })}
@@ -433,6 +436,7 @@ const SortableStudentRow = ({
   handlePaymentStatusChange,
   onUpdateField,
   courses = [],
+  teachers = [],
 }) => {
   const {
     attributes,
@@ -559,8 +563,8 @@ const SortableStudentRow = ({
               </td>
             );
           }
-          // Render demo_scheduled as a select (nested lead field)
-          if (leadKey === "demo_scheduled") {
+          // Render scheduled_taken (legacy demo_scheduled) as a select (nested lead field)
+          if (leadKey === "scheduled_taken" || leadKey === "demo_scheduled") {
             return (
               <td
                 key={key}
@@ -569,7 +573,15 @@ const SortableStudentRow = ({
                 <select
                   value={val || ""}
                   onChange={(e) =>
-                    onUpdateField(student.id, `lead.${leadKey}`, e.target.value)
+                    onUpdateField(
+                      student.id,
+                      `lead.${
+                        leadKey === "demo_scheduled"
+                          ? "demo_scheduled"
+                          : "scheduled_taken"
+                      }`,
+                      e.target.value
+                    )
                   }
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
                 >
@@ -686,16 +698,44 @@ const SortableStudentRow = ({
                 onSave={(v) => onUpdateField(student.id, key, v)}
               />
             );
-          case "assigned_teacher":
+          case "assigned_teacher": {
+            // Accept either id stored in assigned_teacher or a separate assigned_teacher_name
+            const currentId = student.assigned_teacher;
+            const currentName =
+              student.assigned_teacher_name || student.assigned_teacher_label;
             return (
-              <EditableTextCell
+              <td
                 key={key}
-                field={key}
-                cellClass="min-w-[130px]"
-                value={student[key] ?? (student.lead ? student.lead[key] : "")}
-                onSave={(v) => onUpdateField(student.id, key, v)}
-              />
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[160px]"
+              >
+                <select
+                  value={currentId || ""}
+                  onChange={(e) => {
+                    const selectedId = e.target.value || null;
+                    if (selectedId) {
+                      const match = teachers.find(
+                        (t) => String(t.id) === String(selectedId)
+                      );
+                      onUpdateField(student.id, "assigned_teacher", {
+                        id: selectedId,
+                        name: match ? match.name : undefined,
+                      });
+                    } else {
+                      onUpdateField(student.id, "assigned_teacher", null);
+                    }
+                  }}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 bg-white"
+                >
+                  <option value="">-- None --</option>
+                  {teachers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </td>
             );
+          }
           case "course_duration":
             return (
               <EditableTextCell
@@ -720,6 +760,26 @@ const SortableStudentRow = ({
                   }
                   onChange={(e) =>
                     onUpdateField(student.id, "last_pay_date", e.target.value)
+                  }
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
+                />
+              </td>
+            );
+          case "next_pay_date":
+            return (
+              <td
+                key={key}
+                className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
+              >
+                <input
+                  type="date"
+                  value={
+                    student.next_pay_date
+                      ? student.next_pay_date.split("T")[0]
+                      : ""
+                  }
+                  onChange={(e) =>
+                    onUpdateField(student.id, "next_pay_date", e.target.value)
                   }
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1"
                 />
@@ -820,19 +880,23 @@ const SortableStudentRow = ({
                 </button>
               </td>
             );
-          case "demo_scheduled":
+          case "scheduled_taken":
             return (
               <td
                 key={key}
                 className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[100px]"
               >
                 <select
-                  value={resolveField(student, "demo_scheduled") || ""}
+                  value={
+                    resolveField(student, "scheduled_taken") ||
+                    resolveField(student, "demo_scheduled") ||
+                    ""
+                  }
                   onChange={(e) =>
                     // send nested lead field update so enrollment's lead.demo_scheduled is updated
                     onUpdateField(
                       student.id,
-                      `lead.demo_scheduled`,
+                      `lead.scheduled_taken`,
                       e.target.value
                     )
                   }

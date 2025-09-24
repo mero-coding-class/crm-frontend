@@ -939,20 +939,32 @@ const Leads = () => {
           authToken
         );
 
-        setAllLeads((prev) =>
-          prev.map((l) =>
-            String(l.id || l._id || "") ===
-            String(updatedLead.id || updatedLead._id || "")
-              ? {
-                  // merge fields returned by server, prefer server values
-                  ...l,
-                  ...serverResp,
-                  // ensure stable _id remains available to UI
-                  _id: serverResp._id || serverResp.id || l._id,
-                }
-              : l
-          )
-        );
+        setAllLeads((prev) => {
+          const targetId = String(
+            updatedLead.id || updatedLead._id || serverResp.id || serverResp._id
+          );
+          const updatedList = [];
+          let updatedEntry = null;
+          for (const l of prev) {
+            const lid = String(l.id || l._id || "");
+            if (lid === targetId) {
+              updatedEntry = {
+                ...l,
+                ...serverResp,
+                _id: serverResp._id || serverResp.id || l._id,
+              };
+              continue; // skip pushing now; we'll prepend later
+            }
+            updatedList.push(l);
+          }
+          if (!updatedEntry) {
+            updatedEntry = {
+              ...serverResp,
+              _id: serverResp._id || serverResp.id || targetId,
+            };
+          }
+          return [updatedEntry, ...updatedList];
+        });
 
         handleCloseEditModal();
       } catch (err) {
@@ -1144,18 +1156,28 @@ const Leads = () => {
         );
 
         // Merge server response into local leads (preserve UI _id when present)
-        setAllLeads((prev) =>
-          prev.map((l) =>
-            matchId(l, leadId)
-              ? {
-                  ...l,
-                  ...serverResp,
-                  // keep a stable _id for UI use (prefer existing)
-                  _id: l._id || serverResp._id || serverResp.id || l._id,
-                }
-              : l
-          )
-        );
+        setAllLeads((prev) => {
+          const updatedList = [];
+          let updatedEntry = null;
+          for (const l of prev) {
+            if (matchId(l, leadId)) {
+              updatedEntry = {
+                ...l,
+                ...serverResp,
+                _id: l._id || serverResp._id || serverResp.id || l._id,
+              };
+              continue; // we'll prepend later
+            }
+            updatedList.push(l);
+          }
+          if (!updatedEntry) {
+            updatedEntry = {
+              ...serverResp,
+              _id: serverResp._id || serverResp.id || leadId,
+            };
+          }
+          return [updatedEntry, ...updatedList];
+        });
 
         // Dispatch a global event so changelog components can show an
         // immediate synthetic log entry without waiting for a full refresh.
@@ -1371,8 +1393,8 @@ const Leads = () => {
     [updateLeadField]
   );
 
-  const handleDemoScheduledChange = useCallback(
-    (leadId, newVal) => updateLeadField(leadId, "demo_scheduled", newVal),
+  const handleScheduledTakenChange = useCallback(
+    (leadId, newVal) => updateLeadField(leadId, "scheduled_taken", newVal),
     [updateLeadField]
   );
 
@@ -2136,7 +2158,9 @@ const Leads = () => {
             onGradeChange={handleGradeChange}
             onCourseDurationChange={handleCourseDurationChange}
             onShiftChange={handleShiftChange}
-            onDemoScheduledChange={handleDemoScheduledChange}
+            // Prop kept as onDemoScheduledChange for backward compatibility with LeadTableDisplay/DraggableRow.
+            // Handler now updates canonical scheduled_taken field.
+            onDemoScheduledChange={handleScheduledTakenChange}
             onAssignedToChange={handleAssignedToChange}
             authToken={authToken}
             changeLogService={changeLogService}

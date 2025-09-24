@@ -33,6 +33,8 @@ const DraggableRow = ({
   onAssignedToChange,
   onShiftChange,
   onDemoScheduledChange,
+  onCourseTypeChange,
+  onClassTypeChange,
   authToken,
   changeLogService,
 }) => {
@@ -94,6 +96,80 @@ const DraggableRow = ({
 
         const renderCell = () => {
           switch (key) {
+            case "scheduled_taken": {
+              const value =
+                (lead.scheduled_taken || lead.demo_scheduled || "No") === "Yes"
+                  ? "Yes"
+                  : "No";
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[120px]"
+                >
+                  <select
+                    value={value}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (typeof onDemoScheduledChange === "function") {
+                        onDemoScheduledChange(lead.id || lead._id, v);
+                      }
+                    }}
+                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm font-semibold"
+                  >
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </td>
+              );
+            }
+            case "course_type":
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[120px]"
+                >
+                  <select
+                    value={lead.course_type || ""}
+                    onChange={(e) => {
+                      if (typeof onCourseTypeChange === "function") {
+                        onCourseTypeChange(lead.id || lead._id, e.target.value);
+                      }
+                    }}
+                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm font-semibold"
+                  >
+                    <option value="">Select</option>
+                    {["Physical", "Online"].map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              );
+            case "class_type":
+              return (
+                <td
+                  key={key}
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[120px]"
+                >
+                  <select
+                    value={lead.class_type || ""}
+                    onChange={(e) => {
+                      if (typeof onClassTypeChange === "function") {
+                        onClassTypeChange(lead.id || lead._id, e.target.value);
+                      }
+                    }}
+                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm font-semibold"
+                  >
+                    <option value="">Select</option>
+                    {["One to One", "Group"].map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              );
             case "substatus":
               return (
                 <td
@@ -258,20 +334,27 @@ const DraggableRow = ({
               );
 
             case "demo_scheduled":
+              // Legacy support: render same as scheduled_taken
               return (
                 <td
                   key={key}
-                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[140px]"
+                  className="px-3 py-4 whitespace-nowrap text-sm text-gray-700 min-w-[120px]"
                 >
                   <select
-                    value={lead.demo_scheduled || ""}
-                    onChange={(e) =>
-                      typeof onDemoScheduledChange === "function" &&
-                      onDemoScheduledChange(lead.id || lead._id, e.target.value)
+                    value={
+                      (lead.scheduled_taken || lead.demo_scheduled || "No") ===
+                      "Yes"
+                        ? "Yes"
+                        : "No"
                     }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (typeof onDemoScheduledChange === "function") {
+                        onDemoScheduledChange(lead.id || lead._id, v);
+                      }
+                    }}
                     className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm font-semibold"
                   >
-                    <option value="">Select</option>
                     <option value="Yes">Yes</option>
                     <option value="No">No</option>
                   </select>

@@ -24,9 +24,12 @@ export const sourceOptions = [
 ];
 
 export const classTypeOptions = [
+    'One to One',
+    'Group'
+];
+export const courseTypeOptions = [
     'Online',
-    'Offline',
-    'Hybrid'
+    'Physical'
 ];
 
 export const paymentTypeOptions = [
@@ -42,32 +45,6 @@ export const shiftOptions = [
     'Flexible'
 ];
 
-export const courseTypeOptions = [
-    'Long-term',
-    'Short-term',
-    'Workshop'
-];
-
-// This is the one specifically used by EnrolledStudentEditModal
-export const courseOptions = [
-    'Full Stack Web Dev',
-    'Data Science',
-    'UI/UX Design',
-    'Game Development',
-    'Cybersecurity',
-    'Cloud Computing',
-    'Digital Marketing',
-    'AI & Machine Learning',
-    'Mobile App Dev',
-    'Robotics',
-    'Graphic Design',
-    'Video Editing',
-    'Python Programming',
-    'Java Programming',
-    'C++ Programming',
-    'Blockchain Basics',
-    'Other'
-];
 
 export const laptopOptions = [
     'Yes',

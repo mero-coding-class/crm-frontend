@@ -116,12 +116,14 @@ const EnrolledStudents = () => {
   const [searchLastPaymentDate, setSearchLastPaymentDate] = useState("");
   const [filterPaymentNotCompleted, setFilterPaymentNotCompleted] =
     useState(false);
+  // New scheduled_taken filter (replaces demo_scheduled). Keep legacy filterDemoTaken temporarily for UI label reuse.
+  const [filterScheduledTaken, setFilterScheduledTaken] = useState("");
   const [filterDemoTaken, setFilterDemoTaken] = useState("");
   // Refs to hold latest filter values so fetchEnrolledStudents can be stable
   const searchQueryRef = React.useRef(searchQuery);
   const searchLastPaymentDateRef = React.useRef(searchLastPaymentDate);
   const filterPaymentNotCompletedRef = React.useRef(filterPaymentNotCompleted);
-  const filterDemoTakenRef = React.useRef(filterDemoTaken);
+  const filterScheduledTakenRef = React.useRef(filterScheduledTaken);
 
   // keep refs in sync with state
   useEffect(() => {
@@ -134,13 +136,42 @@ const EnrolledStudents = () => {
     filterPaymentNotCompletedRef.current = filterPaymentNotCompleted;
   }, [filterPaymentNotCompleted]);
   useEffect(() => {
-    filterDemoTakenRef.current = filterDemoTaken;
-  }, [filterDemoTaken]);
+    filterScheduledTakenRef.current = filterScheduledTaken;
+  }, [filterScheduledTaken]);
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
   const [totalPages, setTotalPages] = useState(1);
   const [courses, setCourses] = useState([]);
+  // Teachers for assigned_teacher dropdown
+  const [teachers, setTeachers] = useState([]);
+
+  const TEACHERS_LIST_URL = `${BASE_URL}/teachers/`;
+
+  const fetchTeachers = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const res = await fetch(TEACHERS_LIST_URL, {
+        headers: { Authorization: `Token ${authToken}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch teachers");
+      const data = await res.json();
+      let list = [];
+      if (Array.isArray(data)) list = data;
+      else if (data && Array.isArray(data.results)) list = data.results;
+      else if (data && Array.isArray(data.data)) list = data.data;
+      else if (data && Array.isArray(data.teachers)) list = data.teachers;
+      const normalized = list
+        .map((t) => ({
+          id: t.id || t.pk || t._id || t.teacher_id || t.uuid,
+          name: t.name || t.teacher_name || t.full_name || t.title || "",
+        }))
+        .filter((t) => t.id != null);
+      setTeachers(normalized);
+    } catch (e) {
+      console.warn("Failed loading teachers", e);
+    }
+  }, [authToken]);
 
   // Local, client-side filtered view of the current page of students.
   // This lets typing in the search box filter the visible table immediately
@@ -166,19 +197,22 @@ const EnrolledStudents = () => {
           if (lpDate !== dateFilter) return false;
         }
 
-        // Demo taken filter (client-side). Accepts "" (all), "Yes", "No"
-        if (filterDemoTaken) {
-          const demoVal =
-            s.demo_scheduled ?? (s.lead && s.lead.demo_scheduled) ?? "";
-          const normalized = String(demoVal).toLowerCase();
+        // scheduled_taken filter (client-side). Accepts "" (all), "Yes", "No"
+        if (filterScheduledTaken) {
+          const schedVal =
+            s.scheduled_taken ||
+            s.demo_scheduled ||
+            (s.lead && (s.lead.scheduled_taken || s.lead.demo_scheduled)) ||
+            "";
+          const normalized = String(schedVal).toLowerCase();
           if (
-            filterDemoTaken === "Yes" &&
+            filterScheduledTaken === "Yes" &&
             normalized !== "yes" &&
             normalized !== "true"
           )
             return false;
           if (
-            filterDemoTaken === "No" &&
+            filterScheduledTaken === "No" &&
             normalized !== "no" &&
             normalized !== "false"
           )
@@ -207,7 +241,7 @@ const EnrolledStudents = () => {
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
-    filterDemoTaken,
+    filterScheduledTaken,
   ]);
 
   // Server-driven pagination: fetch enrollments for a page
@@ -227,12 +261,12 @@ const EnrolledStudents = () => {
         const sq = searchQueryRef.current;
         const slp = searchLastPaymentDateRef.current;
         const fNotCompleted = filterPaymentNotCompletedRef.current;
-        const fDemo = filterDemoTakenRef.current;
+        const fDemo = filterScheduledTakenRef.current;
         if (sq && sq.trim()) params.append("search", sq.trim());
         if (slp && slp.trim()) params.append("last_pay_date", slp.trim());
         if (fNotCompleted) params.append("payment_completed", "false");
         if (fDemo && (fDemo === "Yes" || fDemo === "No")) {
-          params.append("demo_scheduled", fDemo === "Yes" ? "true" : "false");
+          params.append("scheduled_taken", fDemo === "Yes" ? "true" : "false");
         }
 
         const url = `${BASE_URL}/enrollments/?${params.toString()}`;
@@ -256,7 +290,17 @@ const EnrolledStudents = () => {
           count = json.count ?? null;
         }
 
-        setAllStudents(list || []);
+        // Deduplicate by primary id (enrollment id). Keep the FIRST occurrence from latest fetch.
+        const seen = new Set();
+        const deduped = (list || []).filter((item) => {
+          const id = item && (item.id || item._id);
+          if (id == null) return true; // keep items without id defensively
+          const key = String(id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setAllStudents(deduped);
         setCurrentPage(page);
         if (count != null) {
           setTotalPages(Math.max(1, Math.ceil(count / ITEMS_PER_PAGE)));
@@ -316,11 +360,30 @@ const EnrolledStudents = () => {
 
         if (enrollmentCandidate && enrollmentCandidate.id) {
           setAllStudents((prev) => {
-            const idx = prev.findIndex((s) => s.id === enrollmentCandidate.id);
-            if (idx === -1) return [enrollmentCandidate, ...prev];
-            const next = [...prev];
-            next[idx] = { ...next[idx], ...enrollmentCandidate };
-            return next;
+            const seen = new Set();
+            const updatedList = [];
+            let mergedHandled = false;
+            // Prepend merged/updated enrollment first
+            updatedList.push({ ...enrollmentCandidate });
+            seen.add(String(enrollmentCandidate.id));
+            for (const s of prev) {
+              const sid = s && s.id != null ? String(s.id) : null;
+              if (!sid) {
+                updatedList.push(s);
+                continue;
+              }
+              if (sid === String(enrollmentCandidate.id)) {
+                if (!mergedHandled) {
+                  // already pushed new version at top; mark handled
+                  mergedHandled = true;
+                }
+                continue; // skip old duplicate
+              }
+              if (seen.has(sid)) continue; // skip any dup just in case
+              seen.add(sid);
+              updatedList.push(s);
+            }
+            return updatedList;
           });
           return;
         }
@@ -329,16 +392,32 @@ const EnrolledStudents = () => {
         // student and the backend returned student-like fields (best-effort).
         setAllStudents((prev) => {
           let changed = false;
-          const next = prev.map((s) => {
+          const next = [];
+          const seen = new Set();
+          for (const s of prev) {
+            if (!s) continue;
+            const sid = s.id != null ? String(s.id) : null;
             if (
               (updated.email && s.email === updated.email) ||
               (updated.phone_number && s.phone_number === updated.phone_number)
             ) {
               changed = true;
-              return { ...s, ...updated };
+              const merged = { ...s, ...updated };
+              // Move merged match to TOP if not already placed
+              if (sid && !seen.has(sid)) {
+                seen.add(sid);
+                next.unshift(merged); // put at start
+              } else {
+                next.unshift(merged);
+              }
+            } else {
+              if (sid) {
+                if (seen.has(sid)) continue; // skip duplicates
+                seen.add(sid);
+              }
+              next.push(s);
             }
-            return s;
-          });
+          }
           return changed ? next : prev;
         });
       } catch (err) {
@@ -357,7 +436,18 @@ const EnrolledStudents = () => {
       try {
         const enrollment = e?.detail?.enrollment;
         if (!enrollment) return;
-        setAllStudents((prev) => [enrollment, ...prev]);
+        setAllStudents((prev) => {
+          const seen = new Set();
+          const list = [enrollment];
+          seen.add(String(enrollment.id));
+          for (const s of prev) {
+            const sid = s && s.id != null ? String(s.id) : null;
+            if (sid && seen.has(sid)) continue; // skip duplicate
+            if (sid) seen.add(sid);
+            list.push(s);
+          }
+          return list;
+        });
       } catch (err) {
         console.warn("Failed to handle crm:enrollmentCreated event", err);
       }
@@ -386,6 +476,11 @@ const EnrolledStudents = () => {
     };
   }, [authToken]);
 
+  // Fetch teachers once auth available
+  useEffect(() => {
+    fetchTeachers();
+  }, [fetchTeachers]);
+
   // Refetch when filters change (debounced) and reset to page 1.
   // If we're not already on page 1, set page to 1 and let the page-change
   // effect trigger the fetch. If already on page 1, call fetch once.
@@ -405,7 +500,7 @@ const EnrolledStudents = () => {
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
-    filterDemoTaken,
+    filterScheduledTaken,
     authToken,
     fetchEnrolledStudents,
     currentPage,
@@ -426,12 +521,12 @@ const EnrolledStudents = () => {
       if (filterPaymentNotCompleted)
         baseParams.append("payment_completed", "false");
       if (
-        filterDemoTaken &&
-        (filterDemoTaken === "Yes" || filterDemoTaken === "No")
+        filterScheduledTaken &&
+        (filterScheduledTaken === "Yes" || filterScheduledTaken === "No")
       )
         baseParams.append(
-          "demo_scheduled",
-          filterDemoTaken === "Yes" ? "true" : "false"
+          "scheduled_taken",
+          filterScheduledTaken === "Yes" ? "true" : "false"
         );
 
       // Fetch all pages from the enrollments endpoint
@@ -540,7 +635,7 @@ const EnrolledStudents = () => {
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
-    filterDemoTaken,
+    filterScheduledTaken,
   ]);
 
   // Instant field update (sends PATCH to backend immediately)
@@ -553,23 +648,7 @@ const EnrolledStudents = () => {
         "third_installment",
       ]);
 
-      // Temporarily disable demo_scheduled edits from both inline table and modal.
-      // Show a friendly alert and do not send a PATCH.
-      try {
-        const isSingleDemo =
-          field === "demo_scheduled" || field === "lead.demo_scheduled";
-        const isModalWithDemo =
-          field === null &&
-          value &&
-          (value.demo_scheduled !== undefined ||
-            (value.lead && value.lead.demo_scheduled !== undefined));
-        if (isSingleDemo || isModalWithDemo) {
-          window.alert("Working on it. It will be soon available");
-          return;
-        }
-      } catch (e) {
-        // ignore any alert errors and continue
-      }
+      // Allow scheduled_taken (legacy demo_scheduled) edits.
 
       // Map frontend field to backend field
       let backendField = field;
@@ -589,6 +668,12 @@ const EnrolledStudents = () => {
         ].includes(backendField)
       ) {
         backendField = "course_duration";
+      }
+      // Normalize possible assigned_teacher name updates
+      if (
+        ["assigned_teacher_name", "assignedTeacherName"].includes(backendField)
+      ) {
+        backendField = "assigned_teacher"; // we'll send the id; value expected should be id
       }
 
       // We'll apply an optimistic local update so the table reflects the
@@ -724,13 +809,15 @@ const EnrolledStudents = () => {
             }
             payload[k] = v;
           }
-          // If the modal passed nested lead fields (lead.demo_scheduled/lead.device/lead.shift),
+          // If the modal passed nested lead fields (lead.scheduled_taken / legacy lead.demo_scheduled / lead.device / lead.shift),
           // mirror them to top-level payload fields because the enrollments API
           // commonly expects these at the enrollment root.
           try {
             const leadObj = value.lead || {};
-            if (leadObj.demo_scheduled !== undefined) {
-              payload.demo_scheduled = leadObj.demo_scheduled;
+            if (leadObj.scheduled_taken !== undefined) {
+              payload.scheduled_taken = leadObj.scheduled_taken;
+            } else if (leadObj.demo_scheduled !== undefined) {
+              payload.scheduled_taken = leadObj.demo_scheduled; // legacy
             }
             if (leadObj.shift !== undefined) {
               payload.shift = leadObj.shift;
@@ -751,6 +838,18 @@ const EnrolledStudents = () => {
             payload = { lead: { [leadKey]: value } };
           } else {
             payload = { [backendField]: value };
+          }
+
+          // If updating assigned_teacher from dropdown we may have both id and label
+          if (
+            backendField === "assigned_teacher" &&
+            value &&
+            typeof value === "object"
+          ) {
+            // Expect shape { id, name }
+            if (value.id !== undefined) payload.assigned_teacher = value.id;
+            // keep a parallel name for optimistic UI (even if backend doesn't store it)
+            payload.assigned_teacher_name = value.name || value.label || "";
           }
 
           // Type coercion for single-field updates
@@ -831,7 +930,7 @@ const EnrolledStudents = () => {
 
         let response;
 
-        // Normalize demo_scheduled values: backend commonly expects boolean
+        // Normalize scheduled_taken (legacy demo_scheduled) values: backend commonly expects boolean
         // Convert "Yes"/"No" (or case variants) to true/false where present
         try {
           const normalizeYesNo = (v) => {
@@ -845,28 +944,32 @@ const EnrolledStudents = () => {
             return v;
           };
 
-          if (payload && payload.demo_scheduled !== undefined) {
-            payload.demo_scheduled = normalizeYesNo(payload.demo_scheduled);
+          if (payload && payload.scheduled_taken !== undefined) {
+            payload.scheduled_taken = normalizeYesNo(payload.scheduled_taken);
           }
-          if (
-            payload &&
-            payload.lead &&
-            payload.lead.demo_scheduled !== undefined
-          ) {
-            payload.lead.demo_scheduled = normalizeYesNo(
-              payload.lead.demo_scheduled
-            );
-            // Mirror to top-level if backend expects enrollment-level field instead
-            if (
-              payload.lead.demo_scheduled !== null &&
-              payload.lead.demo_scheduled !== undefined
-            ) {
-              payload.demo_scheduled = payload.lead.demo_scheduled;
+          if (payload && payload.lead) {
+            if (payload.lead.scheduled_taken !== undefined) {
+              payload.lead.scheduled_taken = normalizeYesNo(
+                payload.lead.scheduled_taken
+              );
+              if (
+                payload.lead.scheduled_taken !== null &&
+                payload.lead.scheduled_taken !== undefined
+              ) {
+                payload.scheduled_taken = payload.lead.scheduled_taken;
+              }
+            } else if (payload.lead.demo_scheduled !== undefined) {
+              const norm = normalizeYesNo(payload.lead.demo_scheduled);
+              payload.lead.scheduled_taken = norm;
+              if (norm !== null && norm !== undefined) {
+                payload.scheduled_taken = norm;
+              }
+              delete payload.lead.demo_scheduled;
             }
           }
         } catch (e) {
           // normalization should not block saving; ignore on error
-          console.debug("demo_scheduled normalization failed:", e);
+          console.debug("scheduled_taken normalization failed:", e);
         }
 
         // Debug log outgoing payload and target URL to help trace 400 responses
@@ -983,6 +1086,26 @@ const EnrolledStudents = () => {
                       ...(s.lead || {}),
                       ...(respJson.lead || {}),
                     },
+                    // Mirror teacher name if backend returns only id
+                    ...(respJson.assigned_teacher &&
+                    !respJson.assigned_teacher_name
+                      ? {
+                          assigned_teacher_name: (function () {
+                            try {
+                              const match = (teachers || []).find(
+                                (t) =>
+                                  String(t.id) ===
+                                  String(respJson.assigned_teacher)
+                              );
+                              return match
+                                ? match.name
+                                : s.assigned_teacher_name;
+                            } catch (e) {
+                              return s.assigned_teacher_name;
+                            }
+                          })(),
+                        }
+                      : {}),
                   }
                 : s
             )
@@ -1038,7 +1161,7 @@ const EnrolledStudents = () => {
         console.error(`Error updating student ${field}:`, err);
       }
     },
-    [authToken, fetchEnrolledStudents, currentPage]
+    [authToken, fetchEnrolledStudents, currentPage, teachers]
   );
 
   // Payment status update
@@ -1242,6 +1365,7 @@ const EnrolledStudents = () => {
         <EnrolledStudentsTable
           students={filteredStudents}
           courses={courses}
+          teachers={teachers}
           handleEdit={handleEdit}
           handleDelete={handleDelete}
           handleBulkDelete={handleBulkDelete}
@@ -1278,6 +1402,7 @@ const EnrolledStudents = () => {
       {isModalOpen && editingStudent && (
         <EnrolledStudentEditModal
           student={editingStudent}
+          teachers={teachers}
           onClose={handleCloseModal}
           onSave={async (updatedStudent) => {
             const resp = await handleUpdateField(

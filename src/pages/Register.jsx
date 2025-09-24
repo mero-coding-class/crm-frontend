@@ -225,6 +225,18 @@ const RegisterUser = () => {
   // selection
   const [selectedUsers, setSelectedUsers] = useState([]);
 
+  // --- Teachers Management State ---
+  const [teachers, setTeachers] = useState([]); // list of teacher objects { id, name }
+  const [teacherName, setTeacherName] = useState(""); // create form input
+  const [teacherLoading, setTeacherLoading] = useState(false);
+  const [teacherMsg, setTeacherMsg] = useState({ type: "", text: "" });
+  const [editTeacherId, setEditTeacherId] = useState(null);
+  const [editTeacherName, setEditTeacherName] = useState("");
+
+  const TEACHERS_LIST_URL = `${BASE_URL}/teachers/`;
+  // Adjusted to use plural form and trailing slash: /teachers/{id}/
+  const TEACHER_DETAIL_URL = (id) => `${BASE_URL}/teachers/${id}/`;
+
   // for "show more" functionality
   const [visibleUsers, setVisibleUsers] = useState(INITIAL_VISIBLE_USERS);
   const hasMoreUsers = users.length > visibleUsers;
@@ -247,6 +259,7 @@ const RegisterUser = () => {
   useEffect(() => {
     if (canManage(roleFromStorage)) {
       fetchUsers();
+      fetchTeachers();
     }
   }, []);
 
@@ -279,6 +292,147 @@ const RegisterUser = () => {
     } catch (err) {
       console.error(err);
       setMsg({ type: "error", text: "Could not load users." });
+    }
+  };
+
+  // Fetch teachers list
+  const fetchTeachers = async () => {
+    try {
+      const res = await fetch(TEACHERS_LIST_URL, {
+        headers: { Authorization: `Token ${authToken}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch teachers.");
+      const data = await res.json();
+      // Expecting an array; if backend wraps, try common wrappers
+      let list = [];
+      if (Array.isArray(data)) list = data;
+      else if (data && Array.isArray(data.results)) list = data.results;
+      else if (data && Array.isArray(data.data)) list = data.data;
+      else if (data && Array.isArray(data.teachers)) list = data.teachers;
+      else list = [];
+      // Normalize to { id, name }
+      const normalized = list
+        .map((t) => ({
+          id: t.id || t.pk || t._id || t.teacher_id || t.uuid,
+          name: t.name || t.teacher_name || t.full_name || t.title || "",
+          raw: t,
+        }))
+        .filter((t) => t.id != null);
+      setTeachers(normalized);
+    } catch (e) {
+      console.warn(e);
+      setTeacherMsg({
+        type: "error",
+        text: e.message || "Could not load teachers.",
+      });
+    }
+  };
+
+  // Create a new teacher
+  const handleCreateTeacher = async (e) => {
+    e.preventDefault();
+    setTeacherMsg({ type: "", text: "" });
+    if (!teacherName.trim()) {
+      setTeacherMsg({ type: "error", text: "Teacher name is required." });
+      return;
+    }
+    setTeacherLoading(true);
+    try {
+      const res = await fetch(TEACHERS_LIST_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        // Send both possible field names for compatibility (backend may expect either)
+        body: JSON.stringify({
+          name: teacherName.trim(),
+          teacher_name: teacherName.trim(),
+        }),
+      });
+      if (!res.ok) {
+        let err = await res.text();
+        try {
+          const j = JSON.parse(err);
+          err = j.detail || JSON.stringify(j);
+        } catch {}
+        throw new Error(err || "Failed to create teacher");
+      }
+      setTeacherName("");
+      setTeacherMsg({ type: "success", text: "Teacher created." });
+      fetchTeachers();
+    } catch (e) {
+      setTeacherMsg({
+        type: "error",
+        text: e.message || "Failed to create teacher.",
+      });
+    } finally {
+      setTeacherLoading(false);
+    }
+  };
+
+  // Save teacher edit
+  const handleSaveTeacher = async (id) => {
+    if (!editTeacherName.trim()) {
+      setTeacherMsg({ type: "error", text: "Teacher name cannot be blank." });
+      return;
+    }
+    try {
+      const res = await fetch(TEACHER_DETAIL_URL(id), {
+        method: "PATCH",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: editTeacherName.trim(),
+          teacher_name: editTeacherName.trim(),
+        }),
+      });
+      if (!res.ok) {
+        let err = await res.text();
+        try {
+          const j = JSON.parse(err);
+          err = j.detail || JSON.stringify(j);
+        } catch {}
+        throw new Error(err || "Failed to update teacher");
+      }
+      setTeachers((prev) =>
+        prev.map((t) =>
+          t.id === id ? { ...t, name: editTeacherName.trim() } : t
+        )
+      );
+      setEditTeacherId(null);
+      setEditTeacherName("");
+      setTeacherMsg({ type: "success", text: "Teacher updated." });
+    } catch (e) {
+      setTeacherMsg({
+        type: "error",
+        text: e.message || "Failed to update teacher.",
+      });
+    }
+  };
+
+  // Delete teacher
+  const handleDeleteTeacher = async (id) => {
+    if (!window.confirm("Delete this teacher?")) return;
+    try {
+      const res = await fetch(TEACHER_DETAIL_URL(id), {
+        method: "DELETE",
+        headers: { Authorization: `Token ${authToken}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete teacher");
+      setTeachers((prev) => prev.filter((t) => t.id !== id));
+      if (editTeacherId === id) {
+        setEditTeacherId(null);
+        setEditTeacherName("");
+      }
+      setTeacherMsg({ type: "success", text: "Teacher deleted." });
+    } catch (e) {
+      setTeacherMsg({
+        type: "error",
+        text: e.message || "Failed to delete teacher.",
+      });
     }
   };
 
@@ -684,6 +838,190 @@ const RegisterUser = () => {
           </button>
         )}
       </div>
+
+      {/* Teachers Management */}
+      {canManage(roleFromStorage) && (
+        <h3 className="text-2xl font-bold mt-16 mb-4 text-gray-900 border-b pb-2">
+          Manage Teachers
+        </h3>
+      )}
+      {canManage(roleFromStorage) && teacherMsg.text && (
+        <div
+          className={`mb-6 p-4 rounded-lg ${
+            teacherMsg.type === "error"
+              ? "bg-red-50 text-red-700 border border-red-200"
+              : "bg-green-50 text-green-700 border border-green-200"
+          }`}
+        >
+          {teacherMsg.text}
+        </div>
+      )}
+
+      {canManage(roleFromStorage) && (
+        <form
+          onSubmit={handleCreateTeacher}
+          className="flex flex-col md:flex-row md:items-end md:space-x-4 space-y-4 md:space-y-0 mb-8"
+        >
+          <div className="flex-1">
+            <label className="block text-gray-700 text-sm font-medium mb-1">
+              Teacher Name
+            </label>
+            <input
+              type="text"
+              value={teacherName}
+              onChange={(e) => setTeacherName(e.target.value)}
+              placeholder="Enter teacher name"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={teacherLoading}
+            className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {teacherLoading ? "Saving…" : "Add Teacher"}
+          </button>
+        </form>
+      )}
+
+      {canManage(roleFromStorage) && (
+        <div className="overflow-x-auto rounded-lg shadow-lg">
+          <table className="min-w-full divide-y divide-gray-200 bg-white">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                  ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Teacher Name
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {teachers.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-6 py-6 text-center text-sm text-gray-500"
+                  >
+                    No teachers found.
+                  </td>
+                </tr>
+              )}
+              {teachers.map((t) => (
+                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap">
+                    {t.id}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700 align-top">
+                    {editTeacherId === t.id ? (
+                      <input
+                        type="text"
+                        value={editTeacherName}
+                        onChange={(e) => setEditTeacherName(e.target.value)}
+                        className="p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 w-full max-w-sm"
+                      />
+                    ) : (
+                      <span className="block max-w-sm truncate">{t.name}</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap text-right">
+                    {editTeacherId === t.id ? (
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => handleSaveTeacher(t.id)}
+                          className="p-1.5 rounded-md text-green-600 hover:bg-green-100 transition-colors"
+                          aria-label="Save"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditTeacherId(null);
+                            setEditTeacherName("");
+                          }}
+                          className="p-1.5 rounded-md text-gray-500 hover:bg-gray-200 transition-colors"
+                          aria-label="Cancel"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => {
+                            setEditTeacherId(t.id);
+                            setEditTeacherName(t.name);
+                          }}
+                          className="p-1.5 rounded-md text-yellow-500 hover:bg-yellow-100 transition-colors"
+                          aria-label="Edit"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTeacher(t.id)}
+                          className="p-1.5 rounded-md text-red-600 hover:bg-red-100 transition-colors"
+                          aria-label="Delete"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };

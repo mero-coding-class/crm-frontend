@@ -7,7 +7,12 @@ import {
 import { useAuth } from "../context/AuthContext.jsx";
 import { BASE_URL } from "../config";
 
-const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
+const EnrolledStudentEditModal = ({
+  student,
+  onClose,
+  onSave,
+  teachers = [],
+}) => {
   const { authToken } = useAuth();
   // store full course objects (id, course_name, ...)
   const [courseOptions, setCourseOptions] = useState([]);
@@ -35,6 +40,10 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       last_pay_date:
         student?.last_pay_date || ""
           ? String(student.last_pay_date || "").split("T")[0]
+          : "",
+      next_pay_date:
+        student?.next_pay_date || ""
+          ? String(student.next_pay_date || "").split("T")[0]
           : "",
       payment_completed: student?.payment_completed ?? false,
       created_at: student?.created_at ?? student?.enrollment_created_at ?? "",
@@ -79,7 +88,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
         city: lead.city || "",
         county: lead.county || "",
         post_code: lead.post_code || "",
-        demo_scheduled: lead.demo_scheduled || "",
+        scheduled_taken: lead.scheduled_taken || lead.demo_scheduled || "",
         created_at: lead.created_at || "",
         updated_at: lead.updated_at || "",
         course: lead.course || "",
@@ -123,6 +132,7 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       "second_installment",
       "third_installment",
       "last_pay_date",
+      "next_pay_date",
       "payment_completed",
       "remarks",
     ];
@@ -291,6 +301,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
           last_pay_date: data.last_pay_date
             ? String(data.last_pay_date).split("T")[0]
             : prev.last_pay_date || "",
+          next_pay_date: data.next_pay_date
+            ? String(data.next_pay_date).split("T")[0]
+            : prev.next_pay_date || "",
           payment_completed:
             typeof data.payment_completed === "boolean"
               ? data.payment_completed
@@ -474,6 +487,9 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
       // Ensure dates are sent as YYYY-MM-DD (input[type=date] produces this format)
       last_pay_date: formData.last_pay_date
         ? String(formData.last_pay_date).split("T")[0]
+        : null,
+      next_pay_date: formData.next_pay_date
+        ? String(formData.next_pay_date).split("T")[0]
         : null,
       // normalize starting_date for comparison/send
       starting_date: formData.starting_date
@@ -977,14 +993,29 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
             >
               Assigned Teacher
             </label>
-            <input
-              type="text"
+            <select
               name="assigned_teacher"
               id="assigned_teacher"
-              value={formData.assigned_teacher}
-              onChange={handleChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
+              value={formData.assigned_teacher || ""}
+              onChange={(e) => {
+                const val = e.target.value || null;
+                setFormData((prev) => ({
+                  ...prev,
+                  assigned_teacher: val,
+                }));
+              }}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
+            >
+              <option value="">-- Select Teacher --</option>
+              {(Array.isArray(typeof teachers !== "undefined" ? teachers : [])
+                ? teachers
+                : []
+              ).map((t) => (
+                <option key={String(t.id)} value={String(t.id)}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -1116,6 +1147,22 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
                 name="last_pay_date"
                 id="last_pay_date"
                 value={formData.last_pay_date}
+                onChange={handleChange}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
+            <div className="col-span-1">
+              <label
+                htmlFor="next_pay_date"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Next Pay Date
+              </label>
+              <input
+                type="date"
+                name="next_pay_date"
+                id="next_pay_date"
+                value={formData.next_pay_date || ""}
                 onChange={handleChange}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
@@ -1436,15 +1483,18 @@ const EnrolledStudentEditModal = ({ student, onClose, onSave }) => {
               Demo Scheduled
             </label>
             <select
-              name="demo_scheduled"
+              name="scheduled_taken"
               value={
-                formData.demo_scheduled || formData.lead?.demo_scheduled || ""
+                formData.scheduled_taken ||
+                formData.lead?.scheduled_taken ||
+                formData.lead?.demo_scheduled ||
+                ""
               }
               onChange={(e) => {
                 const val = e.target.value;
-                setFormData((prev) => ({ ...prev, demo_scheduled: val }));
+                setFormData((prev) => ({ ...prev, scheduled_taken: val }));
                 handleLeadChange({
-                  target: { name: "demo_scheduled", value: val },
+                  target: { name: "scheduled_taken", value: val },
                 });
               }}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"

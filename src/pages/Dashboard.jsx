@@ -9,7 +9,7 @@ import StatCard from "../components/dashboard/StatCard";
 import LatestLeadsTable from "../components/dashboard/LatestLeadsTable";
 import TopCoursesTable from "../components/dashboard/TopCoursesTable";
 
-// 👉 use your real API service
+
 import { leadService } from "../services/api";
 import { BASE_URL } from "../config";
 
@@ -342,11 +342,15 @@ const Dashboard = () => {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // totalLeads should include leads + enrollments + trashed leads (counts)
+    // User requirement: total leads on dashboard should be the sum of
+    // counts returned by leads, enrollments and trash endpoints (raw sum).
+    // NOTE: This will intentionally double count a lead that appears in
+    // both the leads list and has an enrollment (or is also present in trash)
+    // because the explicit instruction was to *add* all three sources.
     const totalLeads =
-      allLeads.length +
-      (Number(enrollmentsCount) || 0) +
-      (Number(trashCount) || 0);
+      (allLeads ? allLeads.length : 0) +
+      (enrollments ? enrollments.length : 0) +
+      (trashedLeads ? trashedLeads.length : 0);
 
     // Define "enrolled" as status === Converted
     // Prefer authoritative enrollments endpoint for enrolled students count
@@ -579,6 +583,68 @@ const Dashboard = () => {
       .sort((a, b) => b.enrollments - a.enrollments)
       .slice(0, 7);
 
+    // --- Monthly Distribution Calculation ---
+    // Helper to get month string and full name
+    const getMonth = (date) => {
+      if (!date) return "Unknown";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "Unknown";
+      const year = d.getFullYear();
+      const monthNum = d.getMonth();
+      const monthShort = String(monthNum + 1).padStart(2, "0");
+      const monthName = d.toLocaleString("default", { month: "long" });
+      return {
+        key: `${year}-${monthShort}`,
+        label: `${monthName} ${year}`,
+      };
+    };
+
+    // Use objects for month keys and labels
+    const monthLabels = {};
+    const leadsByMonth = {};
+    const enrollmentsByMonth = {};
+    const trashByMonth = {};
+    allLeads.forEach((lead) => {
+      const mObj = getMonth(getLeadAddDate(lead));
+      if (!mObj || !mObj.key) return;
+      leadsByMonth[mObj.key] = (leadsByMonth[mObj.key] || 0) + 1;
+      monthLabels[mObj.key] = mObj.label;
+    });
+    enrollments.forEach((enr) => {
+      const mObj = getMonth(
+        enr.enrollment_date || enr.created_at || enr.add_date
+      );
+      if (!mObj || !mObj.key) return;
+      enrollmentsByMonth[mObj.key] = (enrollmentsByMonth[mObj.key] || 0) + 1;
+      monthLabels[mObj.key] = mObj.label;
+    });
+    trashedLeads.forEach((lead) => {
+      const mObj = getMonth(getLeadAddDate(lead));
+      if (!mObj || !mObj.key) return;
+      trashByMonth[mObj.key] = (trashByMonth[mObj.key] || 0) + 1;
+      monthLabels[mObj.key] = mObj.label;
+    });
+
+    const allMonths = Array.from(
+      new Set([
+        ...Object.keys(leadsByMonth),
+        ...Object.keys(enrollmentsByMonth),
+        ...Object.keys(trashByMonth),
+      ])
+    ).sort();
+
+    const monthlyDistribution = allMonths.map((monthKey) => {
+      const base = leadsByMonth[monthKey] || 0; // active/non-enrolled leads
+      const enr = enrollmentsByMonth[monthKey] || 0; // enrolled (from enrollments endpoint)
+      const tr = trashByMonth[monthKey] || 0; // trashed
+      return {
+        month: monthLabels[monthKey] || monthKey,
+        totalLeads: base + enr + tr, // total combined (matches stat card logic)
+        enrollments: enr,
+        trash: tr,
+      };
+    });
+
     return {
       stats: {
         totalLeads,
@@ -591,11 +657,12 @@ const Dashboard = () => {
         leadStatusDistribution,
         enrollmentTrends,
         leadsBySource,
+        monthlyDistribution,
       },
       latestLeads,
       topCourses,
     };
-  }, [allLeads, coursesMap, enrollments, enrollmentsTrendData]);
+  }, [allLeads, coursesMap, enrollments, enrollmentsTrendData, trashedLeads]);
 
   if (loading)
     return <DelayedLoader message="Loading dashboard..." minMs={2000} />;
@@ -742,18 +809,33 @@ const Dashboard = () => {
         </ChartContainer>
       </div>
 
-      {/* Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Monthly totals grouped: total leads, enrollments, trash */}
+      <div className="mb-8">
+        <ChartContainer title="Monthly Leads Breakdown (Total / Enrollments / Trash)">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              data={dashboardData.charts.monthlyDistribution}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              barCategoryGap={30}
+              barGap={0}
+              stackOffset="none"
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis allowDecimals={false} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="totalLeads" fill="#1E88E5" name="Total Leads" />
+              <Bar dataKey="enrollments" fill="#34A853" name="Enrollments" />
+              <Bar dataKey="trash" fill="#FB8C00" name="Trash" />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartContainer>
+      </div>
+
+      {/* Latest Leads table below, full width */}
+      <div className="mb-8">
         <LatestLeadsTable leads={dashboardData.latestLeads} />
-        <TopCoursesTable
-          courses={
-            dashboardData.topCourses.length
-              ? dashboardData.topCourses
-              : enrollmentsTopCourses
-          }
-          coursesMap={coursesMap}
-          authToken={authToken}
-        />
       </div>
 
       {/* Map: show leads on map (defaults to Nepal/Kathmandu) */}

@@ -1,3 +1,7 @@
+import {
+  statusOptions,
+  subStatusOptions,
+} from "../constants/leadStatusOptions";
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { BASE_URL } from "../config";
@@ -74,6 +78,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     course_name: "",
     course_duration: "",
     class_type: "",
+    course_type: "", // new field
     shift: "",
     status: "Active",
     sub_status: "New",
@@ -448,7 +453,30 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     "Instagram",
     "Other",
   ];
-  const classTypeOptions = ["Select", "Physical", "Online"];
+  const classTypeOptions = ["Select", "One to One", "Group"];
+
+  const courseTypeOptions = ["Select", "Online", "Physical"];
+  // ...existing code...
+  {
+    /* Add course_type dropdown in the form UI */
+  }
+  <div className="mb-4">
+    <label className="block text-gray-700 text-sm font-bold mb-2">
+      Course Type
+    </label>
+    <select
+      name="course_type"
+      value={formData.course_type}
+      onChange={handleChange}
+      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+    >
+      {courseTypeOptions.map((opt) => (
+        <option key={opt} value={opt === "Select" ? "" : opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  </div>;
 
   const paymentTypeOptions = [
     "Select",

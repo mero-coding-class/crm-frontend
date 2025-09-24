@@ -47,7 +47,7 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     courseDuration: "",
     course_duration: "",
     source: "",
-    addDate: "",
+    add_date: "",
     recentCall: "",
     nextCall: "",
     status: "Active",
@@ -57,7 +57,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     city: "",
     county: "",
     postCode: "",
-    classType: "",
+    class_type: "",
+    course_type: "",
     value: "",
     adsetName: "",
     remarks: "",
@@ -71,6 +72,9 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     // Backend fields the server expects
     school_college_name: "",
     lead_type: "",
+    // New canonical field replacing legacy demo_scheduled
+    scheduled_taken: "",
+    // Legacy field kept only for backward read compatibility (do not write)
     demo_scheduled: "",
   };
 
@@ -124,8 +128,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
         return "";
       })(),
       source: lead.source || "",
-      addDate:
-        getFormattedDate(lead.addDate || lead.add_date || lead.created_at) ||
+      add_date:
+        getFormattedDate(lead.add_date || lead.addDate || lead.created_at) ||
         "",
       recentCall: getFormattedDate(lead.recentCall || lead.last_call) || "",
       nextCall: getFormattedDate(lead.nextCall || lead.next_call) || "",
@@ -140,7 +144,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       city: lead.city || "",
       county: lead.county || "",
       postCode: lead.postCode || lead.post_code || "",
-      classType: lead.classType || lead.class_type || "",
+      class_type: lead.class_type || lead.classType || "",
+      course_type: lead.course_type || lead.courseType || "",
       value: lead.value || "",
       adsetName: lead.adsetName || lead.adset_name || "",
       remarks: lead.remarks || lead.change_log || lead.changeLog || "",
@@ -153,7 +158,9 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       school_college_name:
         lead.school_college_name || lead.school || lead.school_college || "",
       lead_type: lead.lead_type || lead.leadType || "",
-      demo_scheduled: lead.demo_scheduled || "",
+      // Prefer new scheduled_taken; fall back to legacy demo_scheduled
+      scheduled_taken: lead.scheduled_taken || lead.demo_scheduled || "",
+      demo_scheduled: lead.demo_scheduled || "", // retain for display only if backend still returns it
     };
 
     // Enforce backend-level semantics: backend only accepts these top-level
@@ -245,9 +252,9 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
             return "";
           })(),
           source: updated.source || "",
-          addDate:
+          add_date:
             getFormattedDate(
-              updated.addDate || updated.add_date || updated.created_at
+              updated.add_date || updated.addDate || updated.created_at
             ) || "",
           recentCall:
             getFormattedDate(updated.recentCall || updated.last_call) || "",
@@ -278,7 +285,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
           city: updated.city || "",
           county: updated.county || "",
           postCode: updated.postCode || updated.post_code || "",
-          classType: updated.classType || updated.class_type || "",
+          class_type: updated.class_type || updated.classType || "",
+          course_type: updated.course_type || updated.courseType || "",
           value: updated.value || "",
           adsetName: updated.adsetName || updated.adset_name || "",
           remarks:
@@ -296,6 +304,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
             updated.school_college ||
             "",
           lead_type: updated.lead_type || updated.leadType || "",
+          scheduled_taken:
+            updated.scheduled_taken || updated.demo_scheduled || "",
           demo_scheduled: updated.demo_scheduled || "",
         };
 
@@ -383,7 +393,16 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       if (name === "course_duration") {
         return { ...prevData, course_duration: value, courseDuration: value };
       }
-
+      if (name === "class_type" || name === "classType") {
+        return { ...prevData, class_type: value };
+      }
+      if (name === "course_type" || name === "courseType") {
+        return { ...prevData, course_type: value };
+      }
+      if (name === "scheduled_taken" || name === "demo_scheduled") {
+        // Always store in scheduled_taken canonical field
+        return { ...prevData, scheduled_taken: value, demo_scheduled: value };
+      }
       return {
         ...prevData,
         [name]: value,
@@ -415,7 +434,13 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       // Ensure backend fields are present
       school_college_name: formData.school_college_name || "",
       lead_type: formData.lead_type || "",
-      demo_scheduled: formData.demo_scheduled || "",
+      // Always send scheduled_taken; keep legacy demo_scheduled out of payload
+      scheduled_taken:
+        formData.scheduled_taken || formData.demo_scheduled || "",
+      demo_scheduled: undefined,
+      // Add new fields for backend
+      class_type: formData.class_type,
+      course_type: formData.course_type,
     };
     onSave(updatedData);
   };
@@ -435,7 +460,10 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     "Instagram",
     "Other",
   ];
-  const classTypeOptions = ["Select", "Physical", "Online"];
+  // Class type: backend expects exactly "One to One" or "Group"
+  const classTypeOptions = ["Select", "One to One", "Group"];
+  // Course type: backend expects exactly "Physical" or "Online"
+  const courseTypeOptions = ["Select", "Physical", "Online"];
   const shiftOptions = [
     "Select",
     "7 A.M. - 9 A.M.",
