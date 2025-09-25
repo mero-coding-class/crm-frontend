@@ -77,6 +77,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     scheduled_taken: "",
     // Legacy field kept only for backward read compatibility (do not write)
     demo_scheduled: "",
+    first_installment: "",
+    first_invoice: null,
   };
 
   const [formData, setFormData] = useState(DEFAULT_FORM);
@@ -162,6 +164,8 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       // Prefer new scheduled_taken; fall back to legacy demo_scheduled
       scheduled_taken: lead.scheduled_taken || lead.demo_scheduled || "",
       demo_scheduled: lead.demo_scheduled || "", // retain for display only if backend still returns it
+      first_installment: lead.first_installment || "",
+      first_invoice: lead.first_invoice || null,
     };
 
     // Enforce backend-level semantics: backend only accepts these top-level
@@ -413,6 +417,13 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // Check if status is "Converted" and first_invoice is required
+    if (formData.status === "Converted" && !formData.first_invoice) {
+      alert("Invoice is required when setting status to 'Converted'");
+      return;
+    }
+
     // Send data in format expected by backend
     const updatedData = {
       ...formData,
@@ -442,6 +453,9 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       // Add new fields for backend
       class_type: formData.class_type,
       course_type: formData.course_type,
+      first_installment: formData.first_installment
+        ? parseFloat(formData.first_installment)
+        : null,
     };
     onSave(updatedData);
   };

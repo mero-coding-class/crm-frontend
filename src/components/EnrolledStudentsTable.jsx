@@ -107,11 +107,14 @@ const ColumnToggler = ({ columns, setColumns }) => {
 
 // Editable text cell
 const EditableTextCell = ({ value, field, onSave, cellClass = "" }) => {
-  const [text, setText] = useState(value || "");
+  // Ensure value is always a string to prevent controlled/uncontrolled warning
+  const safeValue = value == null ? "" : String(value);
+  const [text, setText] = useState(safeValue);
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    setText(value || "");
+    const newSafeValue = value == null ? "" : String(value);
+    setText(newSafeValue);
   }, [value]);
 
   // Only save on blur or Enter

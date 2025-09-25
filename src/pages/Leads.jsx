@@ -28,6 +28,28 @@ import {
   FunnelIcon,
 } from "@heroicons/react/24/outline";
 
+// Utility function to deduplicate leads by ID
+const deduplicateLeads = (leads) => {
+  if (!Array.isArray(leads)) return [];
+  
+  const seen = new Map();
+  const result = [];
+  
+  for (const lead of leads) {
+    if (!lead) continue;
+    
+    // Use multiple ID variants to match leads
+    const id = String(lead.id || lead._id || lead.email || `${lead.student_name}-${lead.phone_number}` || '');
+    
+    if (!seen.has(id)) {
+      seen.set(id, true);
+      result.push(lead);
+    }
+  }
+  
+  return result;
+};
+
 const Leads = () => {
   const { authToken, user } = useAuth();
 
@@ -598,6 +620,19 @@ const Leads = () => {
     const importDebounceRef = { current: null };
     const onImported = (e) => {
       console.info("Leads.jsx detected crm:imported event, scheduling refresh");
+      
+      // Show success toast with import count if available
+      const importedCount = e?.detail?.count || e?.detail?.importedCount || 0;
+      const message = importedCount > 0 
+        ? `Successfully imported ${importedCount} leads`
+        : 'CSV import completed successfully';
+      
+      setToast({
+        show: true,
+        message: message,
+        type: "success",
+      });
+      
       // Invalidate cached full dataset
       allLeadsFullRef.current = false;
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
@@ -759,11 +794,11 @@ const Leads = () => {
             // Replace existing lead
             const updatedLeads = [...prevLeads];
             updatedLeads[existingLeadIndex] = formattedLead;
-            return updatedLeads;
+            return deduplicateLeads(updatedLeads);
           }
 
           // Add new lead at the beginning
-          return [formattedLead, ...prevLeads];
+          return deduplicateLeads([formattedLead, ...prevLeads]);
         });
 
         // Show success message
@@ -939,31 +974,32 @@ const Leads = () => {
           authToken
         );
 
-        setAllLeads((prev) => {
-          const targetId = String(
-            updatedLead.id || updatedLead._id || serverResp.id || serverResp._id
-          );
-          const updatedList = [];
-          let updatedEntry = null;
-          for (const l of prev) {
+        // Update the lead with server response data
+        setAllLeads((prev) =>
+          deduplicateLeads(prev.map((l) => {
             const lid = String(l.id || l._id || "");
+            const targetId = String(
+              updatedLead.id ||
+                updatedLead._id ||
+                serverResp.id ||
+                serverResp._id
+            );
             if (lid === targetId) {
-              updatedEntry = {
+              return {
                 ...l,
                 ...serverResp,
                 _id: serverResp._id || serverResp.id || l._id,
               };
-              continue; // skip pushing now; we'll prepend later
             }
-            updatedList.push(l);
-          }
-          if (!updatedEntry) {
-            updatedEntry = {
-              ...serverResp,
-              _id: serverResp._id || serverResp.id || targetId,
-            };
-          }
-          return [updatedEntry, ...updatedList];
+            return l;
+          }))
+        );
+
+        // Show success toast notification
+        setToast({
+          show: true,
+          message: "Lead updated successfully",
+          type: "success",
         });
 
         handleCloseEditModal();
@@ -1023,10 +1059,10 @@ const Leads = () => {
           (newValue === "Lost" || newValue === "Converted")
         ) {
           // remove locally for these statuses (normalize ids)
-          setAllLeads((prev) => prev.filter((l) => !matchId(l, leadId)));
+          setAllLeads((prev) => deduplicateLeads(prev.filter((l) => !matchId(l, leadId))));
         } else {
           setAllLeads((prev) =>
-            prev.map((lead) =>
+            deduplicateLeads(prev.map((lead) =>
               matchId(lead, leadId)
                 ? {
                     ...lead,
@@ -1059,7 +1095,7 @@ const Leads = () => {
                       : {}),
                   }
                 : lead
-            )
+            ))
           );
         }
 
@@ -1155,29 +1191,33 @@ const Leads = () => {
           authToken
         );
 
+        // Show success toast notification
+        const fieldDisplayName = fieldName === 'substatus' || fieldName === 'sub_status' ? 'Sub Status' 
+          : fieldName === 'last_call' ? 'Last Call' 
+          : fieldName === 'next_call' ? 'Next Call'
+          : fieldName === 'course_duration' ? 'Course Duration'
+          : fieldName === 'assigned_to_username' ? 'Assigned To'
+          : fieldName.charAt(0).toUpperCase() + fieldName.slice(1).replace(/_/g, ' ');
+        
+        setToast({
+          show: true,
+          message: `${fieldDisplayName} updated successfully`,
+          type: "success",
+        });
+
         // Merge server response into local leads (preserve UI _id when present)
-        setAllLeads((prev) => {
-          const updatedList = [];
-          let updatedEntry = null;
-          for (const l of prev) {
+        setAllLeads((prev) =>
+          deduplicateLeads(prev.map((l) => {
             if (matchId(l, leadId)) {
-              updatedEntry = {
+              return {
                 ...l,
                 ...serverResp,
                 _id: l._id || serverResp._id || serverResp.id || l._id,
               };
-              continue; // we'll prepend later
             }
-            updatedList.push(l);
-          }
-          if (!updatedEntry) {
-            updatedEntry = {
-              ...serverResp,
-              _id: serverResp._id || serverResp.id || leadId,
-            };
-          }
-          return [updatedEntry, ...updatedList];
-        });
+            return l;
+          }))
+        );
 
         // Dispatch a global event so changelog components can show an
         // immediate synthetic log entry without waiting for a full refresh.
@@ -1220,12 +1260,6 @@ const Leads = () => {
           // don't let synthetic event emission break the edit flow
           console.debug("Failed to emit crm:leadUpdated event", e);
         }
-        // If course_duration was updated, refresh leads table
-        if (fieldName === "course_duration") {
-          if (typeof handleRefresh === "function") {
-            await handleRefresh();
-          }
-        }
 
         // status side-effects (enrollment/trash) — run after successful PATCH
         if (fieldName === "status") {
@@ -1252,7 +1286,7 @@ const Leads = () => {
                 lead: leadObjAfter.id || leadId,
                 course: resolvedCourseId || null,
                 total_payment: leadObjAfter.value || null,
-                first_installment: null,
+                first_installment: leadObjAfter.first_installment || null,
                 second_installment: null,
                 third_installment: null,
                 batchname: "",
@@ -1353,8 +1387,18 @@ const Leads = () => {
   );
 
   const handleStatusChange = useCallback(
-    (leadId, newStatus) => updateLeadField(leadId, "status", newStatus),
-    [updateLeadField]
+    async (leadId, newStatus) => {
+      // Check if status is "Converted" and first_invoice is required
+      if (newStatus === "Converted") {
+        const lead = allLeads.find((l) => matchId(l, leadId));
+        if (!lead?.first_invoice) {
+          alert("Invoice is required when setting status to 'Converted'");
+          return; // Don't proceed with status change
+        }
+      }
+      updateLeadField(leadId, "status", newStatus);
+    },
+    [updateLeadField, allLeads]
   );
   const handleSubStatusChange = useCallback(
     (leadId, newSubStatus) =>
@@ -1731,10 +1775,10 @@ const Leads = () => {
   const [leads, setLeads] = useState([]);
 
   const handleFieldChange = (id, field, value) => {
-    setLeads((prev) =>
-      prev.map((lead) =>
+    setAllLeads((prev) =>
+      deduplicateLeads(prev.map((lead) =>
         matchId(lead, id) ? { ...lead, [field]: value } : lead
-      )
+      ))
     );
   };
 
