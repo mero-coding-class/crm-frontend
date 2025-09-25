@@ -101,6 +101,8 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     post_code: "",
     demo_scheduled: "",
     add_date: getTodayDate(),
+    first_installment: "",
+    first_invoice: null,
   });
 
   const modalContentRef = useRef(null);
@@ -209,6 +211,13 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
       return;
     }
 
+    // Check if status is "Converted" and first_invoice is required
+    if (formData.status === "Converted" && !formData.first_invoice) {
+      alert("Invoice is required when setting status to 'Converted'");
+      setErrors({ first_invoice: "Invoice is required for Converted status" });
+      return;
+    }
+
     // --- 2️⃣ Prepare Payload ---
     const payload = {
       ...formData,
@@ -298,6 +307,9 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         last_call: formatDateForBackend(formData.last_call),
         next_call: formatDateForBackend(formData.next_call),
         add_date: formData.add_date,
+        first_installment: formData.first_installment
+          ? parseFloat(formData.first_installment)
+          : null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -355,14 +367,43 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
         // ignore
       }
 
-      const response = await fetch(`${BASE_URL}/leads/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${authToken}`,
-        },
-        body: JSON.stringify(backendPayload),
-      });
+      // Prepare API call - use FormData if file upload, otherwise JSON
+      let requestOptions;
+      if (formData.first_invoice) {
+        // Use FormData for file upload
+        const formDataToSend = new FormData();
+
+        // Add all fields to FormData
+        Object.entries(backendPayload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            formDataToSend.append(key, value);
+          }
+        });
+
+        // Add the file
+        formDataToSend.append("first_invoice", formData.first_invoice);
+
+        requestOptions = {
+          method: "POST",
+          headers: {
+            Authorization: `Token ${authToken}`,
+            // Don't set Content-Type for FormData - browser will set it with boundary
+          },
+          body: formDataToSend,
+        };
+      } else {
+        // Regular JSON request
+        requestOptions = {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Token ${authToken}`,
+          },
+          body: JSON.stringify(backendPayload),
+        };
+      }
+
+      const response = await fetch(`${BASE_URL}/leads/`, requestOptions);
       // Debug log outgoing request for better tracing of 400 responses
       try {
         console.debug("POST /leads/ -> payload:", backendPayload);
@@ -1258,6 +1299,60 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
+          </div>
+
+          {/* Payment & Invoice Section */}
+          <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
+            Payment Information
+          </div>
+
+          {/* First Installment */}
+          <div>
+            <label
+              htmlFor="first_installment"
+              className="block text-sm font-medium text-gray-700"
+            >
+              First Installment Amount
+            </label>
+            <input
+              type="number"
+              id="first_installment"
+              name="first_installment"
+              value={formData.first_installment}
+              onChange={handleChange}
+              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              placeholder="Enter amount"
+              min="0"
+              step="0.01"
+            />
+          </div>
+
+          {/* First Invoice Upload */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              First Invoice (PDF/Image)
+            </label>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+              <input
+                type="file"
+                id="first_invoice"
+                name="first_invoice"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  setFormData((prev) => ({ ...prev, first_invoice: file }));
+                }}
+                accept=".pdf,.jpg,.jpeg,.png,.gif"
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              {formData.first_invoice && (
+                <div className="mt-2 text-sm text-green-600">
+                  Selected: {formData.first_invoice.name}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Upload PDF or image files (JPG, PNG, GIF)
+              </p>
+            </div>
           </div>
 
           {/* Form Actions */}

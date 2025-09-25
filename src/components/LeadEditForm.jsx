@@ -726,6 +726,65 @@ const LeadEditForm = ({
         </select>
       </div>
 
+      {/* First Installment */}
+      <div className="flex flex-col">
+        <label
+          htmlFor="first_installment"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          First Installment
+        </label>
+        <input
+          type="number"
+          id="first_installment"
+          name="first_installment"
+          value={formData.first_installment || ""}
+          onChange={onChange}
+          className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          placeholder="Enter amount"
+          min="0"
+          step="0.01"
+        />
+      </div>
+
+      {/* First Invoice Upload */}
+      <div className="flex flex-col">
+        <label
+          htmlFor="first_invoice"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          First Invoice
+        </label>
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-3">
+          <input
+            type="file"
+            id="first_invoice"
+            name="first_invoice"
+            onChange={(e) => {
+              const file = e.target.files[0];
+              onChange({
+                target: {
+                  name: "first_invoice",
+                  value: file,
+                },
+              });
+            }}
+            accept=".pdf,.jpg,.jpeg,.png,.gif"
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {formData.first_invoice && (
+            <div className="mt-2 text-sm text-green-600">
+              {formData.first_invoice instanceof File
+                ? `Selected: ${formData.first_invoice.name}`
+                : "File uploaded"}
+            </div>
+          )}
+          <p className="mt-1 text-xs text-gray-500">
+            Upload PDF or image files (JPG, PNG, GIF)
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-col col-span-1 sm:col-span-2 lg:col-span-3">
         <label
           htmlFor="remarks"

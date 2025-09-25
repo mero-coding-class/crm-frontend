@@ -42,6 +42,8 @@ const initialColumns = {
   value: { label: "Value", visible: false },
   adset_name: { label: "Adset Name", visible: false },
   payment_type: { label: "Payment Type", visible: false },
+  first_installment: { label: "First Installment", visible: false },
+  first_invoice: { label: "First Invoice", visible: false },
   device: { label: "Device", visible: false },
   school_college_name: { label: "School/College", visible: false },
   scheduled_taken: { label: "Scheduled Taken", visible: true },

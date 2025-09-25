@@ -616,6 +616,9 @@ const EnrolledStudents = () => {
   // Instant field update (sends PATCH to backend immediately)
   const handleUpdateField = useCallback(
     async (studentId, field, value) => {
+      // Capture snapshot at function level for error recovery
+      const prevStudents = (allStudents || []).slice();
+
       const paymentFields = new Set([
         "total_payment",
         "first_installment",
@@ -655,8 +658,6 @@ const EnrolledStudents = () => {
       // user's change immediately. If the PATCH fails we'll roll back.
 
       try {
-        const prevStudents = (allStudents || []).slice();
-
         // Apply optimistic update locally so UI updates immediately.
         setAllStudents((prev) =>
           (prev || []).map((s) => {
@@ -703,7 +704,6 @@ const EnrolledStudents = () => {
           })
         );
 
-        const prevSnapshot = prevStudents;
         let payload = {};
         if (field === null && value && typeof value === "object") {
           // When modal sends a whole object, sanitize to only include
@@ -924,18 +924,19 @@ const EnrolledStudents = () => {
 
         let response;
 
-        // Normalize scheduled_taken (legacy demo_scheduled) values: backend commonly expects boolean
-        // Convert "Yes"/"No" (or case variants) to true/false where present
+        // Normalize scheduled_taken (legacy demo_scheduled) values: backend expects "Yes"/"No" strings
+        // Convert boolean true/false to "Yes"/"No" strings where present
         try {
           const normalizeYesNo = (v) => {
             if (v === undefined || v === null) return v;
-            if (typeof v === "boolean") return v;
+            if (typeof v === "boolean") return v ? "Yes" : "No";
             const s = String(v).trim().toLowerCase();
-            if (s === "yes") return true;
-            if (s === "no") return false;
+            if (s === "yes" || s === "true") return "Yes";
+            if (s === "no" || s === "false") return "No";
             // If it's an empty string, return null so backend will treat as cleared
             if (s === "") return null;
-            return v;
+            // Return "Yes" or "No" for any other truthy/falsy values
+            return v ? "Yes" : "No";
           };
 
           if (payload && payload.scheduled_taken !== undefined) {
@@ -980,7 +981,7 @@ const EnrolledStudents = () => {
         // If using PUT, build a full representation to avoid unintentionally clearing fields
         if (method === "PUT") {
           try {
-            const current = prevSnapshot.find(
+            const current = prevStudents.find(
               (s) => String(s.id) === String(studentId)
             );
             if (current) {
@@ -1084,7 +1085,95 @@ const EnrolledStudents = () => {
             credentials: "include",
           });
         } else {
-          response = await fetch(`${ENROLLMENTS_API_BASE}${studentId}/`, {
+          // Determine if this is a lead field or enrollment field
+          const currentStudent = allStudents.find(
+            (s) => String(s.id) === String(studentId)
+          );
+          const isLeadField =
+            field &&
+            (field.startsWith("lead.") ||
+              // Lead fields that might be updated directly
+              [
+                "student_name",
+                "parents_name",
+                "email",
+                "phone_number",
+                "age",
+                "grade",
+                "status",
+                "substatus",
+                "course_type",
+                "shift",
+                "previous_coding_experience",
+                "last_call",
+                "next_call",
+                "value",
+                "adset_name",
+                "payment_type",
+                "device",
+                "school_college_name",
+                "remarks",
+                "address_line_1",
+                "address_line_2",
+                "city",
+                "country",
+                "post_code",
+                "source",
+                "class_type",
+                "lead_type",
+                "course",
+                "scheduled_taken",
+                "whatsapp_number",
+              ].includes(backendField));
+
+          // Force these fields to always go to enrollment API regardless of field name
+          const enrollmentOnlyFields = [
+            "course_duration", // This should be enrollment-specific, not lead
+            "batchname",
+            "batch_name",
+            "assigned_teacher",
+            "assigned_teacher_name",
+            "total_payment",
+            "first_installment",
+            "second_installment",
+            "third_installment",
+            "payment_completed",
+            "starting_date",
+            "last_pay_date",
+            "next_pay_date",
+            "course",
+            "invoice",
+          ];
+
+          const isEnrollmentOnlyField =
+            enrollmentOnlyFields.includes(backendField);
+          const shouldUseLeadsAPI =
+            isLeadField && !isEnrollmentOnlyField && currentStudent?.lead?.id;
+
+          let apiUrl, targetId;
+          if (shouldUseLeadsAPI) {
+            // Lead field - send to leads API
+            apiUrl = `${BASE_URL}/leads/${currentStudent.lead.id}/`;
+            targetId = currentStudent.lead.id;
+          } else {
+            // Enrollment field - send to enrollments API
+            apiUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
+            targetId = studentId;
+          }
+
+          // Debug logging
+          console.log("API Routing Debug:", {
+            field,
+            backendField,
+            isLeadField,
+            isEnrollmentOnlyField,
+            shouldUseLeadsAPI,
+            hasLeadId: !!currentStudent?.lead?.id,
+            apiUrl,
+            payload,
+          });
+
+          response = await fetch(apiUrl, {
             method,
             headers: {
               "Content-Type": "application/json",
@@ -1095,7 +1184,7 @@ const EnrolledStudents = () => {
           });
         }
         if (!response.ok) {
-          // Retry 1: scheduled_taken boolean -> "Yes" / "No"
+          // Retry 1: scheduled_taken boolean -> "Yes" / "No" (fallback safety)
           if (
             response.status === 400 &&
             payload &&
@@ -1108,7 +1197,7 @@ const EnrolledStudents = () => {
                 scheduled_taken: payload.scheduled_taken ? "Yes" : "No",
               };
               const retryResp = await fetch(
-                `${ENROLLMENTS_API_BASE}${studentId}/`,
+                apiUrl, // Use the same API URL determined above
                 {
                   method,
                   headers: {
@@ -1138,7 +1227,7 @@ const EnrolledStudents = () => {
                 lead: { payment_type: payload.payment_type },
               };
               const retryResp = await fetch(
-                `${ENROLLMENTS_API_BASE}${studentId}/`,
+                apiUrl, // Use the same API URL determined above
                 {
                   method,
                   headers: {
@@ -1168,7 +1257,7 @@ const EnrolledStudents = () => {
                 lead: { course_duration: payload.course_duration },
               };
               const retryResp = await fetch(
-                `${ENROLLMENTS_API_BASE}${studentId}/`,
+                apiUrl, // Use the same API URL determined above
                 {
                   method,
                   headers: {
@@ -1194,16 +1283,30 @@ const EnrolledStudents = () => {
             errorData = { detail: errorText };
           }
           // rollback optimistic update
-          setAllStudents(prevSnapshot);
+          setAllStudents(prevStudents);
           // Show error in UI and log full response
           setError(
             `Failed to update enrollment: ${
               errorData.detail || response.statusText
             }`
           );
+
+          // Determine the URL that was used for the request based on context
+          let requestUrl;
+          if (hasInvoiceFiles) {
+            // For file uploads, reconstruct the URL that was used
+            requestUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
+          } else if (typeof apiUrl !== "undefined") {
+            // Use the apiUrl from the non-file branch if it's defined
+            requestUrl = apiUrl;
+          } else {
+            // Fallback
+            requestUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
+          }
+
           console.error("Enrollment update error details:", {
             method,
-            url: `${ENROLLMENTS_API_BASE}${studentId}/`,
+            url: requestUrl,
             payload,
             status: response.status,
             response: errorData,
@@ -1270,7 +1373,7 @@ const EnrolledStudents = () => {
             };
             // try to infer old/new for this field from payload
             try {
-              meta.old_value = prevSnapshot.find(
+              meta.old_value = prevStudents.find(
                 (x) => String(x.id) === String(studentId)
               )?.[backendField];
               meta.new_value =
@@ -1287,6 +1390,29 @@ const EnrolledStudents = () => {
             console.debug("Failed to emit enrollment/lead updated events", e);
           }
         }
+
+        // Show success toast notification
+        const fieldDisplayName =
+          backendField === "payment_completed"
+            ? "Payment Status"
+            : backendField === "assigned_teacher"
+            ? "Assigned Teacher"
+            : backendField === "course_duration"
+            ? "Course Duration"
+            : backendField === "scheduled_taken"
+            ? "Demo Scheduled"
+            : backendField === "batchname"
+            ? "Batch Name"
+            : field === null
+            ? "Student Information"
+            : backendField.charAt(0).toUpperCase() +
+              backendField.slice(1).replace(/_/g, " ");
+
+        setToast({
+          show: true,
+          message: `${fieldDisplayName} updated successfully`,
+          type: "success",
+        });
 
         setError(null);
         // Return parsed JSON so callers (modal) can react to updated invoice URLs
