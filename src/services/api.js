@@ -312,6 +312,23 @@ export const leadService = {
     }
     if (updates.paymentType !== undefined)
       backendUpdates.payment_type = updates.paymentType;
+    // Support updating first_installment (numeric or null)
+    if (updates.first_installment !== undefined) {
+      const v = updates.first_installment;
+      if (v === null || v === "") backendUpdates.first_installment = null;
+      else {
+        const n = Number(v);
+        backendUpdates.first_installment = Number.isFinite(n) ? n : v;
+      }
+    }
+    if (updates.firstInstallment !== undefined) {
+      const v = updates.firstInstallment;
+      if (v === null || v === "") backendUpdates.first_installment = null;
+      else {
+        const n = Number(v);
+        backendUpdates.first_installment = Number.isFinite(n) ? n : v;
+      }
+    }
     if (updates.previousCodingExp !== undefined)
       backendUpdates.previous_coding_experience = updates.previousCodingExp;
     if (updates.workshopBatch !== undefined)
@@ -348,14 +365,49 @@ export const leadService = {
       backendUpdates.assigned_to_username = updates.assigned_to_username;
 
     const doPatch = async (payload) => {
-      const resp = await fetch(`${BASE_URL}/leads/${id}/`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Token ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      // If uploading a file for first_invoice, use multipart/form-data
+      const hasInvoiceFile =
+        updates && updates.first_invoice && updates.first_invoice instanceof File;
+
+      let resp;
+      if (hasInvoiceFile) {
+        const fd = new FormData();
+        // Append scalar fields from payload
+        Object.entries(payload || {}).forEach(([k, v]) => {
+          if (k === "first_invoice") return; // handle below
+          if (v === undefined || v === null) return;
+          if (typeof v === "object") {
+            try {
+              fd.append(k, JSON.stringify(v));
+            } catch {
+              // fall back to string
+              fd.append(k, String(v));
+            }
+          } else {
+            fd.append(k, String(v));
+          }
+        });
+        // Append the file last
+        fd.append("first_invoice", updates.first_invoice);
+
+        resp = await fetch(`${BASE_URL}/leads/${id}/`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Token ${authToken}`,
+            // IMPORTANT: Do not set Content-Type for FormData; browser will set boundary
+          },
+          body: fd,
+        });
+      } else {
+        resp = await fetch(`${BASE_URL}/leads/${id}/`, {
+          method: "PATCH",
+          headers: {
+            Authorization: `Token ${authToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      }
 
       // Debug: log outgoing request details so we can trace missing updates
       try {
@@ -426,6 +478,16 @@ export const leadService = {
   // Keep assigned_to and assigned_to_username in sync
   merged.assigned_to = merged.assigned_to || merged.assigned_to_username || backendUpdates.assigned_to || backendUpdates.assigned_to_username || "";
   merged.assigned_to_username = merged.assigned_to_username || merged.assigned_to || "";
+
+  // Normalize first_installment to a number or null consistently in the merged result
+  if (merged.first_installment !== undefined) {
+    if (merged.first_installment === "" || merged.first_installment === null) {
+      merged.first_installment = null;
+    } else if (typeof merged.first_installment === "string" || typeof merged.first_installment === "number") {
+      const n = Number(merged.first_installment);
+      merged.first_installment = Number.isFinite(n) ? n : merged.first_installment;
+    }
+  }
 
   // Normalize course_duration variants — preserve empty string if present
   if (serverData.course_duration !== undefined) {

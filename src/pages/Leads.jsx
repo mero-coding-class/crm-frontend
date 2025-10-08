@@ -20,33 +20,29 @@ import {
   changeLogService,
 } from "../services/api";
 import { resolveServerId } from "../services/api";
-import {
-  PlusIcon,
-  ArrowDownTrayIcon,
-  ArrowPathIcon,
-  MagnifyingGlassIcon,
-  FunnelIcon,
-} from "@heroicons/react/24/outline";
 
-// Utility function to deduplicate leads by ID
+// Utility function to deduplicate leads by ID (normalizes number/string ids and fallbacks)
 const deduplicateLeads = (leads) => {
   if (!Array.isArray(leads)) return [];
-  
-  const seen = new Map();
+
+  const seen = new Set();
   const result = [];
-  
+
   for (const lead of leads) {
     if (!lead) continue;
-    
-    // Use multiple ID variants to match leads
-    const id = String(lead.id || lead._id || lead.email || `${lead.student_name}-${lead.phone_number}` || '');
-    
-    if (!seen.has(id)) {
-      seen.set(id, true);
+    const normalize = (v) =>
+      v === undefined || v === null ? "" : String(v).trim();
+    const key =
+      normalize(lead.id) ||
+      normalize(lead._id) ||
+      normalize(lead.email) ||
+      normalize(`${lead.student_name}-${lead.phone_number}`);
+    if (!seen.has(key)) {
+      seen.add(key);
       result.push(lead);
     }
   }
-  
+
   return result;
 };
 
@@ -164,7 +160,8 @@ const Leads = () => {
 
   // Always recalculate filters on latest allLeads
   useEffect(() => {
-    let workingSet = [...allLeads];
+    // Always deduplicate before applying any filters/search
+    let workingSet = deduplicateLeads(allLeads);
 
     const applyFilters = (items) => {
       let filtered = [...items];
@@ -316,7 +313,7 @@ const Leads = () => {
           (lead.previous_coding_experience || "") === filterPrevCodingExp
       );
     }
-    setLeads(filtered);
+    setLeads(deduplicateLeads(filtered));
   }, [
     allLeads,
     filterStatus,
@@ -400,8 +397,8 @@ const Leads = () => {
         if (list.length < pageSizeForFetch) break;
         page += 1;
       }
-      // Replace allLeads with the full dataset
-      setAllLeads(accumulated);
+      // Replace allLeads with the full dataset (deduplicated)
+      setAllLeads(deduplicateLeads(accumulated));
       allLeadsFullRef.current = true;
       return accumulated;
     } catch (err) {
@@ -495,7 +492,8 @@ const Leads = () => {
         }))
         .slice(0, pageSize);
 
-      setAllLeads(processedLeads);
+      // Replace with the latest page (deduplicated just in case)
+      setAllLeads(deduplicateLeads(processedLeads));
       // Normalize coursesData
       if (
         coursesData &&
@@ -569,9 +567,10 @@ const Leads = () => {
             const appended = normalized.filter(
               (l) => !prevOrder.includes(String(l.id || l._id || ""))
             );
-            setAllLeads([...ordered, ...appended]);
+            // Preserve prior ordering and append the rest, then deduplicate
+            setAllLeads(deduplicateLeads([...ordered, ...appended]));
           } else {
-            setAllLeads(normalized);
+            setAllLeads(deduplicateLeads(normalized));
           }
           setTotalCount(count);
           // Note: totalPages is now handled by useLeadSearch hook
@@ -620,19 +619,20 @@ const Leads = () => {
     const importDebounceRef = { current: null };
     const onImported = (e) => {
       console.info("Leads.jsx detected crm:imported event, scheduling refresh");
-      
+
       // Show success toast with import count if available
       const importedCount = e?.detail?.count || e?.detail?.importedCount || 0;
-      const message = importedCount > 0 
-        ? `Successfully imported ${importedCount} leads`
-        : 'CSV import completed successfully';
-      
+      const message =
+        importedCount > 0
+          ? `Successfully imported ${importedCount} leads`
+          : "CSV import completed successfully";
+
       setToast({
         show: true,
         message: message,
         type: "success",
       });
-      
+
       // Invalidate cached full dataset
       allLeadsFullRef.current = false;
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
@@ -658,7 +658,7 @@ const Leads = () => {
           if (matchIndex === -1) return prev;
           const next = [...prev];
           next[matchIndex] = { ...next[matchIndex], ...updated };
-          return next;
+          return deduplicateLeads(next);
         });
       } catch (err) {
         console.warn("Leads.jsx could not apply crm:leadUpdated event", err);
@@ -694,7 +694,7 @@ const Leads = () => {
               restored.email ||
               `lead-${Date.now()}`,
           };
-          return [withId, ...filtered];
+          return deduplicateLeads([withId, ...filtered]);
         });
       } catch (err) {
         console.warn("Failed to apply crm:leadRestored event", err);
@@ -718,7 +718,7 @@ const Leads = () => {
             if (foundIndex === -1) return prev;
             const next = [...prev];
             const [item] = next.splice(foundIndex, 1);
-            return [item, ...next];
+            return deduplicateLeads([item, ...next]);
           });
         }
       } catch (err) {
@@ -976,31 +976,181 @@ const Leads = () => {
 
         // Update the lead with server response data
         setAllLeads((prev) =>
-          deduplicateLeads(prev.map((l) => {
-            const lid = String(l.id || l._id || "");
-            const targetId = String(
-              updatedLead.id ||
-                updatedLead._id ||
-                serverResp.id ||
-                serverResp._id
-            );
-            if (lid === targetId) {
-              return {
-                ...l,
-                ...serverResp,
-                _id: serverResp._id || serverResp.id || l._id,
-              };
-            }
-            return l;
-          }))
+          deduplicateLeads(
+            prev.map((l) => {
+              const lid = String(l.id || l._id || "");
+              const targetId = String(
+                updatedLead.id ||
+                  updatedLead._id ||
+                  serverResp.id ||
+                  serverResp._id
+              );
+              if (lid === targetId) {
+                return {
+                  ...l,
+                  ...serverResp,
+                  _id: serverResp._id || serverResp.id || l._id,
+                };
+              }
+              return l;
+            })
+          )
         );
 
-        // Show success toast notification
+        // Show success toast notification (3s)
         setToast({
           show: true,
           message: "Lead updated successfully",
           type: "success",
+          duration: 3000,
         });
+
+        // Bridge: if first_installment was part of the edit, emit a targeted event
+        try {
+          if (
+            updatedLead &&
+            Object.prototype.hasOwnProperty.call(
+              updatedLead,
+              "first_installment"
+            )
+          ) {
+            window.dispatchEvent(
+              new CustomEvent("crm:leadFirstInstallmentUpdated", {
+                detail: {
+                  leadId: serverResp?.id || updatedLead?.id || updatedLead?._id,
+                  first_installment: updatedLead.first_installment,
+                },
+              })
+            );
+          }
+        } catch (e) {
+          // non-blocking
+        }
+
+        // If status changed to Converted/Lost from modal, trigger side-effects immediately
+        try {
+          const finalStatus =
+            (serverResp && serverResp.status) || updatedLead.status;
+          const serverIdAfter =
+            serverResp?.id || updatedLead?.id || updatedLead?._id;
+          if (finalStatus === "Converted") {
+            // Optional guard: ensure first_invoice exists
+            const foundLead = (allLeads || []).find(
+              (l) => String(l.id || l._id || "") === String(serverIdAfter)
+            );
+            if (foundLead && !foundLead.first_invoice) {
+              alert("Invoice is required when setting status to 'Converted'");
+            } else {
+              // Resolve course id from selected course or course_name
+              const leadObjAfter = serverResp || updatedLead || {};
+              let resolvedCourseId = null;
+              if (
+                leadObjAfter.course &&
+                (typeof leadObjAfter.course === "number" ||
+                  /^\d+$/.test(String(leadObjAfter.course)))
+              ) {
+                resolvedCourseId = leadObjAfter.course;
+              } else if (leadObjAfter.course_name) {
+                const foundCourse = Array.isArray(courses)
+                  ? courses.find(
+                      (c) =>
+                        (c.course_name || c.name || "").toString().trim() ===
+                        String(leadObjAfter.course_name).trim()
+                    )
+                  : null;
+                resolvedCourseId = foundCourse ? foundCourse.id : null;
+              }
+
+              const enrollmentPayload = {
+                lead: serverIdAfter,
+                course: resolvedCourseId || null,
+                total_payment: leadObjAfter.value ?? null,
+                second_installment: null,
+                third_installment: null,
+                batchname: "",
+                last_pay_date: null,
+                payment_completed: false,
+                starting_date: null,
+                assigned_teacher: "",
+              };
+
+              const respEnroll = await fetch(`${BASE_URL}/enrollments/`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(enrollmentPayload),
+                credentials: "include",
+              });
+              if (respEnroll.ok) {
+                const created = await respEnroll.json();
+                window.dispatchEvent(
+                  new CustomEvent("crm:enrollmentCreated", {
+                    detail: { enrollment: created },
+                  })
+                );
+                window.dispatchEvent(
+                  new CustomEvent("crm:leadConverted", {
+                    detail: { leadId: serverIdAfter, enrollment: created },
+                  })
+                );
+                // Remove from Leads list immediately
+                setAllLeads((prev) =>
+                  prev.filter(
+                    (l) => String(l.id || l._id || "") !== String(serverIdAfter)
+                  )
+                );
+              } else {
+                console.warn(
+                  "Modal: Enrollment POST failed, triggering refresh",
+                  await respEnroll.text()
+                );
+                window.dispatchEvent(new CustomEvent("crm:refreshEnrollments"));
+              }
+            }
+          } else if (finalStatus === "Lost") {
+            const respTrash = await fetch(
+              `${BASE_URL}/trash/${serverIdAfter}/`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify({ status: "Lost" }),
+                credentials: "include",
+              }
+            );
+            if (respTrash.ok) {
+              const trashed = await respTrash.json();
+              window.dispatchEvent(
+                new CustomEvent("crm:leadMovedToTrash", {
+                  detail: { lead: trashed, leadId: serverIdAfter },
+                })
+              );
+              setAllLeads((prev) =>
+                prev.filter(
+                  (l) => String(l.id || l._id || "") !== String(serverIdAfter)
+                )
+              );
+            } else {
+              console.warn("Modal: Trash PATCH failed", await respTrash.text());
+              window.dispatchEvent(
+                new CustomEvent("crm:leadMovedToTrash", {
+                  detail: { leadId: serverIdAfter },
+                })
+              );
+              setAllLeads((prev) =>
+                prev.filter(
+                  (l) => String(l.id || l._id || "") !== String(serverIdAfter)
+                )
+              );
+            }
+          }
+        } catch (e) {
+          console.warn("Modal status side-effects failed:", e);
+        }
 
         handleCloseEditModal();
       } catch (err) {
@@ -1059,43 +1209,49 @@ const Leads = () => {
           (newValue === "Lost" || newValue === "Converted")
         ) {
           // remove locally for these statuses (normalize ids)
-          setAllLeads((prev) => deduplicateLeads(prev.filter((l) => !matchId(l, leadId))));
+          setAllLeads((prev) =>
+            deduplicateLeads(prev.filter((l) => !matchId(l, leadId)))
+          );
         } else {
           setAllLeads((prev) =>
-            deduplicateLeads(prev.map((lead) =>
-              matchId(lead, leadId)
-                ? {
-                    ...lead,
-                    // keep both variants in sync
-                    ...(fieldName === "substatus" || fieldName === "sub_status"
-                      ? { substatus: newValue, sub_status: newValue }
-                      : {}),
-                    // handle assigned_to_username specifically
-                    ...(fieldName === "assigned_to_username"
-                      ? {
-                          assigned_to_username: newValue,
-                          assigned_to: newValue,
-                        }
-                      : {}),
-                    // date fields should be stored in YYYY-MM-DD for UI
-                    ...(fieldName === "last_call" || fieldName === "recentCall"
-                      ? { recentCall: newValue, last_call: newValue }
-                      : {}),
-                    ...(fieldName === "next_call" || fieldName === "nextCall"
-                      ? { nextCall: newValue, next_call: newValue }
-                      : {}),
-                    // default assignment for other fields
-                    ...(fieldName !== "substatus" &&
-                    fieldName !== "sub_status" &&
-                    fieldName !== "last_call" &&
-                    fieldName !== "recentCall" &&
-                    fieldName !== "next_call" &&
-                    fieldName !== "nextCall"
-                      ? { [fieldName]: newValue }
-                      : {}),
-                  }
-                : lead
-            ))
+            deduplicateLeads(
+              prev.map((lead) =>
+                matchId(lead, leadId)
+                  ? {
+                      ...lead,
+                      // keep both variants in sync
+                      ...(fieldName === "substatus" ||
+                      fieldName === "sub_status"
+                        ? { substatus: newValue, sub_status: newValue }
+                        : {}),
+                      // handle assigned_to_username specifically
+                      ...(fieldName === "assigned_to_username"
+                        ? {
+                            assigned_to_username: newValue,
+                            assigned_to: newValue,
+                          }
+                        : {}),
+                      // date fields should be stored in YYYY-MM-DD for UI
+                      ...(fieldName === "last_call" ||
+                      fieldName === "recentCall"
+                        ? { recentCall: newValue, last_call: newValue }
+                        : {}),
+                      ...(fieldName === "next_call" || fieldName === "nextCall"
+                        ? { nextCall: newValue, next_call: newValue }
+                        : {}),
+                      // default assignment for other fields
+                      ...(fieldName !== "substatus" &&
+                      fieldName !== "sub_status" &&
+                      fieldName !== "last_call" &&
+                      fieldName !== "recentCall" &&
+                      fieldName !== "next_call" &&
+                      fieldName !== "nextCall"
+                        ? { [fieldName]: newValue }
+                        : {}),
+                    }
+                  : lead
+              )
+            )
           );
         }
 
@@ -1192,13 +1348,20 @@ const Leads = () => {
         );
 
         // Show success toast notification
-        const fieldDisplayName = fieldName === 'substatus' || fieldName === 'sub_status' ? 'Sub Status' 
-          : fieldName === 'last_call' ? 'Last Call' 
-          : fieldName === 'next_call' ? 'Next Call'
-          : fieldName === 'course_duration' ? 'Course Duration'
-          : fieldName === 'assigned_to_username' ? 'Assigned To'
-          : fieldName.charAt(0).toUpperCase() + fieldName.slice(1).replace(/_/g, ' ');
-        
+        const fieldDisplayName =
+          fieldName === "substatus" || fieldName === "sub_status"
+            ? "Sub Status"
+            : fieldName === "last_call"
+            ? "Last Call"
+            : fieldName === "next_call"
+            ? "Next Call"
+            : fieldName === "course_duration"
+            ? "Course Duration"
+            : fieldName === "assigned_to_username"
+            ? "Assigned To"
+            : fieldName.charAt(0).toUpperCase() +
+              fieldName.slice(1).replace(/_/g, " ");
+
         setToast({
           show: true,
           message: `${fieldDisplayName} updated successfully`,
@@ -1207,16 +1370,18 @@ const Leads = () => {
 
         // Merge server response into local leads (preserve UI _id when present)
         setAllLeads((prev) =>
-          deduplicateLeads(prev.map((l) => {
-            if (matchId(l, leadId)) {
-              return {
-                ...l,
-                ...serverResp,
-                _id: l._id || serverResp._id || serverResp.id || l._id,
-              };
-            }
-            return l;
-          }))
+          deduplicateLeads(
+            prev.map((l) => {
+              if (matchId(l, leadId)) {
+                return {
+                  ...l,
+                  ...serverResp,
+                  _id: l._id || serverResp._id || serverResp.id || l._id,
+                };
+              }
+              return l;
+            })
+          )
         );
 
         // Dispatch a global event so changelog components can show an
@@ -1281,12 +1446,16 @@ const Leads = () => {
                       ) || {}
                     ).id
                   : null;
+              const serverIdAfter =
+                resolveServerId(leadObjAfter || leadId, prevLeads) ||
+                (leadObjAfter && (leadObjAfter.id || leadObjAfter._id)) ||
+                leadId;
 
               const enrollmentPayload = {
-                lead: leadObjAfter.id || leadId,
+                lead: serverIdAfter,
                 course: resolvedCourseId || null,
                 total_payment: leadObjAfter.value || null,
-                first_installment: leadObjAfter.first_installment || null,
+                // first_installment is owned by lead; do not send here
                 second_installment: null,
                 third_installment: null,
                 batchname: "",
@@ -1296,21 +1465,15 @@ const Leads = () => {
                 assigned_teacher: "",
               };
 
-              const serverIdAfter =
-                resolveServerId(leadObjAfter || leadId, prevLeads) ||
-                (leadObjAfter && (leadObjAfter.id || leadObjAfter._id)) ||
-                leadId;
-              const resp = await fetch(
-                `${BASE_URL}/enrollments/${serverIdAfter}/`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Token ${authToken}`,
-                  },
-                  body: JSON.stringify(enrollmentPayload),
-                }
-              );
+              // Create enrollment (POST). If backend expects a different flow, we still emit a refresh event as fallback.
+              const resp = await fetch(`${BASE_URL}/enrollments/`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(enrollmentPayload),
+              });
               if (resp.ok) {
                 const created = await resp.json();
                 window.dispatchEvent(
@@ -1320,14 +1483,19 @@ const Leads = () => {
                 );
                 window.dispatchEvent(
                   new CustomEvent("crm:leadConverted", {
-                    detail: { leadId: leadId, enrollment: created },
+                    detail: { leadId: serverIdAfter, enrollment: created },
                   })
                 );
               } else {
-                console.error("Enrollment PATCH failed:", await resp.text());
+                console.warn(
+                  "Enrollment POST failed, triggering refresh:",
+                  await resp.text()
+                );
+                window.dispatchEvent(new CustomEvent("crm:refreshEnrollments"));
               }
             } catch (e) {
               console.error("Enrollment PATCH request failed:", e);
+              window.dispatchEvent(new CustomEvent("crm:refreshEnrollments"));
             }
           }
 
@@ -1776,9 +1944,11 @@ const Leads = () => {
 
   const handleFieldChange = (id, field, value) => {
     setAllLeads((prev) =>
-      deduplicateLeads(prev.map((lead) =>
-        matchId(lead, id) ? { ...lead, [field]: value } : lead
-      ))
+      deduplicateLeads(
+        prev.map((lead) =>
+          matchId(lead, id) ? { ...lead, [field]: value } : lead
+        )
+      )
     );
   };
 
@@ -1789,7 +1959,7 @@ const Leads = () => {
           // Mark the lead as 'Lost' using the update endpoint (backend accepts "Lost").
           await leadService.updateLead(leadId, { status: "Lost" }, authToken);
           setAllLeads((prevLeads) =>
-            prevLeads.filter((lead) => lead._id !== leadId)
+            deduplicateLeads(prevLeads.filter((lead) => !matchId(lead, leadId)))
           );
         } catch (err) {
           setError(err.message || "Failed to move lead to trash");
@@ -1810,7 +1980,9 @@ const Leads = () => {
         );
         // Remove the leads from the local state
         setAllLeads((prevLeads) =>
-          prevLeads.filter((lead) => !leadIds.includes(lead._id))
+          deduplicateLeads(
+            prevLeads.filter((lead) => !leadIds.some((id) => matchId(lead, id)))
+          )
         );
       } catch (err) {
         setError(err.message || "Failed to move selected leads to trash");
@@ -1830,7 +2002,8 @@ const Leads = () => {
 
   // Admins/super-admins should see all leads by default
   // For non-admins, hide Converted/Lost/Junk except when the lead is assigned to the current user
-  let currentLeads = [...allLeads];
+  // Ensure uniqueness before any role-based visibility or extra filter chaining
+  let currentLeads = deduplicateLeads([...allLeads]);
   if (!isAdmin) {
     const username =
       (user && user.username) || localStorage.getItem("username") || "";
@@ -2028,6 +2201,7 @@ const Leads = () => {
         <Toast
           message={toast.message}
           type={toast.type}
+          duration={toast.duration ?? 6000}
           onClose={() =>
             setToast({ show: false, message: "", type: "success" })
           }

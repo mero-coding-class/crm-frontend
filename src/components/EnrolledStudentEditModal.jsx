@@ -20,6 +20,38 @@ const EnrolledStudentEditModal = ({
   const [formData, setFormData] = useState(() => {
     // Merge lead info immediately if available
     const lead = student?.lead || {};
+    // Build simple invoice view: show lead first_invoice and any existing second/third invoice urls
+    const buildInitialInvoices = () => {
+      const base = [];
+      if (lead && lead.first_invoice) {
+        base.push({
+          name: "Lead invoice",
+          url: lead.first_invoice,
+          date: "",
+          file: null,
+          previewUrl: lead.first_invoice,
+        });
+      }
+      if (student?.second_invoice) {
+        base.push({
+          name: "Second invoice",
+          url: student.second_invoice,
+          date: "",
+          file: null,
+          previewUrl: student.second_invoice,
+        });
+      }
+      if (student?.third_invoice) {
+        base.push({
+          name: "Third invoice",
+          url: student.third_invoice,
+          date: "",
+          file: null,
+          previewUrl: student.third_invoice,
+        });
+      }
+      return base;
+    };
     return {
       ...student,
       student_name: student?.student_name ?? lead.student_name ?? "",
@@ -36,9 +68,15 @@ const EnrolledStudentEditModal = ({
           ? String(student.starting_date || "").split("T")[0]
           : "",
       total_payment: student?.total_payment ?? "",
-      first_installment: student?.first_installment ?? "",
+      first_installment:
+        student?.first_installment ?? lead.first_installment ?? "",
       second_installment: student?.second_installment ?? "",
       third_installment: student?.third_installment ?? "",
+      // dedicated invoice urls/files for backend fields
+      second_invoice_url: student?.second_invoice || "",
+      third_invoice_url: student?.third_invoice || "",
+      second_invoice_file: null,
+      third_invoice_file: null,
       last_pay_date:
         student?.last_pay_date || ""
           ? String(student.last_pay_date || "").split("T")[0]
@@ -51,13 +89,7 @@ const EnrolledStudentEditModal = ({
       created_at: student?.created_at ?? student?.enrollment_created_at ?? "",
       updated_at: student?.updated_at ?? student?.enrollment_updated_at ?? "",
       remarks: student?.remarks ?? lead.remarks ?? "",
-      invoice: Array.isArray(student?.invoice)
-        ? student.invoice.map((inv) => ({
-            ...inv,
-            file: null,
-            previewUrl: inv?.url || "",
-          }))
-        : [],
+      invoice: buildInitialInvoices(),
       lead: {
         ...lead,
         id: lead.id || "",
@@ -296,11 +328,22 @@ const EnrolledStudentEditModal = ({
             : prev.starting_date || "",
           total_payment: data.total_payment ?? prev.total_payment ?? "",
           first_installment:
-            data.first_installment ?? prev.first_installment ?? "",
+            data.first_installment !== undefined &&
+            data.first_installment !== null
+              ? data.first_installment
+              : data.lead &&
+                data.lead.first_installment !== undefined &&
+                data.lead.first_installment !== null
+              ? data.lead.first_installment
+              : prev.first_installment ?? "",
           second_installment:
             data.second_installment ?? prev.second_installment ?? "",
           third_installment:
             data.third_installment ?? prev.third_installment ?? "",
+          // reflect server invoice file urls
+          second_invoice_url:
+            data.second_invoice || prev.second_invoice_url || "",
+          third_invoice_url: data.third_invoice || prev.third_invoice_url || "",
           last_pay_date: data.last_pay_date
             ? String(data.last_pay_date).split("T")[0]
             : prev.last_pay_date || "",
@@ -311,24 +354,36 @@ const EnrolledStudentEditModal = ({
             typeof data.payment_completed === "boolean"
               ? data.payment_completed
               : prev.payment_completed,
-          // Normalize invoice field: backend may return an array, a single object,
-          // or a string URL. Convert all variants to an array of invoice objects.
+          // Build simple invoice display list again from lead + second/third URLs
           invoice: (() => {
-            try {
-              if (!data.invoice) return prev.invoice || [];
-              let arr = [];
-              if (Array.isArray(data.invoice)) arr = data.invoice;
-              else if (typeof data.invoice === "string")
-                arr = [{ url: data.invoice }];
-              else if (typeof data.invoice === "object") arr = [data.invoice];
-              return arr.map((inv) => ({
-                ...inv,
+            const list = [];
+            const li =
+              (data.lead && data.lead.first_invoice) ||
+              (student.lead && student.lead.first_invoice) ||
+              prev.lead?.first_invoice ||
+              "";
+            if (li)
+              list.push({
+                name: "Lead invoice",
+                url: li,
                 file: null,
-                previewUrl: inv?.url || inv?.previewUrl || "",
-              }));
-            } catch (e) {
-              return prev.invoice || [];
-            }
+                previewUrl: li,
+              });
+            if (data.second_invoice)
+              list.push({
+                name: "Second invoice",
+                url: data.second_invoice,
+                file: null,
+                previewUrl: data.second_invoice,
+              });
+            if (data.third_invoice)
+              list.push({
+                name: "Third invoice",
+                url: data.third_invoice,
+                file: null,
+                previewUrl: data.third_invoice,
+              });
+            return list;
           })(),
           remarks: data.remarks || prev.remarks || "",
           lead: { ...(data.lead || {}), ...(prev.lead || {}) },
@@ -421,42 +476,45 @@ const EnrolledStudentEditModal = ({
   };
 
   // handle file selection for an invoice row (image or pdf)
-  const handleInvoiceFileChange = (index, file) => {
+  const handleSecondInvoiceFileChange = (file) => {
     if (!file) return;
     const previewUrl = URL.createObjectURL(file);
-    setFormData((prev) => {
-      // revoke previous preview if present
-      const prevEntry = prev.invoice[index] || {};
-      try {
-        if (prevEntry && prevEntry.previewUrl)
-          URL.revokeObjectURL(prevEntry.previewUrl);
-      } catch (e) {}
-      const today = new Date().toISOString().split("T")[0];
-      const updated = prev.invoice.map((inv, i) =>
-        i === index
-          ? {
-              ...inv,
-              file,
-              previewUrl,
-              // set url to preview for preview/opening convenience but backend upload should replace this
-              url: previewUrl,
-              name: inv.name || file.name,
-              date: inv.date || today,
-            }
-          : inv
-      );
-      return { ...prev, invoice: updated };
-    });
+    setFormData((prev) => ({
+      ...prev,
+      second_invoice_file: file,
+      second_invoice_url: previewUrl,
+    }));
+  };
+
+  const handleThirdInvoiceFileChange = (file) => {
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setFormData((prev) => ({
+      ...prev,
+      third_invoice_file: file,
+      third_invoice_url: previewUrl,
+    }));
   };
 
   // cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       try {
-        (formData.invoice || []).forEach((inv) => {
-          if (inv && inv.previewUrl) URL.revokeObjectURL(inv.previewUrl);
-        });
-      } catch (e) {}
+        if (
+          formData?.second_invoice_url &&
+          formData.second_invoice_url.startsWith("blob:")
+        ) {
+          URL.revokeObjectURL(formData.second_invoice_url);
+        }
+      } catch {}
+      try {
+        if (
+          formData?.third_invoice_url &&
+          formData.third_invoice_url.startsWith("blob:")
+        ) {
+          URL.revokeObjectURL(formData.third_invoice_url);
+        }
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -498,9 +556,9 @@ const EnrolledStudentEditModal = ({
       starting_date: formData.starting_date
         ? String(formData.starting_date).split("T")[0]
         : null,
-      invoice: Array.isArray(formData.invoice)
-        ? formData.invoice.filter((inv) => inv.file || inv.url || inv.name)
-        : [],
+      // pass explicit second/third invoice files if chosen
+      second_invoice_file: formData.second_invoice_file || null,
+      third_invoice_file: formData.third_invoice_file || null,
     };
 
     // Normalize payment_completed to boolean/null (table sends booleans)
@@ -534,11 +592,9 @@ const EnrolledStudentEditModal = ({
       const original = originalSnapshotRef.current || {};
       const snapshotsEqual =
         JSON.stringify(compareSnapshot) === JSON.stringify(original);
-      const hasNewFiles = Array.isArray(updatedStudentData.invoice)
-        ? updatedStudentData.invoice.some(
-            (inv) => inv && inv.file instanceof File
-          )
-        : false;
+      const hasNewFiles =
+        updatedStudentData.second_invoice_file instanceof File ||
+        updatedStudentData.third_invoice_file instanceof File;
 
       if (snapshotsEqual && !hasNewFiles) {
         setSaveSuccess("No changes to save");
@@ -558,7 +614,7 @@ const EnrolledStudentEditModal = ({
       await fetchEnrollmentDetails();
 
       // If response has invoice urls, show success briefly
-      if (resp && Array.isArray(resp.invoice) && resp.invoice.length > 0) {
+      if (resp && (resp.second_invoice || resp.third_invoice)) {
         setSaveSuccess("Invoice uploaded");
         setTimeout(() => setSaveSuccess(null), 3000);
       }
@@ -1201,156 +1257,85 @@ const EnrolledStudentEditModal = ({
           {/* Invoice Section */}
           <div className="md:col-span-2 border-t pt-4 mt-4">
             <h3 className="text-lg font-medium text-gray-700 mb-2">Invoices</h3>
-            {formData.invoice.map((inv, index) => (
-              <div
-                key={index}
-                className="flex flex-col sm:flex-row items-end gap-2 mb-3"
-              >
-                <div className="flex-grow">
-                  <label
-                    htmlFor={`invoiceName-${index}`}
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Invoice Name
-                  </label>
-                  <input
-                    type="text"
-                    id={`invoiceName-${index}`}
-                    value={inv.name || ""}
-                    onChange={(e) =>
-                      handleInvoiceChange(index, "name", e.target.value)
-                    }
-                    placeholder="e.g., Final Invoice"
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm"
-                  />
-                </div>
-                <div className="flex-grow">
-                  {/* File upload for image or PDF - stores File in invoice.file and creates previewUrl */}
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Upload (image / PDF)
-                    </label>
-                    {/* Hidden file input triggered by the Upload button for a cleaner UI */}
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf"
-                      id={`hidden-invoice-input-${index}`}
-                      onChange={(e) =>
-                        handleInvoiceFileChange(index, e.target.files[0])
-                      }
-                      className="hidden"
-                    />
-                    <div className="flex items-center space-x-2 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const el = document.getElementById(
-                            `hidden-invoice-input-${index}`
-                          );
-                          if (el) el.click();
-                        }}
-                        className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600 transition-colors"
-                      >
-                        Choose File
-                      </button>
-                      <span className="text-sm text-gray-600">
-                        {inv.file
-                          ? inv.file.name
-                          : inv.name || "No file chosen"}
-                      </span>
-                    </div>
-                    {/* Preview: prefer local previewUrl (uploaded file), else show external URL preview/link */}
-                    {(() => {
-                      if (inv.previewUrl) {
-                        if (
-                          inv.file &&
-                          inv.file.type &&
-                          inv.file.type.startsWith("image/")
-                        ) {
-                          return (
-                            <img
-                              src={inv.previewUrl}
-                              alt={inv.name || "invoice-preview"}
-                              className="mt-2 w-32 h-20 object-contain border rounded"
-                            />
-                          );
-                        }
-                        return (
-                          <div className="mt-2 text-sm">
-                            <a
-                              href={inv.previewUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-indigo-600 hover:underline"
-                            >
-                              Open uploaded PDF
-                            </a>
-                          </div>
-                        );
-                      }
-                      if (inv.url) {
-                        if (/(jpe?g|png|gif|webp|bmp)$/i.test(inv.url)) {
-                          return (
-                            <img
-                              src={inv.url}
-                              alt={inv.name || "invoice"}
-                              className="mt-2 w-32 h-20 object-contain border rounded"
-                            />
-                          );
-                        }
-                        if (/.pdf($|\?)/i.test(inv.url)) {
-                          return (
-                            <div className="mt-2 text-sm">
-                              <a
-                                href={inv.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-indigo-600 hover:underline"
-                              >
-                                Open PDF
-                              </a>
-                            </div>
-                          );
-                        }
-                      }
-                      return null;
-                    })()}
+            {/* Lead Invoice (read-only link if available) */}
+            {(() => {
+              const leadInvoice =
+                (formData.lead && formData.lead.first_invoice) || "";
+              if (!leadInvoice) return null;
+              return (
+                <div className="flex items-center justify-between p-2 border rounded-md bg-gray-50 mb-3">
+                  <div className="flex items-center space-x-3">
+                    <a
+                      href={leadInvoice}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-blue-600 underline"
+                    >
+                      Lead invoice
+                    </a>
                   </div>
+                  <span className="text-xs text-gray-500">Read-only</span>
                 </div>
-                <div className="flex-grow-0">
-                  <label
-                    htmlFor={`invoiceDate-${index}`}
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    Invoice Date
-                  </label>
-                  <input
-                    type="date"
-                    id={`invoiceDate-${index}`}
-                    value={inv.date || ""}
-                    onChange={(e) =>
-                      handleInvoiceChange(index, "date", e.target.value)
-                    }
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeInvoiceField(index)}
-                  className="p-2 text-red-600 hover:text-red-800 rounded-md hover:bg-red-50 transition-colors"
-                  title="Remove Invoice"
-                >
-                  <TrashIcon className="h-5 w-5" />
-                </button>
+              );
+            })()}
+
+            {/* Second Invoice */}
+            <div className="flex flex-col sm:flex-row items-end gap-2 mb-3">
+              <div className="flex-grow">
+                <label className="block text-sm font-medium text-gray-700">
+                  Second Invoice
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) =>
+                    handleSecondInvoiceFileChange(e.target.files[0])
+                  }
+                  className="mt-1 block w-full text-sm"
+                />
+                {formData.second_invoice_url && (
+                  <div className="mt-2 text-sm">
+                    <a
+                      href={formData.second_invoice_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-600 hover:underline"
+                    >
+                      Open second invoice
+                    </a>
+                  </div>
+                )}
               </div>
-            ))}
-            <button
-              type="button"
-              onClick={addInvoiceField}
-              className="flex items-center px-3 py-1 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 transition-colors mt-2"
-            >
-              <DocumentArrowDownIcon className="h-4 w-4 mr-1" /> Add Invoice
-            </button>
+            </div>
+
+            {/* Third Invoice */}
+            <div className="flex flex-col sm:flex-row items-end gap-2 mb-3">
+              <div className="flex-grow">
+                <label className="block text-sm font-medium text-gray-700">
+                  Third Invoice
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) =>
+                    handleThirdInvoiceFileChange(e.target.files[0])
+                  }
+                  className="mt-1 block w-full text-sm"
+                />
+                {formData.third_invoice_url && (
+                  <div className="mt-2 text-sm">
+                    <a
+                      href={formData.third_invoice_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo-600 hover:underline"
+                    >
+                      Open third invoice
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Remarks (full width) */}

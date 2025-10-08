@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { UpdateHandler } from "../utils/updateHandler";
 import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 import { useAuth } from "../context/AuthContext";
 import { BASE_URL } from "../config";
@@ -388,8 +389,29 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     }
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = async (e) => {
     const { name, value } = e.target;
+    // Immediate status push: if user changes status, call backend right away
+    if (name === "status") {
+      // Guard: Converted requires an invoice
+      if (value === "Converted" && !formData.first_invoice) {
+        alert("Invoice is required when setting status to 'Converted'");
+        return; // skip local update
+      }
+      try {
+        // Fire update immediately via UpdateHandler without closing the modal
+        const targetId = (lead && lead.id) || formData.id || formData._id;
+        if (targetId) {
+          await UpdateHandler.updateLead(
+            targetId,
+            { status: value },
+            authToken
+          );
+        }
+      } catch (err) {
+        console.warn("Immediate status update failed:", err);
+      }
+    }
     setFormData((prevData) => {
       // Keep snake_case/camelCase variants in sync for fields like course_duration
       if (name === "courseDuration") {
@@ -457,7 +479,30 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
         ? parseFloat(formData.first_installment)
         : null,
     };
-    onSave(updatedData);
+    try {
+      onSave(updatedData);
+    } finally {
+      // Bridge: if user added additional invoices, broadcast so enrollment page can upload them
+      try {
+        if (Array.isArray(formData.invoices) && formData.invoices.length > 0) {
+          const files = formData.invoices.filter((x) => x instanceof File);
+          if (files.length > 0) {
+            window.dispatchEvent(
+              new CustomEvent("crm:leadInvoicesSelected", {
+                detail: {
+                  leadId: formData._id || formData.id,
+                  files,
+                  first_installment: updatedData.first_installment ?? null,
+                },
+              })
+            );
+          }
+        }
+      } catch (e2) {
+        // non-fatal
+        console.debug("Failed to emit leadInvoicesSelected", e2);
+      }
+    }
   };
 
   // Dropdown options
