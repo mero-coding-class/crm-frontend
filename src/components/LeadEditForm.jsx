@@ -1,6 +1,8 @@
 import React from "react";
 import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 
+import { BASE_URL } from "../config";
+
 const LeadEditForm = ({
   formData,
   onChange,
@@ -11,6 +13,36 @@ const LeadEditForm = ({
   user = {},
   onClose,
 }) => {
+  // Helpers to show existing invoice nicely
+  const toAbsoluteUrl = (u) => {
+    if (!u) return "";
+    if (u instanceof File) return "";
+    try {
+      // If already absolute, keep as-is
+      // new URL throws if not absolute
+      // eslint-disable-next-line no-new
+      new URL(u);
+      return u;
+    } catch {
+      const origin = BASE_URL.replace(/\/api\/?$/, "");
+      return u.startsWith("/") ? `${origin}${u}` : `${origin}/${u}`;
+    }
+  };
+
+  const getFileName = (u) => {
+    if (!u) return "";
+    if (u instanceof File) return u.name;
+    const str = String(u);
+    try {
+      const abs = toAbsoluteUrl(str);
+      const url = new URL(abs);
+      const path = url.pathname || "";
+      return decodeURIComponent(path.substring(path.lastIndexOf("/") + 1));
+    } catch {
+      const idx = str.lastIndexOf("/");
+      return decodeURIComponent(idx >= 0 ? str.slice(idx + 1) : str);
+    }
+  };
   const statusOptions = ["Active", "Converted", "Lost"];
   const sourceOptions = [
     "Select",
@@ -773,10 +805,24 @@ const LeadEditForm = ({
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
           />
           {formData.first_invoice && (
-            <div className="mt-2 text-sm text-green-600">
-              {formData.first_invoice instanceof File
-                ? `Selected: ${formData.first_invoice.name}`
-                : "File uploaded"}
+            <div className="mt-2 text-sm">
+              {formData.first_invoice instanceof File ? (
+                <span className="text-green-700">
+                  Selected: {formData.first_invoice.name}
+                </span>
+              ) : (
+                <span className="text-blue-700">
+                  Invoice:{" "}
+                  <a
+                    href={toAbsoluteUrl(formData.first_invoice)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    {getFileName(formData.first_invoice) || "Open"}
+                  </a>
+                </span>
+              )}
             </div>
           )}
           <p className="mt-1 text-xs text-gray-500">
@@ -784,6 +830,8 @@ const LeadEditForm = ({
           </p>
         </div>
       </div>
+
+      {/* Removed Additional Invoices section as requested */}
 
       <div className="flex flex-col col-span-1 sm:col-span-2 lg:col-span-3">
         <label

@@ -96,12 +96,22 @@ const EnrolledStudents = () => {
     message: "",
     type: "success",
   });
+  // Keep export progress separate from table loading to avoid flicker
+  const [exporting, setExporting] = useState(false);
 
   // Refs for debounced server filter fetching
   const searchQueryRef = useRef(searchQuery);
   const searchLastPaymentDateRef = useRef(searchLastPaymentDate);
   const filterPaymentNotCompletedRef = useRef(filterPaymentNotCompleted);
   const filterScheduledTakenRef = useRef(filterScheduledTaken);
+  // Ref to access handleUpdateField inside early effects without TDZ
+  const handleUpdateFieldRef = useRef(null);
+  // Ref to always read the latest students list inside event handlers
+  const allStudentsRef = useRef(allStudents);
+
+  useEffect(() => {
+    allStudentsRef.current = allStudents;
+  }, [allStudents]);
 
   useEffect(() => {
     searchQueryRef.current = searchQuery;
@@ -313,8 +323,62 @@ const EnrolledStudents = () => {
     };
     window.addEventListener("crm:imported", onImported);
 
+    // Bridge: listen for invoices added from lead edit and upload to enrollment
+    const onLeadInvoicesSelected = async (e) => {
+      try {
+        const detail = e?.detail || {};
+        const leadId = detail.leadId;
+        const files = detail.files || [];
+        if (!leadId || !files.length) return;
+        const target = (allStudentsRef.current || []).find(
+          (s) =>
+            s?.lead &&
+            (String(s.lead.id) === String(leadId) ||
+              String(s.lead._id) === String(leadId))
+        );
+        if (!target) return;
+        const today = new Date().toISOString().split("T")[0];
+        const invoice = files.map((file) => ({
+          name: file.name,
+          date: today,
+          file,
+        }));
+        const fn = handleUpdateFieldRef.current;
+        if (typeof fn === "function") {
+          await fn(target.id, "invoice", { invoice });
+        }
+        await fetchEnrolledStudents(currentPage);
+      } catch (err) {
+        console.debug("onLeadInvoicesSelected failed", err);
+      }
+    };
+    window.addEventListener("crm:leadInvoicesSelected", onLeadInvoicesSelected);
+
+    // React to conversion or manual refresh requests by fetching current page
+    const onLeadConverted = () => {
+      try {
+        fetchEnrolledStudents(currentPage);
+      } catch {}
+    };
+    const onRefreshEnrollments = () => {
+      try {
+        fetchEnrolledStudents(currentPage);
+      } catch {}
+    };
+    window.addEventListener("crm:leadConverted", onLeadConverted);
+    window.addEventListener("crm:refreshEnrollments", onRefreshEnrollments);
+
     return () => {
       window.removeEventListener("crm:imported", onImported);
+      window.removeEventListener(
+        "crm:leadInvoicesSelected",
+        onLeadInvoicesSelected
+      );
+      window.removeEventListener("crm:leadConverted", onLeadConverted);
+      window.removeEventListener(
+        "crm:refreshEnrollments",
+        onRefreshEnrollments
+      );
       if (importDebounce.timeoutId) clearTimeout(importDebounce.timeoutId);
     };
   }, [authToken, fetchEnrolledStudents, currentPage]);
@@ -399,7 +463,26 @@ const EnrolledStudents = () => {
     };
 
     window.addEventListener("crm:leadUpdated", onLeadUpdated);
-    return () => window.removeEventListener("crm:leadUpdated", onLeadUpdated);
+    // Listen for explicit first_installment updates coming from Leads
+    const onLeadFI = (e) => {
+      try {
+        const leadId = e?.detail?.leadId;
+        const fi = e?.detail?.first_installment;
+        if (!leadId) return;
+        setAllStudents((prev) =>
+          (prev || []).map((s) =>
+            s?.lead && String(s.lead.id) === String(leadId)
+              ? { ...s, lead: { ...(s.lead || {}), first_installment: fi } }
+              : s
+          )
+        );
+      } catch {}
+    };
+    window.addEventListener("crm:leadFirstInstallmentUpdated", onLeadFI);
+    return () => {
+      window.removeEventListener("crm:leadUpdated", onLeadUpdated);
+      window.removeEventListener("crm:leadFirstInstallmentUpdated", onLeadFI);
+    };
   }, []);
 
   // Listen for enrollment created events so we can insert new enrollments
@@ -481,8 +564,8 @@ const EnrolledStudents = () => {
 
   // Export enrollments using backend export endpoint; passes current filters
   const handleExportEnrollments = useCallback(async () => {
-    if (!authToken) return;
-    setLoading(true);
+    if (!authToken || exporting) return;
+    setExporting(true);
     setError(null);
     try {
       // Build base params from current filters
@@ -603,10 +686,11 @@ const EnrolledStudents = () => {
       console.error("Failed to export enrollments (client-side):", err);
       setError(err.message || "Failed to export enrollments");
     } finally {
-      setLoading(false);
+      setExporting(false);
     }
   }, [
     authToken,
+    exporting,
     searchQuery,
     searchLastPaymentDate,
     filterPaymentNotCompleted,
@@ -706,124 +790,310 @@ const EnrolledStudents = () => {
 
         let payload = {};
         if (field === null && value && typeof value === "object") {
-          // When modal sends a whole object, sanitize to only include
-          // fields the enrollment endpoint expects/editable. Sending the
-          // entire object (including id, created_at, lead, etc.) can
-          // trigger backend validation 400s.
-          const allowed = new Set([
+          // Strictly split modal save into two payloads to avoid 400s on enrollment endpoint
+          const obj = { ...(value || {}) };
+          const current = prevStudents.find(
+            (s) => String(s.id) === String(studentId)
+          );
+          const leadId = current?.lead?.id;
+
+          // Normalize possible key variants
+          if (obj.batch_name && !obj.batchname) obj.batchname = obj.batch_name;
+
+          // Enrollment-allowed fields only
+          const enrollmentAllowed = new Set([
+            "course",
+            "batchname",
+            "assigned_teacher",
+            "starting_date",
+            "total_payment",
+            "second_installment",
+            "third_installment",
+            "last_pay_date",
+            "next_pay_date",
+            "payment_completed",
+            "remarks",
+          ]);
+          const enrollmentPayload = {};
+          for (const [k, vRaw] of Object.entries(obj)) {
+            if (!enrollmentAllowed.has(k)) continue;
+            if (vRaw === undefined) continue;
+            let v = vRaw;
+            // Coercions
+            if (k === "course") {
+              if (v && typeof v === "object" && v.id !== undefined) v = v.id;
+              if (typeof v === "string" && /^\d+$/.test(v)) v = parseInt(v, 10);
+            }
+            if (
+              [
+                "total_payment",
+                "second_installment",
+                "third_installment",
+              ].includes(k)
+            ) {
+              if (v === null || v === "") v = null;
+              else {
+                const n = Number(v);
+                v = Number.isFinite(n) ? n : null;
+              }
+            }
+            if (k === "assigned_teacher" && typeof v === "object") {
+              if (v.id !== undefined) v = v.id;
+            }
+            if (k === "payment_completed") {
+              if (typeof v === "string") {
+                const s = v.toLowerCase();
+                v = s === "true" || s === "yes" || s === "1";
+              } else v = !!v;
+            }
+            // Dates to YYYY-MM-DD
+            if (
+              ["starting_date", "last_pay_date", "next_pay_date"].includes(k) &&
+              v
+            ) {
+              try {
+                v = String(v).split("T")[0];
+              } catch {}
+            }
+            enrollmentPayload[k] = v;
+          }
+
+          // Auto last_pay_date when payment-related fields present
+          const paymentKeys = [
+            "total_payment",
+            "second_installment",
+            "third_installment",
+            "payment_completed",
+          ];
+          if (
+            paymentKeys.some((k) =>
+              Object.prototype.hasOwnProperty.call(enrollmentPayload, k)
+            )
+          ) {
+            const today = new Date().toISOString().split("T")[0];
+            if (!enrollmentPayload.last_pay_date)
+              enrollmentPayload.last_pay_date = today;
+          }
+
+          // Lead payload from nested lead or top-level fallbacks
+          const leadAllowed = new Set([
             "student_name",
             "parents_name",
             "email",
             "phone_number",
-            "course",
-            "batchname",
-            "batch_name",
-            "assigned_teacher",
-            "course_duration",
-            "starting_date",
-            "total_payment",
-            "first_installment",
-            "second_installment",
-            "third_installment",
-            "last_pay_date",
-            "payment_completed",
-            "remarks",
-            // allow enrollment/lead-level demo scheduling and shift edits
-            "demo_scheduled",
-            "scheduled_taken",
-            "payment_type",
+            "whatsapp_number",
+            "grade",
+            "source",
+            "class_type",
+            "lead_type",
             "shift",
-            "invoice",
+            "previous_coding_experience",
+            "last_call",
+            "next_call",
+            "value",
+            "adset_name",
+            "course_duration",
+            "payment_type",
+            "device",
+            "school_college_name",
+            "address_line_1",
+            "address_line_2",
+            "city",
+            "county",
+            "post_code",
+            "scheduled_taken",
+            "first_installment",
+            "remarks",
           ]);
-          const obj = { ...(value || {}) };
-          // Normalize possible key variants
-          if (obj.batch_name && !obj.batchname) obj.batchname = obj.batch_name;
-          // Build sanitized payload
-          payload = {};
-          for (const [k, v] of Object.entries(obj)) {
-            if (!allowed.has(k)) continue;
-            // skip undefined fields
-            if (v === undefined) continue;
-            // coerce numeric-like strings to numbers for payment fields
-            if (
-              [
-                "total_payment",
-                "first_installment",
-                "second_installment",
-                "third_installment",
-              ].includes(k) &&
-              (typeof v === "string" || typeof v === "number")
-            ) {
-              const n = Number(v);
-              payload[k] = Number.isFinite(n) ? n : null;
-              continue;
+          const leadPayload = {};
+          const leadSrc = { ...(obj.lead || {}), ...obj };
+          for (const [k, vRaw] of Object.entries(leadSrc)) {
+            if (!leadAllowed.has(k)) continue;
+            if (vRaw === undefined) continue;
+            let v = vRaw;
+            if (k === "scheduled_taken") {
+              const s = String(v).trim().toLowerCase();
+              if (s === "true" || s === "yes") v = "Yes";
+              else if (s === "false" || s === "no") v = "No";
             }
-            // backend sometimes stores invoice as a single string url
-            if (k === "invoice") {
-              if (!v) continue;
-              if (typeof v === "string") {
-                // convert single URL to array of invoice entries
-                payload.invoice = [{ name: "", url: v, date: "", file: null }];
-                continue;
-              }
-              if (Array.isArray(v)) {
-                // ensure each entry is an object with expected keys
-                payload.invoice = v
-                  .map((inv) => {
-                    if (!inv) return null;
-                    if (typeof inv === "string")
-                      return { name: "", url: inv, date: "", file: null };
-                    return {
-                      name: inv.name || "",
-                      url: inv.url || inv.file?.previewUrl || "",
-                      date: inv.date || "",
-                      file: inv.file || null,
-                    };
-                  })
-                  .filter(Boolean);
-                continue;
+            if (k === "first_installment") {
+              if (v === null || v === "") v = null;
+              else {
+                const n = Number(v);
+                v = Number.isFinite(n) ? n : v;
               }
             }
-            payload[k] = v;
+            leadPayload[k] = v;
           }
-          // If the modal passed nested lead fields (lead.scheduled_taken / legacy lead.demo_scheduled / lead.device / lead.shift),
-          // mirror them to top-level payload fields because the enrollments API
-          // commonly expects these at the enrollment root.
+
+          // Handle invoice files for enrollment
+          const hasSecondFile =
+            value && value.second_invoice_file instanceof File;
+          const hasThirdFile =
+            value && value.third_invoice_file instanceof File;
+          const hasInvoiceFiles = hasSecondFile || hasThirdFile;
+
+          // Send to enrollment first (only if there are enrollment changes or invoice files)
+          let enrollmentRespJson = null;
           try {
-            const leadObj = value.lead || {};
-            if (leadObj.scheduled_taken !== undefined) {
-              payload.scheduled_taken = leadObj.scheduled_taken;
-            } else if (leadObj.demo_scheduled !== undefined) {
-              payload.scheduled_taken = leadObj.demo_scheduled; // legacy
+            const enrollUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
+            let resp;
+            const hasEnrollmentChanges =
+              Object.keys(enrollmentPayload).length > 0;
+            if (hasInvoiceFiles) {
+              const fd = new FormData();
+              for (const [k, v] of Object.entries(enrollmentPayload)) {
+                if (v === undefined || v === null) continue;
+                fd.append(
+                  k,
+                  typeof v === "object" ? JSON.stringify(v) : String(v)
+                );
+              }
+              if (hasSecondFile)
+                fd.append("second_invoice", value.second_invoice_file);
+              if (hasThirdFile)
+                fd.append("third_invoice", value.third_invoice_file);
+              resp = await fetch(enrollUrl, {
+                method: "PATCH",
+                headers: { Authorization: `Token ${authToken}` },
+                body: fd,
+                credentials: "include",
+              });
+            } else if (hasEnrollmentChanges) {
+              resp = await fetch(enrollUrl, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(enrollmentPayload),
+                credentials: "include",
+              });
+            } else {
+              resp = null; // no enrollment changes to send
             }
-            if (leadObj.shift !== undefined) {
-              payload.shift = leadObj.shift;
+            if (resp && !resp.ok) {
+              let t = await resp.text();
+              let d = {};
+              try {
+                d = JSON.parse(t);
+              } catch {
+                d = { detail: t };
+              }
+              // rollback optimistic update
+              setAllStudents(prevStudents);
+              setError(
+                `Failed to update enrollment: ${d.detail || resp.statusText}`
+              );
+              console.error("Enrollment (modal) update error:", {
+                url: enrollUrl,
+                status: resp.status,
+                payload: enrollmentPayload,
+                response: d,
+              });
+              return;
             }
-            if (leadObj.device !== undefined) {
-              // device may be "Yes"/"No" or boolean; preserve string for now and
-              // let the outer normalization convert it before sending.
-              payload.device = leadObj.device;
-            }
+            enrollmentRespJson = resp
+              ? await resp.json().catch(() => null)
+              : null;
           } catch (e) {
-            // ignore
+            setAllStudents(prevStudents);
+            setError(`Failed to update enrollment: ${e.message || e}`);
+            console.error("Enrollment (modal) update exception:", e);
+            return;
           }
-          // Legacy top-level demo_scheduled mapping if present
-          if (
-            payload.demo_scheduled !== undefined &&
-            payload.scheduled_taken === undefined
-          ) {
-            payload.scheduled_taken = payload.demo_scheduled;
-          }
-          // If payment_type provided inside nested lead (unlikely) mirror up
-          try {
-            const leadObj = value.lead || {};
-            if (
-              leadObj.payment_type !== undefined &&
-              payload.payment_type === undefined
-            ) {
-              payload.payment_type = leadObj.payment_type;
+
+          // Then send lead payload if any fields exist and we have a lead id
+          let leadRespJson = null;
+          if (leadId && Object.keys(leadPayload).length > 0) {
+            try {
+              const leadUrl = `${BASE_URL}/leads/${leadId}/`;
+              const lresp = await fetch(leadUrl, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(leadPayload),
+                credentials: "include",
+              });
+              if (lresp.ok) {
+                leadRespJson = await lresp.json().catch(() => null);
+              } else {
+                let lt = await lresp.text();
+                let ld = {};
+                try {
+                  ld = JSON.parse(lt);
+                } catch {
+                  ld = { detail: lt };
+                }
+                console.warn("Lead (modal) patch failed (non-blocking):", {
+                  url: leadUrl,
+                  status: lresp.status,
+                  payload: leadPayload,
+                  response: ld,
+                });
+              }
+            } catch (e) {
+              console.warn("Lead (modal) patch exception (non-blocking)", e);
             }
-          } catch (e) {}
+          }
+
+          // Merge responses locally
+          if (enrollmentRespJson || leadRespJson) {
+            setAllStudents((prev) =>
+              (prev || []).map((s) => {
+                if (String(s.id) !== String(studentId)) return s;
+                let merged = { ...s };
+                if (enrollmentRespJson) {
+                  merged = {
+                    ...merged,
+                    ...enrollmentRespJson,
+                    lead: {
+                      ...(merged.lead || {}),
+                      ...(enrollmentRespJson.lead || {}),
+                    },
+                  };
+                }
+                if (leadRespJson) {
+                  merged = {
+                    ...merged,
+                    lead: { ...(merged.lead || {}), ...leadRespJson },
+                  };
+                }
+                return merged;
+              })
+            );
+          }
+
+          // Emit events
+          try {
+            if (enrollmentRespJson) {
+              window.dispatchEvent(
+                new CustomEvent("crm:enrollmentUpdated", {
+                  detail: { enrollment: enrollmentRespJson },
+                })
+              );
+            }
+            if (leadRespJson) {
+              window.dispatchEvent(
+                new CustomEvent("crm:leadUpdated", {
+                  detail: { lead: leadRespJson },
+                })
+              );
+            }
+          } catch {}
+
+          // Toast (no extra refresh here; we already merged response)
+          setToast({
+            show: true,
+            message: "Student Information updated successfully",
+            type: "success",
+          });
+          setError(null);
+
+          // Return enrollment response (used by modal to show invoice URLs)
+          return enrollmentRespJson;
         } else {
           // Single-field updates
           // If this was a lead.* field, send nested lead object to the server
@@ -831,6 +1101,7 @@ const EnrolledStudents = () => {
             const leadKey = backendField; // already stripped above
             payload = { lead: { [leadKey]: value } };
           } else {
+            // Build payload; routing to Leads vs Enrollments decided later
             payload = { [backendField]: value };
           }
 
@@ -854,7 +1125,10 @@ const EnrolledStudents = () => {
           ) {
             payload.course = parseInt(payload.course, 10);
           }
-          if (paymentFields.has(backendField)) {
+          if (
+            paymentFields.has(backendField) &&
+            backendField !== "first_installment"
+          ) {
             // coerce numeric payment fields
             const v = payload[backendField];
             if (v === null || v === undefined || v === "") {
@@ -888,7 +1162,11 @@ const EnrolledStudents = () => {
             (paymentFields.has("total_payment") ||
               paymentFields.has("first_installment")));
 
-        if (paymentChanged) {
+        // Do not attach last_pay_date when we are updating only lead.first_installment via Leads API
+        const isLeadFirstInstallmentOnly =
+          backendField === "first_installment" && field !== null;
+
+        if (paymentChanged && !isLeadFirstInstallmentOnly) {
           if (
             payload.payment_completed === true ||
             paymentFields.has(backendField) ||
@@ -967,58 +1245,8 @@ const EnrolledStudents = () => {
           console.debug("scheduled_taken normalization failed:", e);
         }
 
-        // Decide method: if full-object (modal) update and touching any of key fields, use PUT
+        // Decide method
         let method = "PATCH";
-        if (
-          field === null &&
-          (Object.prototype.hasOwnProperty.call(payload, "scheduled_taken") ||
-            Object.prototype.hasOwnProperty.call(payload, "payment_type") ||
-            Object.prototype.hasOwnProperty.call(payload, "course_duration"))
-        ) {
-          method = "PUT";
-        }
-
-        // If using PUT, build a full representation to avoid unintentionally clearing fields
-        if (method === "PUT") {
-          try {
-            const current = prevStudents.find(
-              (s) => String(s.id) === String(studentId)
-            );
-            if (current) {
-              const editable = [
-                "student_name",
-                "parents_name",
-                "email",
-                "phone_number",
-                "course",
-                "batchname",
-                "assigned_teacher",
-                "course_duration",
-                "starting_date",
-                "total_payment",
-                "first_installment",
-                "second_installment",
-                "third_installment",
-                "last_pay_date",
-                "payment_completed",
-                "remarks",
-                "scheduled_taken",
-                "payment_type",
-                "shift",
-              ];
-              const fullPayload = {};
-              editable.forEach((k) => {
-                if (payload[k] !== undefined) fullPayload[k] = payload[k];
-                else if (current[k] !== undefined) fullPayload[k] = current[k];
-                else if (current.lead && current.lead[k] !== undefined)
-                  fullPayload[k] = current.lead[k];
-              });
-              payload = fullPayload;
-            }
-          } catch (e) {
-            console.warn("Failed to construct full PUT payload", e);
-          }
-        }
 
         try {
           console.debug("Enrollment update outgoing", {
@@ -1027,54 +1255,28 @@ const EnrolledStudents = () => {
             payload,
           });
         } catch (e) {}
-        const hasInvoiceFiles =
-          payload &&
-          Array.isArray(payload.invoice) &&
-          payload.invoice.some((inv) => inv && inv.file instanceof File);
-
-        // If invoice exists but contains no File objects, omit it to avoid
-        // sending an array structure that the backend may not accept.
-        if (payload && Array.isArray(payload.invoice) && !hasInvoiceFiles) {
-          // If there's exactly one entry with a URL and the user likely didn't change it,
-          // don't include invoice in the payload so backend keeps existing value.
-          delete payload.invoice;
-        }
+        // Detect explicit second/third invoice files passed from modal
+        const hasSecondFile =
+          value && value.second_invoice_file instanceof File;
+        const hasThirdFile = value && value.third_invoice_file instanceof File;
+        const hasInvoiceFiles = hasSecondFile || hasThirdFile;
 
         if (hasInvoiceFiles) {
           const fd = new FormData();
-          // Build invoice metadata array to send alongside files so backend
-          // can associate names/dates with uploaded files. Entries without a
-          // file but with an existing url will be included as-is.
-          const invoiceMeta = [];
-          payload.invoice.forEach((inv, idx) => {
-            const meta = {
-              name: inv.name || (inv.file && inv.file.name) || "",
-              date: inv.date || "",
-              url: inv.url || "",
-              index: idx,
-            };
-            invoiceMeta.push(meta);
-            if (inv && inv.file instanceof File) {
-              // append files under the 'invoice' field (backend typically
-              // maps file uploads to the model field name). Send multiple
-              // entries named 'invoice' to support multiple files.
-              fd.append("invoice", inv.file, inv.file.name);
-            }
-          });
-
-          // Append other payload fields. For objects/arrays append JSON string.
+          // append the known enrollment fields
           for (const [k, v] of Object.entries(payload)) {
-            if (k === "invoice") continue; // already handled
             if (v === null || v === undefined) continue;
             if (typeof v === "object") fd.append(k, JSON.stringify(v));
             else fd.append(k, String(v));
           }
-
-          fd.append("invoice_metadata", JSON.stringify(invoiceMeta));
+          // Append invoice files with field names matching backend model fields
+          if (hasSecondFile)
+            fd.append("second_invoice", value.second_invoice_file);
+          if (hasThirdFile)
+            fd.append("third_invoice", value.third_invoice_file);
 
           // Use the explicit enrollments API base for uploads (backend expects this path)
-          const enrollmentsApiBase =
-            "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/";
+          const enrollmentsApiBase = ENROLLMENTS_API_BASE;
           response = await fetch(`${enrollmentsApiBase}${studentId}/`, {
             method: "PATCH",
             headers: {
@@ -1089,6 +1291,14 @@ const EnrolledStudents = () => {
           const currentStudent = allStudents.find(
             (s) => String(s.id) === String(studentId)
           );
+          // Try multiple shapes to resolve a usable lead id for Leads API routing
+          const resolvedLeadId =
+            (currentStudent &&
+              (currentStudent.lead?.id ??
+                currentStudent.lead?._id ??
+                currentStudent.leadId ??
+                currentStudent.lead?.lead_id)) ||
+            null;
           const isLeadField =
             field &&
             (field.startsWith("lead.") ||
@@ -1102,6 +1312,7 @@ const EnrolledStudents = () => {
                 "grade",
                 "status",
                 "substatus",
+                "course_duration",
                 "course_type",
                 "shift",
                 "previous_coding_experience",
@@ -1124,17 +1335,16 @@ const EnrolledStudents = () => {
                 "course",
                 "scheduled_taken",
                 "whatsapp_number",
+                "first_installment",
               ].includes(backendField));
 
           // Force these fields to always go to enrollment API regardless of field name
           const enrollmentOnlyFields = [
-            "course_duration", // This should be enrollment-specific, not lead
             "batchname",
             "batch_name",
             "assigned_teacher",
             "assigned_teacher_name",
             "total_payment",
-            "first_installment",
             "second_installment",
             "third_installment",
             "payment_completed",
@@ -1142,19 +1352,20 @@ const EnrolledStudents = () => {
             "last_pay_date",
             "next_pay_date",
             "course",
-            "invoice",
+            "remarks",
+            // invoices handled by multipart branch
           ];
 
           const isEnrollmentOnlyField =
             enrollmentOnlyFields.includes(backendField);
           const shouldUseLeadsAPI =
-            isLeadField && !isEnrollmentOnlyField && currentStudent?.lead?.id;
+            isLeadField && !isEnrollmentOnlyField && !!resolvedLeadId;
 
           let apiUrl, targetId;
           if (shouldUseLeadsAPI) {
             // Lead field - send to leads API
-            apiUrl = `${BASE_URL}/leads/${currentStudent.lead.id}/`;
-            targetId = currentStudent.lead.id;
+            apiUrl = `${BASE_URL}/leads/${resolvedLeadId}/`;
+            targetId = resolvedLeadId;
           } else {
             // Enrollment field - send to enrollments API
             apiUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
@@ -1172,6 +1383,21 @@ const EnrolledStudents = () => {
             apiUrl,
             payload,
           });
+
+          // Ensure first_installment numeric for lead API
+          if (shouldUseLeadsAPI && backendField === "first_installment") {
+            const v = payload.first_installment;
+            payload = {
+              first_installment:
+                v === null || v === ""
+                  ? null
+                  : Number.isFinite(Number(v))
+                  ? Number(v)
+                  : v,
+            };
+          }
+
+          const usedLeadsAPI = shouldUseLeadsAPI;
 
           response = await fetch(apiUrl, {
             method,
@@ -1197,7 +1423,9 @@ const EnrolledStudents = () => {
                 scheduled_taken: payload.scheduled_taken ? "Yes" : "No",
               };
               const retryResp = await fetch(
-                apiUrl, // Use the same API URL determined above
+                typeof apiUrl !== "undefined"
+                  ? apiUrl
+                  : `${ENROLLMENTS_API_BASE}${studentId}/`,
                 {
                   method,
                   headers: {
@@ -1213,7 +1441,7 @@ const EnrolledStudents = () => {
               console.debug("scheduled_taken retry failed", e);
             }
           }
-          // Retry 2: payment_type needs nested lead
+          // Retry 2: payment_type may need nested lead on enrollments API
           if (
             !response.ok &&
             response.status === 400 &&
@@ -1226,24 +1454,27 @@ const EnrolledStudents = () => {
                 ...payload,
                 lead: { payment_type: payload.payment_type },
               };
-              const retryResp = await fetch(
-                apiUrl, // Use the same API URL determined above
-                {
-                  method,
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Token ${authToken}`,
-                  },
-                  body: JSON.stringify(retryPayload),
-                  credentials: "include",
-                }
-              );
+              const retryUrl =
+                typeof apiUrl !== "undefined" && apiUrl.includes("/leads/")
+                  ? `${ENROLLMENTS_API_BASE}${studentId}/`
+                  : typeof apiUrl !== "undefined"
+                  ? apiUrl
+                  : `${ENROLLMENTS_API_BASE}${studentId}/`;
+              const retryResp = await fetch(retryUrl, {
+                method,
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(retryPayload),
+                credentials: "include",
+              });
               if (retryResp.ok) response = retryResp;
             } catch (e) {
               console.debug("payment_type nested retry failed", e);
             }
           }
-          // Retry 3: course_duration needs nested lead
+          // Retry 3: course_duration may need nested lead on enrollments API
           if (
             !response.ok &&
             response.status === 400 &&
@@ -1256,18 +1487,21 @@ const EnrolledStudents = () => {
                 ...payload,
                 lead: { course_duration: payload.course_duration },
               };
-              const retryResp = await fetch(
-                apiUrl, // Use the same API URL determined above
-                {
-                  method,
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Token ${authToken}`,
-                  },
-                  body: JSON.stringify(retryPayload),
-                  credentials: "include",
-                }
-              );
+              const retryUrl =
+                typeof apiUrl !== "undefined" && apiUrl.includes("/leads/")
+                  ? `${ENROLLMENTS_API_BASE}${studentId}/`
+                  : typeof apiUrl !== "undefined"
+                  ? apiUrl
+                  : `${ENROLLMENTS_API_BASE}${studentId}/`;
+              const retryResp = await fetch(retryUrl, {
+                method,
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(retryPayload),
+                credentials: "include",
+              });
               if (retryResp.ok) response = retryResp;
             } catch (e) {
               console.debug("course_duration nested retry failed", e);
@@ -1292,17 +1526,10 @@ const EnrolledStudents = () => {
           );
 
           // Determine the URL that was used for the request based on context
-          let requestUrl;
-          if (hasInvoiceFiles) {
-            // For file uploads, reconstruct the URL that was used
-            requestUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
-          } else if (typeof apiUrl !== "undefined") {
-            // Use the apiUrl from the non-file branch if it's defined
-            requestUrl = apiUrl;
-          } else {
-            // Fallback
-            requestUrl = `${ENROLLMENTS_API_BASE}${studentId}/`;
-          }
+          const requestUrl =
+            typeof apiUrl !== "undefined"
+              ? apiUrl
+              : `${ENROLLMENTS_API_BASE}${studentId}/`;
 
           console.error("Enrollment update error details:", {
             method,
@@ -1318,39 +1545,44 @@ const EnrolledStudents = () => {
         // Merge server response into local state so UI reflects server-normalized values
         if (respJson) {
           setAllStudents((prev) =>
-            (prev || []).map((s) =>
-              String(s.id) === String(studentId)
-                ? {
-                    ...s,
-                    ...respJson,
-                    // keep nested lead merged when server returned enrollment-only fields
-                    lead: {
-                      ...(s.lead || {}),
-                      ...(respJson.lead || {}),
-                    },
-                    // Mirror teacher name if backend returns only id
-                    ...(respJson.assigned_teacher &&
-                    !respJson.assigned_teacher_name
-                      ? {
-                          assigned_teacher_name: (function () {
-                            try {
-                              const match = (teachers || []).find(
-                                (t) =>
-                                  String(t.id) ===
-                                  String(respJson.assigned_teacher)
-                              );
-                              return match
-                                ? match.name
-                                : s.assigned_teacher_name;
-                            } catch (e) {
-                              return s.assigned_teacher_name;
-                            }
-                          })(),
-                        }
-                      : {}),
-                  }
-                : s
-            )
+            (prev || []).map((s) => {
+              if (String(s.id) !== String(studentId)) return s;
+              // If we updated via Leads API, only merge into nested lead
+              if (typeof apiUrl !== "undefined" && apiUrl.includes("/leads/")) {
+                return {
+                  ...s,
+                  lead: {
+                    ...(s.lead || {}),
+                    ...(respJson || {}),
+                  },
+                };
+              }
+              // Enrollment API merge (existing behavior)
+              const merged = {
+                ...s,
+                ...respJson,
+                lead: {
+                  ...(s.lead || {}),
+                  ...(respJson.lead || {}),
+                },
+              };
+              if (
+                respJson.assigned_teacher &&
+                !respJson.assigned_teacher_name
+              ) {
+                try {
+                  const match = (teachers || []).find(
+                    (t) => String(t.id) === String(respJson.assigned_teacher)
+                  );
+                  merged.assigned_teacher_name = match
+                    ? match.name
+                    : s.assigned_teacher_name;
+                } catch (e) {
+                  merged.assigned_teacher_name = s.assigned_teacher_name;
+                }
+              }
+              return merged;
+            })
           );
 
           // Emit events so other parts of app (leads changelog, leads list)
@@ -1363,7 +1595,8 @@ const EnrolledStudents = () => {
             );
 
             // Emit crm:leadUpdated with both shapes (lead object + meta) for compatibility
-            const emittedLead = respJson.lead || null;
+            const emittedLead =
+              respJson.lead || (apiUrl.includes("/leads/") ? respJson : null);
             const meta = {
               id: emittedLead?.id || respJson?.id || studentId,
               field_changed: backendField,
@@ -1377,7 +1610,9 @@ const EnrolledStudents = () => {
                 (x) => String(x.id) === String(studentId)
               )?.[backendField];
               meta.new_value =
-                respJson[backendField] ??
+                (apiUrl.includes("/leads/")
+                  ? respJson && respJson[backendField]
+                  : respJson[backendField]) ??
                 (respJson.lead && respJson.lead[backendField]) ??
                 payload[backendField] ??
                 value;
@@ -1412,9 +1647,66 @@ const EnrolledStudents = () => {
           show: true,
           message: `${fieldDisplayName} updated successfully`,
           type: "success",
+          duration: 3000,
         });
 
         setError(null);
+
+        // If this was a full-object (modal) save and it included first_installment,
+        // persist it to the Leads API as well so it shows on next open.
+        if (
+          field === null &&
+          value &&
+          Object.prototype.hasOwnProperty.call(value, "first_installment")
+        ) {
+          try {
+            const current = prevStudents.find(
+              (s) => String(s.id) === String(studentId)
+            );
+            const leadId = current?.lead?.id;
+            if (leadId !== undefined && leadId !== null) {
+              const fi = value.first_installment;
+              const body = {
+                first_installment:
+                  fi === null || fi === ""
+                    ? null
+                    : Number.isFinite(Number(fi))
+                    ? Number(fi)
+                    : fi,
+              };
+              const leadResp = await fetch(`${BASE_URL}/leads/${leadId}/`, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Token ${authToken}`,
+                },
+                body: JSON.stringify(body),
+                credentials: "include",
+              });
+              if (leadResp.ok) {
+                const leadJson = await leadResp.json().catch(() => null);
+                if (leadJson) {
+                  setAllStudents((prev) =>
+                    (prev || []).map((s) =>
+                      String(s.id) === String(studentId)
+                        ? {
+                            ...s,
+                            first_installment: body.first_installment,
+                            lead: { ...(s.lead || {}), ...(leadJson || {}) },
+                          }
+                        : s
+                    )
+                  );
+                }
+              }
+            }
+          } catch (e) {
+            console.debug(
+              "Lead first_installment patch failed (non-blocking)",
+              e
+            );
+          }
+        }
         // Return parsed JSON so callers (modal) can react to updated invoice URLs
         return respJson;
       } catch (err) {
@@ -1428,6 +1720,11 @@ const EnrolledStudents = () => {
     },
     [authToken, fetchEnrolledStudents, currentPage, teachers]
   );
+
+  // keep a ref to avoid temporal dead zone in earlier effects
+  useEffect(() => {
+    handleUpdateFieldRef.current = handleUpdateField;
+  }, [handleUpdateField]);
 
   // Payment status update
   const handleUpdatePaymentStatus = useCallback(
@@ -1595,9 +1892,9 @@ const EnrolledStudents = () => {
           <div className="flex items-end">
             <button
               onClick={handleExportEnrollments}
-              disabled={loading}
+              disabled={exporting}
               className={`px-4 py-2 rounded-md border bg-white text-gray-700 hover:bg-gray-50 ${
-                loading ? "opacity-60 cursor-not-allowed" : ""
+                exporting ? "opacity-60 cursor-not-allowed" : ""
               }`}
             >
               Export CSV
@@ -1611,8 +1908,7 @@ const EnrolledStudents = () => {
                 setFilterScheduledTaken("");
                 // set page to 1 and fetch fresh data
                 setCurrentPage(1);
-                // call fetch directly for immediate feedback
-                fetchEnrolledStudents(1);
+                // Do not fetch immediately; the debounced filter effect will fetch once.
               }}
               disabled={loading}
               className={`ml-3 px-4 py-2 rounded-md border bg-blue-700 text-white hover:bg-blue-600 transition-opacity duration-200 ${
@@ -1683,12 +1979,8 @@ const EnrolledStudents = () => {
                 show: true,
                 message: "Updated successfully",
                 type: "success",
+                duration: 3000,
               });
-              // auto-hide toast after 3s (Toast component also does this but keep state tidy)
-              setTimeout(
-                () => setToast({ show: false, message: "", type: "success" }),
-                3000
-              );
             }
             return resp;
           }}
@@ -1699,6 +1991,7 @@ const EnrolledStudents = () => {
         <Toast
           message={toast.message}
           type={toast.type}
+          duration={toast.duration ?? 6000}
           onClose={() =>
             setToast({ show: false, message: "", type: "success" })
           }

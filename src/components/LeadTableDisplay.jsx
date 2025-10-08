@@ -97,6 +97,27 @@ const LeadTableDisplay = ({
 
   const tableContainerRef = useRef(null);
 
+  // Final guard: deduplicate incoming leads by normalized id/email to avoid
+  // transient duplicate rows if upstream state briefly contains duplicates.
+  const dedupLeads = React.useCallback((arr = []) => {
+    const seen = new Set();
+    const out = [];
+    const norm = (v) => (v === undefined || v === null ? "" : String(v).trim());
+    for (const l of arr) {
+      if (!l) continue;
+      const key =
+        norm(l.id) ||
+        norm(l._id) ||
+        norm(l.email) ||
+        `${norm(l.student_name)}-${norm(l.phone_number)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(l);
+      }
+    }
+    return out;
+  }, []);
+
   // Smooth scroll helper used by the arrow buttons
   const smoothScroll = (distance) => {
     if (!tableContainerRef.current) return;
@@ -162,7 +183,7 @@ const LeadTableDisplay = ({
   // fields or omits them.
   const normalizedLeads = useMemo(
     () =>
-      leads.map((lead, _idx) => ({
+      dedupLeads(leads).map((lead, _idx) => ({
         ...lead,
         // guarantee a unique id: prefer _id, then id, then email/phone, then index
         _id:
@@ -209,7 +230,7 @@ const LeadTableDisplay = ({
         // ensure assigned_to is present for the editable input (prefer assigned_to, fallback to username)
         assigned_to: lead.assigned_to || lead.assigned_to_username || "",
       })),
-    [leads]
+    [leads, dedupLeads]
   );
 
   // Initialize remarks and selection on lead changes
