@@ -108,24 +108,21 @@ const ImportCsvButton = ({ authToken, onImported }) => {
 
   const abortControllerRef = useRef(null);
   const isCancelledRef = useRef(false);
-  const papaParserRef = useRef(null);
+  // Note: avoid passing function options to Papa when worker: true to prevent DataCloneError
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setFileName(file.name || "");
-    // initialize progress UI
     setImporting(true);
     setProgress(0);
     setStatusMessage("Attempting backend import...");
 
-    // First preference: upload the CSV file to the backend import endpoint
     const backendImportUrl = `${BASE_URL}/leads/import-csv/`;
-
-    // create an AbortController to allow cancelling the backend request
     abortControllerRef.current = new AbortController();
     isCancelledRef.current = false;
 
+    // Try server-side import first
     if (authToken) {
       try {
         const formData = new FormData();
@@ -139,7 +136,6 @@ const ImportCsvButton = ({ authToken, onImported }) => {
         });
 
         if (resp.ok) {
-          // Expect backend to return created leads or a summary
           let body = null;
           try {
             body = await resp.json();
@@ -148,34 +144,33 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           }
 
           console.log("✅ Backend CSV import succeeded", body);
-          const createdCount =
-            (body && Array.isArray(body.created) && body.created.length) || 0;
+          const created = Array.isArray(body?.created)
+            ? body.created.map((c) => ({ ...c, _id: c.id || c._id }))
+            : [];
+          const createdCount = created.length;
           setImportedCount(createdCount);
           setTotalCount(createdCount);
           setProgress(100);
           setStatusMessage("Import successful (server-side)");
           setImporting(false);
 
-          // If backend returns created leads, normalize them and call onImported
-          if (body && Array.isArray(body.created)) {
-            const created = body.created.map((c) => ({
-              ...c,
-              _id: c.id || c._id,
-            }));
+          // Notify parent and global listeners so the leads table refreshes immediately
+          try {
             if (onImported) onImported(created);
-            // Dispatch a global event so other parts of the app can listen and refresh
-            try {
-              window.dispatchEvent(
-                new CustomEvent("crm:imported", { detail: { created } })
-              );
-            } catch (e) {
-              console.warn("Failed to dispatch crm:imported event", e);
-            }
+          } catch (e) {
+            console.warn("onImported callback failed", e);
+          }
+          try {
+            window.dispatchEvent(
+              new CustomEvent("crm:imported", { detail: { created } })
+            );
+          } catch (e) {
+            console.warn("Failed to dispatch crm:imported event", e);
           }
           return;
         }
 
-        // If backend returns non-OK, read the response body and log it
+        // If backend returns non-OK, read the response and fall back
         try {
           const errBody = await resp.json();
           console.error("Backend CSV import error body:", errBody);
@@ -187,7 +182,6 @@ const ImportCsvButton = ({ authToken, onImported }) => {
             console.error("Backend CSV import failed with status", resp.status);
           }
         }
-
         console.warn(
           "Backend CSV import failed, falling back to client-side import",
           resp.status
@@ -205,35 +199,30 @@ const ImportCsvButton = ({ authToken, onImported }) => {
       }
     }
 
+    // Client-side import fallback
     const headerMapLower = Object.fromEntries(
       Object.entries(headerMapping).map(([k, v]) => [k.trim().toLowerCase(), v])
     );
 
     Papa.parse(file, {
       header: true,
-      worker: true,
+      worker: false, // disable worker to avoid DataCloneError with function cloning
       skipEmptyLines: true,
-      chunkSize: 1024 * 1024,
-      beforeFirstChunk: (chunk) => {
-        // store parser ref for abort
-      },
       complete: async (results) => {
         const mappedRows = results.data.map((r) =>
           mapRowToLead(r, headerMapLower)
         );
 
-        // initialize counts
         const total = mappedRows.length;
         setTotalCount(total);
         setImportedCount(0);
 
         const createdLeads = [];
         const skippedRows = [];
-        // const total initialized above
+
         for (let i = 0; i < mappedRows.length; i++) {
           if (isCancelledRef.current) break;
           const row = mappedRows[i];
-          // update progress per-row (based on current index)
           setProgress(Math.round(((i + 1) / Math.max(1, total)) * 100));
 
           if (row.error) {
@@ -244,8 +233,6 @@ const ImportCsvButton = ({ authToken, onImported }) => {
 
           const { leadBackend, leadFrontend } = row;
           try {
-            // Prefer using leadService which wraps BASE_URL, but fall back to
-            // the explicit leads endpoint you supplied if needed.
             let created = null;
             try {
               created = await leadService.addLead(leadBackend, authToken);
@@ -255,7 +242,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
                 svcErr
               );
               if (authToken) {
-                const resp = await fetch(`${BASE_URL}/leads/`, {
+                const resp2 = await fetch(`${BASE_URL}/leads/`, {
                   method: "POST",
                   headers: {
                     Authorization: `Token ${authToken}`,
@@ -263,17 +250,16 @@ const ImportCsvButton = ({ authToken, onImported }) => {
                   },
                   body: JSON.stringify(leadBackend),
                 });
-                if (!resp.ok) {
-                  const txt = await resp.text();
-                  throw new Error(`Direct POST failed: ${resp.status} ${txt}`);
+                if (!resp2.ok) {
+                  const txt = await resp2.text();
+                  throw new Error(`Direct POST failed: ${resp2.status} ${txt}`);
                 }
-                created = await resp.json();
+                created = await resp2.json();
               } else {
                 throw svcErr;
               }
             }
 
-            // merge backend id into frontend object
             createdLeads.push({
               ...leadFrontend,
               _id: created.id || created._id,
@@ -288,7 +274,6 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           }
         }
 
-        // final progress and state
         if (isCancelledRef.current) {
           setStatusMessage(
             `Import cancelled. Created: ${createdLeads.length}, Skipped: ${skippedRows.length}`
@@ -301,18 +286,18 @@ const ImportCsvButton = ({ authToken, onImported }) => {
         setProgress(100);
         setImporting(false);
 
-        if (onImported && createdLeads.length > 0) {
-          onImported(createdLeads);
-        }
-        // Dispatch global event so pages can auto-refresh (only if created leads exist)
+        // Notify listeners to refresh leads immediately (even if zero created)
         try {
-          if (createdLeads && createdLeads.length > 0) {
-            window.dispatchEvent(
-              new CustomEvent("crm:imported", {
-                detail: { created: createdLeads },
-              })
-            );
-          }
+          if (onImported) onImported(createdLeads);
+        } catch (e) {
+          console.warn("onImported callback failed", e);
+        }
+        try {
+          window.dispatchEvent(
+            new CustomEvent("crm:imported", {
+              detail: { created: createdLeads },
+            })
+          );
         } catch (e) {
           console.warn("Failed to dispatch crm:imported event", e);
         }
@@ -346,7 +331,9 @@ const ImportCsvButton = ({ authToken, onImported }) => {
       />
       <label
         htmlFor="csvUpload"
-        className={`cursor-pointer px-4 py-2 border rounded-md bg-white text-gray-700 hover:bg-gray-50 shadow-sm ${importing ? 'opacity-60 pointer-events-none' : ''}`}
+        className={`cursor-pointer px-4 py-2 border rounded-md bg-white text-gray-700 hover:bg-gray-50 shadow-sm ${
+          importing ? "opacity-60 pointer-events-none" : ""
+        }`}
       >
         Import CSV
       </label>

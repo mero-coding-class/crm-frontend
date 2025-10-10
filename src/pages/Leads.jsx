@@ -118,7 +118,7 @@ const Leads = () => {
   const [filterGrade, setFilterGrade] = useState("");
   const [filterLastCall, setFilterLastCall] = useState("");
   const [filterClassType, setFilterClassType] = useState("Class");
-  const [filterShift, setFilterShift] = useState("Shift");
+  const [filterShift, setFilterShift] = useState("");
   const [filterDevice, setFilterDevice] = useState("Device");
   const [filterSubStatus, setFilterSubStatus] = useState("SubStatus");
   const [filterPrevCodingExp, setFilterPrevCodingExp] = useState("CodingExp");
@@ -193,8 +193,9 @@ const Leads = () => {
       if (filterClassType && filterClassType !== "Class") {
         filtered = filtered.filter((l) => l.class_type === filterClassType);
       }
-      if (filterShift && filterShift !== "Shift") {
-        filtered = filtered.filter((l) => l.shift === filterShift);
+      if (filterShift && filterShift.trim() !== "") {
+        const s = filterShift.trim();
+        filtered = filtered.filter((l) => (l.shift || "") === s);
       }
       if (filterDevice && filterDevice !== "Device") {
         filtered = filtered.filter((l) => l.device === filterDevice);
@@ -228,7 +229,7 @@ const Leads = () => {
       (filterGrade && filterGrade.trim()) ||
       (filterLastCall && filterLastCall.trim()) ||
       (filterClassType && filterClassType !== "Class") ||
-      (filterShift && filterShift !== "Shift") ||
+      (filterShift && filterShift.trim() !== "") ||
       (filterDevice && filterDevice !== "Device") ||
       (filterSubStatus && filterSubStatus !== "SubStatus") ||
       (filterPrevCodingExp && filterPrevCodingExp !== "CodingExp") ||
@@ -287,8 +288,9 @@ const Leads = () => {
         (lead) => (lead.class_type || "") === filterClassType
       );
     }
-    if (filterShift && filterShift !== "Shift") {
-      filtered = filtered.filter((lead) => (lead.shift || "") === filterShift);
+    if (filterShift && filterShift.trim() !== "") {
+      const s = filterShift.trim();
+      filtered = filtered.filter((lead) => (lead.shift || "") === s);
     }
     if (filterDevice && filterDevice !== "Device") {
       filtered = filtered.filter(
@@ -1633,8 +1635,8 @@ const Leads = () => {
             params.append("grade", filterGrade.trim());
           if (filterClassType && filterClassType !== "Class")
             params.append("class_type", filterClassType);
-          if (filterShift && filterShift !== "Shift")
-            params.append("shift", filterShift);
+          if (filterShift && filterShift.trim() !== "")
+            params.append("shift", filterShift.trim());
           if (filterDevice && filterDevice !== "Device")
             params.append("device", filterDevice);
           if (filterSubStatus && filterSubStatus !== "SubStatus")
@@ -1785,8 +1787,8 @@ const Leads = () => {
         params.append("grade", filterGrade.trim());
       if (filterClassType && filterClassType !== "Class")
         params.append("class_type", filterClassType);
-      if (filterShift && filterShift !== "Shift")
-        params.append("shift", filterShift);
+      if (filterShift && filterShift.trim() !== "")
+        params.append("shift", filterShift.trim());
       if (filterDevice && filterDevice !== "Device")
         params.append("device", filterDevice);
       if (filterSubStatus && filterSubStatus !== "SubStatus")
@@ -2065,10 +2067,9 @@ const Leads = () => {
       (lead) => (lead.class_type || "") === filterClassType
     );
   }
-  if (filterShift && filterShift !== "Shift") {
-    currentLeads = currentLeads.filter(
-      (lead) => (lead.shift || "") === filterShift
-    );
+  if (filterShift && filterShift.trim() !== "") {
+    const s = filterShift.trim();
+    currentLeads = currentLeads.filter((lead) => (lead.shift || "") === s);
   }
   if (filterDevice && filterDevice !== "Device") {
     currentLeads = currentLeads.filter(

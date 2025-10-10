@@ -1361,6 +1361,21 @@ const EnrolledStudents = () => {
           const shouldUseLeadsAPI =
             isLeadField && !isEnrollmentOnlyField && !!resolvedLeadId;
 
+          // If it's a lead field but we couldn't resolve a lead id, don't fall back to enrollments API.
+          if (isLeadField && !resolvedLeadId) {
+            // rollback optimistic update
+            setAllStudents(prevStudents);
+            setError(
+              "Cannot update lead field from enrollment row: missing lead id"
+            );
+            console.warn(
+              "Blocked lead field update due to missing lead id",
+              backendField,
+              { studentId, currentStudent }
+            );
+            return;
+          }
+
           let apiUrl, targetId;
           if (shouldUseLeadsAPI) {
             // Lead field - send to leads API
@@ -1383,6 +1398,12 @@ const EnrolledStudents = () => {
             apiUrl,
             payload,
           });
+
+          // If routing to Leads API and payload was constructed as nested { lead: {...} },
+          // flatten it to the shape expected by the Leads endpoint.
+          if (shouldUseLeadsAPI && payload && payload.lead) {
+            payload = { ...payload.lead };
+          }
 
           // Ensure first_installment numeric for lead API
           if (shouldUseLeadsAPI && backendField === "first_installment") {
@@ -1441,13 +1462,26 @@ const EnrolledStudents = () => {
               console.debug("scheduled_taken retry failed", e);
             }
           }
-          // Retry 2: payment_type may need nested lead on enrollments API
+          // Guard against misrouting lead-owned fields to enrollments API in fallbacks
+          const leadOwnedForbidEnrollFallback = new Set([
+            "payment_type",
+            "scheduled_taken",
+            "course_duration",
+            "first_installment",
+            "remarks",
+          ]);
+
+          // Retry 2: (disabled for lead-owned fields) payment_type nested lead on enrollments API
           if (
             !response.ok &&
             response.status === 400 &&
             payload &&
             Object.prototype.hasOwnProperty.call(payload, "payment_type") &&
-            !payload.lead
+            !payload.lead &&
+            !(
+              leadOwnedForbidEnrollFallback.has(backendField) ||
+              (typeof apiUrl !== "undefined" && apiUrl.includes("/leads/"))
+            )
           ) {
             try {
               const retryPayload = {
@@ -1455,9 +1489,7 @@ const EnrolledStudents = () => {
                 lead: { payment_type: payload.payment_type },
               };
               const retryUrl =
-                typeof apiUrl !== "undefined" && apiUrl.includes("/leads/")
-                  ? `${ENROLLMENTS_API_BASE}${studentId}/`
-                  : typeof apiUrl !== "undefined"
+                typeof apiUrl !== "undefined"
                   ? apiUrl
                   : `${ENROLLMENTS_API_BASE}${studentId}/`;
               const retryResp = await fetch(retryUrl, {
@@ -1474,13 +1506,17 @@ const EnrolledStudents = () => {
               console.debug("payment_type nested retry failed", e);
             }
           }
-          // Retry 3: course_duration may need nested lead on enrollments API
+          // Retry 3: (disabled for lead-owned fields) course_duration nested lead on enrollments API
           if (
             !response.ok &&
             response.status === 400 &&
             payload &&
             Object.prototype.hasOwnProperty.call(payload, "course_duration") &&
-            !payload.lead
+            !payload.lead &&
+            !(
+              leadOwnedForbidEnrollFallback.has(backendField) ||
+              (typeof apiUrl !== "undefined" && apiUrl.includes("/leads/"))
+            )
           ) {
             try {
               const retryPayload = {
@@ -1488,9 +1524,7 @@ const EnrolledStudents = () => {
                 lead: { course_duration: payload.course_duration },
               };
               const retryUrl =
-                typeof apiUrl !== "undefined" && apiUrl.includes("/leads/")
-                  ? `${ENROLLMENTS_API_BASE}${studentId}/`
-                  : typeof apiUrl !== "undefined"
+                typeof apiUrl !== "undefined"
                   ? apiUrl
                   : `${ENROLLMENTS_API_BASE}${studentId}/`;
               const retryResp = await fetch(retryUrl, {
