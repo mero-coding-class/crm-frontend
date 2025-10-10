@@ -370,7 +370,9 @@ const DraggableRow = ({
                     <div className="mt-1 p-1 text-sm">Loading users...</div>
                   ) : (
                     <select
-                      value={lead.assigned_to_username || ""}
+                      value={
+                        lead.assigned_to_username || lead.assigned_to || ""
+                      }
                       onChange={(e) =>
                         onAssignedToChange(lead.id || lead._id, e.target.value)
                       }
@@ -385,7 +387,10 @@ const DraggableRow = ({
                       </option>
                       {Array.isArray(lead._users) &&
                         lead._users.map((u) => (
-                          <option key={u.username} value={u.username}>
+                          <option
+                            key={u.username || u.id}
+                            value={u.username || u.id}
+                          >
                             {u.username || u.name || String(u.id)}
                           </option>
                         ))}
