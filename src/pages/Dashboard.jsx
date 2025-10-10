@@ -39,6 +39,7 @@ import {
   GlobeAltIcon,
 } from "@heroicons/react/24/outline";
 import LeadMap from "../components/dashboard/LeadMap";
+import CallReminders from "../components/reminders/CallReminders";
 
 const ChartContainer = ({ title, description, children }) => (
   <div className="bg-white p-6 rounded-lg shadow-md flex flex-col h-full">
@@ -712,6 +713,30 @@ const Dashboard = () => {
   return (
     <div className="container mx-auto p-4 md:p-6 bg-gray-50 min-h-screen text-gray-900">
       <h1 className="text-3xl font-bold mb-8">Education CRM Dashboard</h1>
+
+      {/* Call reminders widget: shows leads with next_call for selected date; per-user by default */}
+      <div className="mb-8">
+        <CallReminders
+          leads={
+            Array.isArray(allLeads)
+              ? allLeads.map((l, i) => ({
+                  _id: l._id || l.id || `lead-${i}`,
+                  student_name: l.student_name || l.name || "",
+                  phone_number: l.phone_number || l.phone || "",
+                  whatsapp_number: l.whatsapp_number || l.whatsapp || "",
+                  course_name: l.course_name || l.course || "",
+                  next_call: l.next_call || l.nextCall || "",
+                  assigned_to_username:
+                    l.assigned_to_username || l.assigned_to || "",
+                  status: l.status || "",
+                  sub_status: l.sub_status || l.substatus || "",
+                }))
+              : []
+          }
+          currentUser={user || {}}
+          isAdminLike={isAdminLike}
+        />
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">

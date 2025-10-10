@@ -260,13 +260,25 @@ export const leadService = {
     const backendUpdates = {};
     if (updates.status !== undefined) backendUpdates.status = updates.status;
     if (updates.remarks !== undefined) backendUpdates.remarks = updates.remarks;
-    // Support both camelCase (recentCall/nextCall) and snake_case
-    // (last_call/next_call) coming from different parts of the app.
-    if (updates.recentCall !== undefined) backendUpdates.last_call = formatDateForApi(updates.recentCall);
-    if (updates.nextCall !== undefined) backendUpdates.next_call = formatDateForApi(updates.nextCall);
-    // Accept snake_case variants as well (some callers use these keys).
-    if (updates.last_call !== undefined) backendUpdates.last_call = formatDateForApi(updates.last_call);
-    if (updates.next_call !== undefined) backendUpdates.next_call = formatDateForApi(updates.next_call);
+    // Update call dates only when explicitly provided by caller.
+    // Do not infer or auto-fill when unrelated fields (like assigned_to) change.
+    // Only map/format call date fields if they are explicitly provided by caller
+    if (Object.prototype.hasOwnProperty.call(updates, 'recentCall')) {
+      const v = updates.recentCall;
+      if (v !== undefined) backendUpdates.last_call = formatDateForApi(v);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'nextCall')) {
+      const v = updates.nextCall;
+      if (v !== undefined) backendUpdates.next_call = formatDateForApi(v);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'last_call')) {
+      const v = updates.last_call;
+      if (v !== undefined) backendUpdates.last_call = formatDateForApi(v);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'next_call')) {
+      const v = updates.next_call;
+      if (v !== undefined) backendUpdates.next_call = formatDateForApi(v);
+    }
     if (updates.device !== undefined) backendUpdates.device = updates.device;
     // Avoid sending null for age/grade (backend rejects null). Send empty string
     // when the user clears the field so server receives a blank value instead
@@ -469,6 +481,14 @@ export const leadService = {
   // Ensure id/_id are set (use server id when available, otherwise use the id we patched)
   merged.id = serverData.id || serverData._id || id;
   merged._id = serverData._id || serverData.id || merged._id || id;
+
+  // Never invent last_call/next_call in merged output; only keep if request or response had them
+  const requestHadLast = ('recentCall' in updates) || ('last_call' in updates);
+  const requestHadNext = ('nextCall' in updates) || ('next_call' in updates);
+  const responseHasLast = ('last_call' in serverData);
+  const responseHasNext = ('next_call' in serverData);
+  if (!responseHasLast && !requestHadLast) delete merged.last_call;
+  if (!responseHasNext && !requestHadNext) delete merged.next_call;
 
   // Normalize naming variants so UI code can read `substatus` primarily.
   merged.substatus = merged.substatus || merged.sub_status || backendUpdates.substatus || backendUpdates.sub_status || "New";

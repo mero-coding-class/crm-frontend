@@ -41,14 +41,48 @@ export default function useLeadsHandlers(ctx) {
             )
           );
         } else {
-          setAllLeads((prev) =>
-            deduplicateLeads(
-              prev.map((l) => (matchId(l, serverId) ? { ...l, [fieldName]: newValue } : l))
-            )
-          );
+          // When updating assignment, mirror both assigned_to and assigned_to_username
+          if (fieldName === "assigned_to_username" || fieldName === "assigned_to") {
+            setAllLeads((prev) =>
+              deduplicateLeads(
+                prev.map((l) =>
+                  matchId(l, serverId)
+                    ? {
+                        ...l,
+                        assigned_to_username: newValue,
+                        assigned_to: newValue,
+                      }
+                    : l
+                )
+              )
+            );
+          } else {
+            setAllLeads((prev) =>
+              deduplicateLeads(
+                prev.map((l) => (matchId(l, serverId) ? { ...l, [fieldName]: newValue } : l))
+              )
+            );
+          }
         }
 
+        // Build updates payload. When updating assignment, also pin last_call/next_call
+        // to their current values so the backend won't auto-change them.
         let updatesToSend = { [fieldName]: newValue };
+        if (fieldName === "assigned_to_username" || fieldName === "assigned_to") {
+          const currentLastCall = leadObj?.last_call ?? leadObj?.recentCall ?? null;
+          const currentNextCall = leadObj?.next_call ?? leadObj?.nextCall ?? null;
+          updatesToSend = {
+            assigned_to_username: newValue,
+            assigned_to: newValue,
+            // Only include dates if they're set; avoid forcing null if unknown
+            ...(currentLastCall !== undefined && currentLastCall !== null
+              ? { last_call: currentLastCall }
+              : {}),
+            ...(currentNextCall !== undefined && currentNextCall !== null
+              ? { next_call: currentNextCall }
+              : {}),
+          };
+        }
         if (fieldName === "shift") {
           updatesToSend.shift = (newValue || "").toString().trim();
         }
@@ -59,7 +93,20 @@ export default function useLeadsHandlers(ctx) {
 
         setAllLeads((prev) =>
           deduplicateLeads(
-            prev.map((l) => (matchId(l, serverId) ? { ...l, ...serverResp, _id: l._id || serverResp.id } : l))
+            prev.map((l) =>
+              matchId(l, serverId)
+                ? {
+                    ...l,
+                    ...serverResp,
+                    _id: l._id || serverResp.id,
+                    // Keep both assignment fields in sync in UI after server responds
+                    assigned_to_username:
+                      serverResp.assigned_to_username ?? serverResp.assigned_to ?? l.assigned_to_username,
+                    assigned_to:
+                      serverResp.assigned_to ?? serverResp.assigned_to_username ?? l.assigned_to,
+                  }
+                : l
+            )
           )
         );
       } catch (err) {
