@@ -1,9 +1,8 @@
 import { useCallback } from "react";
 import { BASE_URL } from "../../config";
 
-// Explicit absolute API base required for enrollment updates (PUT/PATCH)
-const ENROLLMENTS_API_BASE =
-  "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/";
+// Use the configured API base for enrollment updates to stay in the same environment
+const ENROLLMENTS_API_BASE = `${BASE_URL}/enrollments/`;
 
 export default function useEnrollmentUpdates({
   authToken,
@@ -100,7 +99,14 @@ export default function useEnrollmentUpdates({
           const current = prevStudents.find(
             (s) => String(s.id) === String(studentId)
           );
-          const leadId = current?.lead?.id;
+          // Resolve lead id from multiple possible shapes
+          const leadId =
+            (current &&
+              (current.lead?.id ??
+                current.lead?._id ??
+                current.leadId ??
+                current.lead?.lead_id)) ||
+            null;
           if (obj.batch_name && !obj.batchname) obj.batchname = obj.batch_name;
 
           const enrollmentAllowed = new Set([
@@ -181,6 +187,7 @@ export default function useEnrollmentUpdates({
             "address_line_1",
             "address_line_2",
             "city",
+            "country",
             "county",
             "post_code",
             "scheduled_taken",
@@ -725,6 +732,13 @@ export default function useEnrollmentUpdates({
     async (studentId) => {
       if (!window.confirm("Are you sure you want to delete this enrollment?")) return;
       try {
+        // Resolve the lead id before deletion (we'll move it to Trash next)
+        const current = (allStudents || []).find((s) => String(s.id) === String(studentId));
+        const leadId =
+          (current &&
+            (current.lead?.id ?? current.lead?._id ?? current.leadId ?? current.lead?.lead_id)) ||
+          null;
+
         const resp = await fetch(`${BASE_URL}/enrollments/${studentId}/`, {
           method: "DELETE",
           headers: { Authorization: `Token ${authToken}` },
@@ -740,6 +754,40 @@ export default function useEnrollmentUpdates({
         }
         setAllStudents((prev) => prev.filter((s) => s.id !== studentId));
         fetchEnrolledStudents(currentPage);
+
+        // After successful enrollment deletion, move the associated lead to Trash (if any)
+        if (leadId !== null && leadId !== undefined) {
+          try {
+            const trashResp = await fetch(`${BASE_URL}/trash/${leadId}/`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+              },
+              body: JSON.stringify({ status: "Lost" }),
+              credentials: "include",
+            });
+            if (trashResp.ok) {
+              const trashed = await trashResp.json().catch(() => null);
+              try {
+                window.dispatchEvent(
+                  new CustomEvent("crm:leadMovedToTrash", { detail: { lead: trashed || undefined, leadId } })
+                );
+              } catch {}
+            } else {
+              // Best-effort logging, keep UX non-blocking
+              try {
+                const t = await trashResp.text();
+                console.warn("Trash PATCH (after enrollment delete) failed:", t);
+              } catch {}
+              try {
+                window.dispatchEvent(new CustomEvent("crm:leadMovedToTrash", { detail: { leadId } }));
+              } catch {}
+            }
+          } catch (e) {
+            console.debug("Failed to move lead to trash after enrollment delete (non-blocking)", e);
+          }
+        }
       } catch (err) {
         console.error("Failed to delete enrollment:", err);
         setError(err.message || "Failed to delete enrollment");
@@ -753,7 +801,8 @@ export default function useEnrollmentUpdates({
       if (!ids || ids.length === 0) return;
       if (!window.confirm(`Permanently delete ${ids.length} enrollments?`)) return;
       try {
-        await Promise.all(
+        // Delete enrollments first
+        const deleteResults = await Promise.all(
           ids.map((id) =>
             fetch(`${BASE_URL}/enrollments/${id}/`, {
               method: "DELETE",
@@ -762,6 +811,46 @@ export default function useEnrollmentUpdates({
             })
           )
         );
+        // Filter out any failed deletions
+        const deletedIds = ids.filter((_, idx) => deleteResults[idx] && deleteResults[idx].ok);
+
+        // Attempt to move corresponding leads to Trash (best-effort)
+        const leadsToTrash = (allStudents || [])
+          .filter((s) => deletedIds.some((id) => String(s.id) === String(id)))
+          .map((s) => s && (s.lead?.id ?? s.lead?._id ?? s.leadId ?? s.lead?.lead_id))
+          .filter((lid) => lid !== null && lid !== undefined);
+
+        await Promise.all(
+          leadsToTrash.map((lid) =>
+            fetch(`${BASE_URL}/trash/${lid}/`, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Token ${authToken}`,
+              },
+              body: JSON.stringify({ status: "Lost" }),
+              credentials: "include",
+            }).then(async (r) => {
+              try {
+                if (r.ok) {
+                  const trashed = await r.json().catch(() => null);
+                  window.dispatchEvent(
+                    new CustomEvent("crm:leadMovedToTrash", { detail: { lead: trashed || undefined, leadId: lid } })
+                  );
+                } else {
+                  try {
+                    const t = await r.text();
+                    console.warn("Bulk trash PATCH failed:", t);
+                  } catch {}
+                  window.dispatchEvent(
+                    new CustomEvent("crm:leadMovedToTrash", { detail: { leadId: lid } })
+                  );
+                }
+              } catch {}
+            })
+          )
+        );
+
         setAllStudents((prev) => prev.filter((s) => !ids.includes(s.id)));
         fetchEnrolledStudents(currentPage);
       } catch (err) {
@@ -770,7 +859,7 @@ export default function useEnrollmentUpdates({
         fetchEnrolledStudents(currentPage);
       }
     },
-    [authToken, fetchEnrolledStudents, currentPage, setAllStudents, setError]
+    [authToken, allStudents, fetchEnrolledStudents, currentPage, setAllStudents, setError]
   );
 
   return { handleUpdateField, handleUpdatePaymentStatus, handleDelete, handleBulkDelete };

@@ -58,6 +58,7 @@ const EnrolledStudentEditModal = ({
       parents_name: student?.parents_name ?? lead.parents_name ?? "",
       email: student?.email ?? lead.email ?? "",
       phone_number: student?.phone_number ?? lead.phone_number ?? "",
+      country: student?.country ?? lead.country ?? "",
       course: student?.course ?? lead.course ?? "",
       batchname: student?.batchname ?? "", // backend field
       assigned_teacher: student?.assigned_teacher ?? "",
@@ -150,10 +151,22 @@ const EnrolledStudentEditModal = ({
 
   const normalizeForCompare = (data) => {
     const keys = [
+      // Enrollment + lead common fields
       "student_name",
       "parents_name",
       "email",
       "phone_number",
+      "whatsapp_number",
+      "grade",
+      "source",
+      "class_type",
+      "lead_type",
+      "shift",
+      "previous_coding_experience",
+      "device",
+      "adset_name",
+      "scheduled_taken",
+      // Enrollment specifics
       "course",
       // accept both batch_name and batchname variants
       "batchname",
@@ -169,12 +182,30 @@ const EnrolledStudentEditModal = ({
       "next_pay_date",
       "payment_completed",
       "payment_type",
+      // Address fields (lead-owned)
+      "address_line_1",
+      "address_line_2",
+      "city",
+      "county",
+      "country",
+      "post_code",
+      // Misc
       "remarks",
     ];
     const obj = {};
     keys.forEach((k) => {
-      let val =
-        data && data[k] !== undefined && data[k] !== null ? data[k] : null;
+      let val = null;
+      if (data && data[k] !== undefined && data[k] !== null) {
+        val = data[k];
+      } else if (
+        data &&
+        data.lead &&
+        data.lead[k] !== undefined &&
+        data.lead[k] !== null
+      ) {
+        // fallback to nested lead field when top-level missing
+        val = data.lead[k];
+      }
       // normalize dates to YYYY-MM-DD strings for comparison
       if (val && (k === "starting_date" || k === "last_pay_date")) {
         try {
@@ -1442,6 +1473,28 @@ const EnrolledStudentEditModal = ({
                 handleChange(e);
                 handleLeadChange({
                   target: { name: "city", value: e.target.value },
+                });
+              }}
+              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="country"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Country
+            </label>
+            <input
+              type="text"
+              name="country"
+              id="country"
+              value={formData.country || formData.lead?.country || ""}
+              onChange={(e) => {
+                handleChange(e);
+                handleLeadChange({
+                  target: { name: "country", value: e.target.value },
                 });
               }}
               className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
