@@ -353,6 +353,16 @@ const Dashboard = () => {
     );
   };
 
+  // Helper: format to YYYY-MM-DD using toDate()
+  const toYMD = (d) => {
+    const dt = toDate(d);
+    if (!dt) return "";
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const day = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
   // Build all dashboard aggregates from real leads + enrollments
   const dashboardData = useMemo(() => {
     if (
@@ -691,6 +701,76 @@ const Dashboard = () => {
     };
   }, [allLeads, coursesMap, enrollments, enrollmentsTrendData, trashedLeads]);
 
+  // Normalize leads for CallReminders and today's call stats reuse
+  const remindersLeads = useMemo(
+    () =>
+      Array.isArray(allLeads)
+        ? allLeads.map((l, i) => ({
+            _id: l._id || l.id || `lead-${i}`,
+            id: l.id,
+            student_name: l.student_name || l.name || "",
+            phone_number: l.phone_number || l.phone || "",
+            whatsapp_number: l.whatsapp_number || l.whatsapp || "",
+            course_name: l.course_name || l.course || "",
+            next_call: l.next_call || l.nextCall || "",
+            assigned_to_username: l.assigned_to_username || l.assigned_to || "",
+            assigned_to: l.assigned_to || l.assigned_to_username || "",
+            status: l.status || "",
+            sub_status: l.sub_status || l.substatus || "",
+          }))
+        : [],
+    [allLeads]
+  );
+
+  // Compute today's calls: pending/completed counts respecting user role and local storage statuses
+  const todaysCalls = useMemo(() => {
+    const today = toYMD(new Date());
+    if (!today) return { pending: 0, completed: 0, total: 0 };
+
+    const username = (user?.username || user?.name || "").toString();
+    const norm = (v) =>
+      (v == null ? "" : String(v)).trim().toLowerCase().replace(/\s+/g, " ");
+    const usernameNorm = norm(username);
+    const emailLocal = usernameNorm.includes("@")
+      ? usernameNorm.split("@")[0]
+      : usernameNorm;
+    const userIdNorm = norm(user?.id);
+    const nameNorm = norm(user?.name || user?.full_name);
+
+    const visible = (remindersLeads || []).filter((l) => {
+      const isToday = toYMD(l.next_call) === today;
+      if (!isToday) return false;
+      if (isAdminLike) return true;
+      const a = norm(l.assigned_to);
+      const u = norm(l.assigned_to_username);
+      return (
+        a === usernameNorm ||
+        u === usernameNorm ||
+        a === emailLocal ||
+        u === emailLocal ||
+        (!!userIdNorm && (a === userIdNorm || u === userIdNorm)) ||
+        (!!nameNorm && (a === nameNorm || u === nameNorm))
+      );
+    });
+
+    // Local completion status map
+    let map = {};
+    try {
+      const raw = localStorage.getItem(`mcc:reminders:${username || "anon"}`);
+      map = raw ? JSON.parse(raw) : {};
+    } catch {}
+    const dateMap = map[today] || {};
+
+    let completed = 0;
+    visible.forEach((l, i) => {
+      const id = l._id || l.id || `lead-${i}`;
+      if (dateMap[id] === "completed") completed += 1;
+    });
+    const total = visible.length;
+    const pending = Math.max(total - completed, 0);
+    return { pending, completed, total };
+  }, [remindersLeads, user, isAdminLike]);
+
   if (loading)
     return <DelayedLoader message="Loading dashboard..." minMs={2000} />;
 
@@ -717,22 +797,7 @@ const Dashboard = () => {
       {/* Call reminders widget: shows leads with next_call for selected date; per-user by default */}
       <div className="mb-8">
         <CallReminders
-          leads={
-            Array.isArray(allLeads)
-              ? allLeads.map((l, i) => ({
-                  _id: l._id || l.id || `lead-${i}`,
-                  student_name: l.student_name || l.name || "",
-                  phone_number: l.phone_number || l.phone || "",
-                  whatsapp_number: l.whatsapp_number || l.whatsapp || "",
-                  course_name: l.course_name || l.course || "",
-                  next_call: l.next_call || l.nextCall || "",
-                  assigned_to_username:
-                    l.assigned_to_username || l.assigned_to || "",
-                  status: l.status || "",
-                  sub_status: l.sub_status || l.substatus || "",
-                }))
-              : []
-          }
+          leads={remindersLeads}
           currentUser={user || {}}
           isAdminLike={isAdminLike}
         />
@@ -777,6 +842,13 @@ const Dashboard = () => {
             colorClass="text-teal-600 bg-teal-100"
           />
         )}
+        <StatCard
+          title="Today's Calls"
+          value={`${todaysCalls.pending} Pending`}
+          icon={CalendarDaysIcon}
+          description={`Completed ${todaysCalls.completed}`}
+          colorClass="text-indigo-600 bg-indigo-100"
+        />
         {/* Upcoming Classes/Calls intentionally removed (replaced by Trash Students) */}
       </div>
 
