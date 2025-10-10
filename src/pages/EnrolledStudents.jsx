@@ -158,9 +158,8 @@ const EnrolledStudents = () => {
     filterScheduledTakenRef.current = filterScheduledTaken;
   }, [filterScheduledTaken]);
 
-  // Explicit absolute API base required for enrollment updates (PUT/PATCH)
-  const ENROLLMENTS_API_BASE =
-    "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/enrollments/";
+  // Use the configured API base for enrollment endpoints
+  const ENROLLMENTS_API_BASE = `${BASE_URL}/enrollments/`;
 
   // Local, client-side filtered view of the current page of students.
   // This lets typing in the search box filter the visible table immediately
