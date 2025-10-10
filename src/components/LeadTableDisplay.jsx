@@ -87,6 +87,8 @@ const LeadTableDisplay = ({
   totalPages: parentTotalPages,
   onPageChange: parentOnPageChange,
   leadsPerPage: parentLeadsPerPage,
+  // Parent-provided field updater to reflect changes immediately in UI
+  handleFieldChange,
 }) => {
   const [selectedLeads, setSelectedLeads] = useState(new Set());
   const [localRemarks, setLocalRemarks] = useState({});
@@ -376,6 +378,10 @@ const LeadTableDisplay = ({
   const handleCourseTypeChange = async (leadId, value) => {
     try {
       await leadService.updateLead(leadId, { course_type: value }, authToken);
+      // Reflect in parent state so UI updates without waiting for other changes
+      if (typeof handleFieldChange === "function") {
+        handleFieldChange(leadId, "course_type", value);
+      }
     } catch (e) {
       console.warn("Failed to update course_type", e);
     }
@@ -384,6 +390,9 @@ const LeadTableDisplay = ({
   const handleClassTypeChange = async (leadId, value) => {
     try {
       await leadService.updateLead(leadId, { class_type: value }, authToken);
+      if (typeof handleFieldChange === "function") {
+        handleFieldChange(leadId, "class_type", value);
+      }
     } catch (e) {
       console.warn("Failed to update class_type", e);
     }

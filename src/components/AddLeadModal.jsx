@@ -1,148 +1,46 @@
+import React, { useRef } from "react";
+import { useAuth } from "../context/AuthContext";
+import { XMarkIcon } from "@heroicons/react/24/outline";
+import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
 import {
   statusOptions,
   subStatusOptions,
 } from "../constants/leadStatusOptions";
-import React, { useState, useRef, useEffect } from "react";``
-import { useAuth } from "../context/AuthContext";
-import { BASE_URL } from "../config";
-import { XMarkIcon } from "@heroicons/react/24/outline";
-import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
-
-// Helper function to get current date in YYYY-MM-DD format
-const getTodayDate = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-// Format date for API: ensure we send YYYY-MM-DD (backend expects this)
-const formatDateForBackend = (d) => {
-  if (!d && d !== 0) return null;
-  // If already a Date object, format to YYYY-MM-DD
-  if (d instanceof Date) {
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  const s = String(d).trim();
-  // If already in YYYY-MM-DD, return as-is
-  const parts = s.split("-");
-  if (parts.length === 3 && parts[0].length === 4) return s;
-
-  // If input was in legacy backend format 'YYYY|DD|MM', convert to YYYY-MM-DD
-  if (s.includes("|")) {
-    const parts2 = s.split("|");
-    if (parts2.length === 3) {
-      const [yyyy, dd, mm] = parts2;
-      return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-    }
-  }
-
-  // Fallback: try Date parse
-  const parsed = new Date(s);
-  if (!isNaN(parsed.getTime())) {
-    const yyyy = parsed.getFullYear();
-    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
-    const dd = String(parsed.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  return null;
-};
+import {
+  sourceOptions,
+  classTypeOptions,
+  deviceOptions,
+  previousCodingExpOptions,
+  courseTypeOptions,
+} from "../constants/addLeadOptions";
+import useAddLeadForm from "./addLead/useAddLeadForm";
+import {
+  FieldError as FieldErrorBase,
+  RequiredLabel as RequiredLabelBase,
+} from "./addLead/helpers.jsx";
+import useUsers from "../pages/leads/useUsers";
+import AssignedToSelect from "./addLead/AssignedToSelect";
+import AddressFields from "./addLead/AddressFields";
+import PaymentSection from "./addLead/PaymentSection";
 
 const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
-  // Debug: log courses prop to help diagnose missing course_name in dropdown
-  React.useEffect(() => {
-    try {
-      console.debug("AddLeadModal: courses prop:", courses);
-      console.debug(
-        "AddLeadModal: coursesList length:",
-        Array.isArray(courses) ? courses.length : 0
-      );
-    } catch (e) {
-      // ignore
-    }
-  }, [courses]);
-  const [formData, setFormData] = useState({
-    student_name: "",
-    parents_name: "",
-    email: "",
-    phone_number: "",
-    whatsapp_number: "",
-    age: "",
-    grade: "",
-    source: "",
-    course_name: "",
-    course_duration: "",
-    class_type: "",
-    course_type: "", // new field
-    shift: "",
-    status: "Active",
-    sub_status: "New",
-    school_college_name: "",
-    lead_type: "",
-    previous_coding_experience: "",
-    last_call: "",
-    next_call: "",
-    value: "",
-    adset_name: "",
-    remarks: "",
-    payment_type: "",
-    device: "",
-    workshop_batch: "",
-    address_line_1: "",
-    address_line_2: "",
-    city: "",
-    county: "",
-    post_code: "",
-    demo_scheduled: "",
-    add_date: getTodayDate(),
-    first_installment: "",
-    first_invoice: null,
-  });
-
+  const { user } = useAuth();
+  const isAdmin =
+    user &&
+    (user.role === "admin" ||
+      user.role === "super admin" ||
+      user.role === "superadmin" ||
+      user.role === "super-admin");
+  const { formData, setField, errors, setErrors, handleSubmit } =
+    useAddLeadForm({
+      courses,
+      authToken,
+      onClose,
+      onSave,
+      isAdmin,
+    });
   const modalContentRef = useRef(null);
-  const [users, setUsers] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersError, setUsersError] = useState(null);
-  // Validation errors for fields (key -> message)
-  const [errors, setErrors] = useState({});
-
-  useEffect(() => {
-    // Fetch users for the Assigned To dropdown when authToken is available
-    const fetchUsers = async () => {
-      if (!authToken) return;
-      setUsersLoading(true);
-      setUsersError(null);
-      try {
-        const res = await fetch(`${BASE_URL}/users/`, {
-          headers: {
-            Authorization: `Token ${authToken}`,
-            "Content-Type": "application/json",
-          },
-        });
-        if (!res.ok) {
-          const err = await res.text();
-          throw new Error(`Failed to fetch users: ${res.status} ${err}`);
-        }
-        const data = await res.json();
-        // Support both direct array and paginated { results: [] }
-        const list = Array.isArray(data) ? data : data.results || [];
-        setUsers(list);
-      } catch (err) {
-        console.error("Error fetching users:", err);
-        setUsersError(err.message || String(err));
-      } finally {
-        setUsersLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, [authToken]);
+  const { users, usersLoading } = useUsers(authToken);
 
   const handleOverlayClick = (event) => {
     if (
@@ -155,404 +53,15 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-    // Clear validation error for this field while the user types
-    setErrors((prev) => {
-      if (!prev || !prev[name]) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
+    setField(name, value);
   };
 
-  const handleSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    // Debug: confirm the submit handler was invoked and show a small snapshot
-    console.debug("AddLeadModal.handleSubmit called", {
-      student_name: formData.student_name,
-      parents_name: formData.parents_name,
-      email: formData.email,
-    });
-
-    // Use a minimal, explicit set of required fields for the Add form so
-    // users aren't blocked by many backend-only or optional fields.
-    const requiredFieldsList = ["student_name", "parents_name", "email"];
-
-    const internalSkips = new Set(["_id", "invoice"]);
-
-    const missingFields = requiredFieldsList.filter((field) => {
-      const v = formData[field];
-      // treat empty strings, null, undefined as missing
-      if (v === null || v === undefined) return true;
-      if (typeof v === "string" && v.trim() === "") return true;
-      return false;
-    });
-
-    if (missingFields.length > 0) {
-      // Build an errors map so we can show inline messages and keep the modal open
-      const newErrors = {};
-      missingFields.forEach((f) => {
-        newErrors[f] = "This field is required";
-      });
-      setErrors(newErrors);
-
-      // Focus first missing field if possible
-      try {
-        const el = document.getElementsByName(missingFields[0])[0];
-        if (el && typeof el.focus === "function") el.focus();
-      } catch (e) {
-        // ignore
-      }
-
-      // Don't proceed with API call or close the modal
-      return;
-    }
-
-    // Check if status is "Converted" and first_invoice is required
-    if (formData.status === "Converted" && !formData.first_invoice) {
-      alert("Invoice is required when setting status to 'Converted'");
-      setErrors({ first_invoice: "Invoice is required for Converted status" });
-      return;
-    }
-
-    // --- 2️⃣ Prepare Payload ---
-    const payload = {
-      ...formData,
-      last_call: formData.last_call === "" ? null : formData.last_call,
-      next_call: formData.next_call === "" ? null : formData.next_call,
-      // Send the exact selected source label so it matches backend choice list
-      source: formData.source === "Select" ? "" : formData.source,
-      class_type: formData.class_type === "Select" ? "" : formData.class_type,
-      shift: formData.shift || "",
-      payment_type:
-        formData.payment_type === "Select" ? "" : formData.payment_type,
-      previous_coding_experience:
-        formData.previous_coding_experience === "Select"
-          ? ""
-          : formData.previous_coding_experience,
-      device: formData.device === "Select" ? "" : formData.device,
-      // Keep course_duration in payload even when empty so backend can clear it
-      course_duration: formData.course_duration || "",
-    };
-
-    // Remove frontend-only fields
-    delete payload._id;
-    delete payload.invoice;
-
-    console.log("Auth Token:", authToken);
-    console.log("Payload to send:", payload);
-
-    if (!authToken) {
-      alert("Authentication token is missing! Please log in.");
-      return;
-    }
-
-    // --- 4️⃣ API Call ---
-    try {
-      // Create a temporary ID for optimistic updates
-      const tempId = `new-${Date.now()}`;
-
-      // Transform the data to match backend's format and create the final lead object
-      // Find selected course by id (value stored in select) so we can send the
-      // numeric id to backend. The select now stores course.id as value.
-      const selectedCourse = courses.find(
-        (c) =>
-          String(c.id) === String(formData.course_name) ||
-          String(c.id) === String(formData.course)
-      );
-      const selectedCourseId = selectedCourse ? selectedCourse.id : null;
-
-      const backendPayload = {
-        _id: tempId,
-        student_name: formData.student_name.trim(),
-        parents_name: formData.parents_name.trim(),
-        email: formData.email,
-        phone_number: formData.phone_number.trim(),
-        whatsapp_number: formData.whatsapp_number.trim(),
-        age: formData.age,
-        grade: formData.grade,
-        source: formData.source === "Select" ? "" : formData.source,
-        class_type: formData.class_type === "Select" ? "" : formData.class_type,
-        shift: formData.shift ? String(formData.shift).trim() : "",
-        status: formData.status || "New",
-        substatus: formData.sub_status || "New",
-        device: formData.device === "Select" ? "" : formData.device,
-        previous_coding_experience:
-          formData.previous_coding_experience === "Select"
-            ? ""
-            : formData.previous_coding_experience,
-        address_line_1: formData.address_line_1,
-        address_line_2: formData.address_line_2,
-        city: formData.city,
-        county: formData.county,
-        post_code: formData.post_code,
-        value: formData.value,
-        adset_name: formData.adset_name,
-        remarks: formData.remarks,
-        payment_type:
-          formData.payment_type === "Select" ? "" : formData.payment_type,
-        workshop_batch: formData.workshop_batch,
-        // Lead type (B2B / B2C)
-        lead_type: formData.lead_type,
-        school_college_name: formData.school_college_name || "",
-        demo_scheduled: formData.demo_scheduled || "",
-        // Important: send course id under `course` so backend links correctly
-        course: selectedCourseId,
-        // Keep course_name for optimistic UI only (resolve from selectedCourse if possible)
-        course_name: selectedCourse?.course_name ?? formData.course_name,
-        course_duration: formData.course_duration,
-        last_call: formatDateForBackend(formData.last_call),
-        next_call: formatDateForBackend(formData.next_call),
-        add_date: formData.add_date,
-        first_installment: formData.first_installment
-          ? parseFloat(formData.first_installment)
-          : null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      // Only include assigned_to when the creator is an admin and a value was provided
-      if (
-        isAdmin &&
-        formData.created_by &&
-        String(formData.created_by).trim() !== ""
-      ) {
-        backendPayload.assigned_to = String(formData.created_by).trim();
-      }
-
-      // Sanitize optional/nullable fields: delete keys with empty strings so backend
-      // doesn't receive incorrect scalar types (many DRF validators prefer omitted fields)
-      // We intentionally do not strip out course_duration so an empty value
-      // will clear the backend field when saved. Other optional keys can be
-      // removed if empty to avoid sending unnecessary fields.
-      const optionalKeys = [
-        "grade",
-        "source",
-        "class_type",
-        "shift",
-        "payment_type",
-        "device",
-        "previous_coding_experience",
-        "school_college_name",
-        "demo_scheduled",
-      ];
-      optionalKeys.forEach((k) => {
-        if (
-          backendPayload[k] === "" ||
-          backendPayload[k] === null ||
-          backendPayload[k] === undefined
-        ) {
-          delete backendPayload[k];
-        }
-      });
-
-      // Remove null/invalid date fields to avoid backend 400 on date validation
-      if (!backendPayload.last_call) delete backendPayload.last_call;
-      if (!backendPayload.next_call) delete backendPayload.next_call;
-
-      // Call onSave with the optimistic data first (parent can decide how to merge)
-      try {
-        onSave(backendPayload);
-      } catch (e) {
-        // swallow if parent handler throws during optimistic update
-        console.debug("onSave optimistic update handler threw:", e);
-      }
-
-      // Close the modal immediately for optimistic UX
-      try {
-        onClose();
-      } catch (e) {
-        // ignore
-      }
-
-      // Prepare API call - use FormData if file upload, otherwise JSON
-      let requestOptions;
-      if (formData.first_invoice) {
-        // Use FormData for file upload
-        const formDataToSend = new FormData();
-
-        // Add all fields to FormData
-        Object.entries(backendPayload).forEach(([key, value]) => {
-          if (value !== null && value !== undefined) {
-            formDataToSend.append(key, value);
-          }
-        });
-
-        // Add the file
-        formDataToSend.append("first_invoice", formData.first_invoice);
-
-        requestOptions = {
-          method: "POST",
-          headers: {
-            Authorization: `Token ${authToken}`,
-            // Don't set Content-Type for FormData - browser will set it with boundary
-          },
-          body: formDataToSend,
-        };
-      } else {
-        // Regular JSON request
-        requestOptions = {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Token ${authToken}`,
-          },
-          body: JSON.stringify(backendPayload),
-        };
-      }
-
-      const response = await fetch(`${BASE_URL}/leads/`, requestOptions);
-      // Debug log outgoing request for better tracing of 400 responses
-      try {
-        console.debug("POST /leads/ -> payload:", backendPayload);
-      } catch (e) {
-        // ignore
-      }
-
-      if (!response.ok) {
-        // Try parse JSON first, but fall back to text
-        let bodyText = null;
-        let bodyJson = null;
-        try {
-          bodyJson = await response.json();
-        } catch (e) {
-          try {
-            bodyText = await response.text();
-          } catch (e2) {
-            bodyText = `<unreadable response: ${e2}>`;
-          }
-        }
-
-        console.error("API Error POST /leads/ status", response.status, {
-          json: bodyJson,
-          text: bodyText,
-          requestPayload: backendPayload,
-        });
-
-        // Show a friendly alert with available server information
-        const userMessage = bodyJson
-          ? JSON.stringify(bodyJson)
-          : bodyText || `Status ${response.status}`;
-        alert(`Failed to add lead. ${userMessage}`);
-        return;
-      }
-
-      const result = await response.json();
-      console.log("Lead added successfully:", result);
-
-      // Build server-side lead object using server response where possible
-      const serverLead = {
-        ...backendPayload,
-        _id: result.id.toString(),
-        id: result.id,
-        created_at: result.created_at || backendPayload.created_at,
-        updated_at: result.updated_at || backendPayload.updated_at,
-        // Prefer server-provided names/ids; fall back to selectedCourse or form value
-        course_name:
-          result.course_name ??
-          selectedCourse?.course_name ??
-          formData.course_name,
-        course: result.course ?? selectedCourseId ?? null,
-        // Ensure front-end consumers can read both variants and course duration
-        substatus:
-          result.substatus ?? result.sub_status ?? backendPayload.substatus,
-        sub_status:
-          result.sub_status ?? result.substatus ?? backendPayload.sub_status,
-        course_duration:
-          result.course_duration ??
-          backendPayload.course_duration ??
-          formData.course_duration,
-      };
-
-      // Update the lead in the parent component with the server data
-      onSave({
-        ...serverLead,
-        logs_url: `${BASE_URL}/leads/${result.id}/logs/`,
-      });
-
-      console.log("Lead saved successfully:", serverLead);
-    } catch (error) {
-      console.error("Network Error:", error);
-      alert(
-        "An error occurred while connecting to the server. Please try again later."
-      );
-    }
+    await handleSubmit();
   };
-
-  // Dropdown options
-  const statusOptions = ["Active", "Converted", "Lost"];
-  const sourceOptions = [
-    "Select",
-    "WhatsApp/Viber",
-    "Facebook",
-    "Website",
-    "Email",
-    "Office Visit",
-    "Direct call",
-    "TikTok",
-    "Instagram",
-    "Other",
-  ];
-  const classTypeOptions = ["Select", "One to One", "Group"];
-
-  const courseTypeOptions = ["Select", "Online", "Physical"];
-  // ...existing code...
-  {
-    /* Add course_type dropdown in the form UI */
-  }
-  <div className="mb-4">
-    <label className="block text-gray-700 text-sm font-bold mb-2">
-      Course Type
-    </label>
-    <select
-      name="course_type"
-      value={formData.course_type}
-      onChange={handleChange}
-      className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-    >
-      {courseTypeOptions.map((opt) => (
-        <option key={opt} value={opt === "Select" ? "" : opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  </div>;
 
   const paymentTypeOptions = PAYMENT_TYPE_OPTIONS; // centralized constant
-  const previousCodingExpOptions = [
-    "Select",
-    "None",
-    "Basic Python",
-    "Intermediate C++",
-    "Arduino",
-    "Some Linux",
-    "Advanced Python",
-    "Basic Java",
-    "Other",
-  ];
-  const deviceOptions = ["Select", "Yes", "No"];
-
-  const subStatusOptions = [
-    "New",
-    "Open",
-    "Followup",
-    "inProgress",
-    "Average",
-    "Interested",
-    "Junk",
-  ];
-
-  const { user } = useAuth();
-
-  const isAdmin =
-    user &&
-    (user.role === "admin" ||
-      user.role === "super admin" ||
-      user.role === "superadmin" ||
-      user.role === "super-admin");
-
   // Defensive: ensure `courses` is an array before using .map
   const warnedCoursesShape = useRef(false);
   const coursesList = Array.isArray(courses) ? courses : [];
@@ -590,24 +99,13 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   ]);
 
   // Small component to render inline field errors
-  const FieldError = ({ name }) => {
-    if (!errors || !errors[name]) return null;
-    return (
-      <p className="text-red-600 text-sm mt-1" role="alert">
-        {errors[name]}
-      </p>
-    );
-  };
-
+  const FieldError = ({ name }) => (
+    <FieldErrorBase name={name} errors={errors} />
+  );
   const RequiredLabel = ({ field, children }) => (
-    <>
+    <RequiredLabelBase field={field} optionalFields={optionalFields}>
       {children}
-      {!optionalFields.has(field) && (
-        <span className="text-red-600 ml-1" aria-hidden>
-          *
-        </span>
-      )}
-    </>
+    </RequiredLabelBase>
   );
 
   return (
@@ -630,7 +128,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
           </button>
         </div>
         <form
-          onSubmit={handleSubmit}
+          onSubmit={onSubmit}
           className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4"
         >
           {/* (optional fields legend removed) */}
@@ -741,44 +239,14 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
-          {isAdmin && (
-            <div>
-              <label
-                htmlFor="created_by"
-                className="block text-sm font-medium text-gray-700"
-              >
-                <RequiredLabel field="created_by">Assigned To</RequiredLabel>
-              </label>
-              {usersLoading ? (
-                <div className="mt-1 p-2">Loading users...</div>
-              ) : usersError ? (
-                <div className="mt-1 p-2 text-sm text-red-600">
-                  Error loading users
-                </div>
-              ) : (
-                <select
-                  id="created_by"
-                  name="created_by"
-                  value={formData.created_by || ""}
-                  onChange={handleChange}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  <option value="">(Unassigned)</option>
-                  {users.map((u) => {
-                    // prefer username but fall back to id if username not present
-                    const label =
-                      u.username || u.name || u.email || String(u.id);
-                    const value = u.username || String(u.id);
-                    return (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    );
-                  })}
-                </select>
-              )}
-            </div>
-          )}
+          <AssignedToSelect
+            isAdmin={isAdmin}
+            users={users}
+            usersLoading={usersLoading}
+            value={formData.created_by || ""}
+            onChange={handleChange}
+            RequiredLabel={RequiredLabel}
+          />
 
           {/* Parents Name */}
           <div className="md:col-span-2">
@@ -1216,144 +684,9 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
             ></textarea>
           </div>
 
-          {/* Address Fields */}
-          <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
-            Main Address
-          </div>
-          <div>
-            <label
-              htmlFor="address_line_1"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Address Line 1 (Permanent)
-            </label>
-            <input
-              type="text"
-              id="address_line_1"
-              name="address_line_1"
-              value={formData.address_line_1}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="address_line_2"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Address Line 2 (Temporary)
-            </label>
-            <input
-              type="text"
-              id="address_line_2"
-              name="address_line_2"
-              value={formData.address_line_2}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="city"
-              className="block text-sm font-medium text-gray-700"
-            >
-              City
-            </label>
-            <input
-              type="text"
-              id="city"
-              name="city"
-              value={formData.city}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="county"
-              className="block text-sm font-medium text-gray-700"
-            >
-              County
-            </label>
-            <input
-              type="text"
-              id="county"
-              name="county"
-              value={formData.county}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="post_code"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Post Code
-            </label>
-            <input
-              type="text"
-              id="post_code"
-              name="post_code"
-              value={formData.post_code}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
+          <AddressFields formData={formData} onChange={handleChange} />
 
-          {/* Payment & Invoice Section */}
-          <div className="md:col-span-3 text-lg font-semibold text-gray-800 border-t pt-4">
-            Payment Information
-          </div>
-
-          {/* First Installment */}
-          <div>
-            <label
-              htmlFor="first_installment"
-              className="block text-sm font-medium text-gray-700"
-            >
-              First Installment Amount
-            </label>
-            <input
-              type="number"
-              id="first_installment"
-              name="first_installment"
-              value={formData.first_installment}
-              onChange={handleChange}
-              className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="Enter amount"
-              min="0"
-              step="0.01"
-            />
-          </div>
-
-          {/* First Invoice Upload */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              First Invoice (PDF/Image)
-            </label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-              <input
-                type="file"
-                id="first_invoice"
-                name="first_invoice"
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  setFormData((prev) => ({ ...prev, first_invoice: file }));
-                }}
-                accept=".pdf,.jpg,.jpeg,.png,.gif"
-                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-              />
-              {formData.first_invoice && (
-                <div className="mt-2 text-sm text-green-600">
-                  Selected: {formData.first_invoice.name}
-                </div>
-              )}
-              <p className="mt-1 text-xs text-gray-500">
-                Upload PDF or image files (JPG, PNG, GIF)
-              </p>
-            </div>
-          </div>
+          <PaymentSection formData={formData} setField={setField} />
 
           {/* Form Actions */}
           <div className="md:col-span-3 flex justify-end gap-3 pt-4 border-t border-gray-200">

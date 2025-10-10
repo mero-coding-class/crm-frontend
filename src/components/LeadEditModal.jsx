@@ -524,22 +524,7 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
   const classTypeOptions = ["Select", "One to One", "Group"];
   // Course type: backend expects exactly "Physical" or "Online"
   const courseTypeOptions = ["Select", "Physical", "Online"];
-  const shiftOptions = [
-    "Select",
-    "7 A.M. - 9 A.M.",
-    "8 A.M. - 10 A.M.",
-    "10 A.M. - 12 P.M.",
-    "11 A.M. - 1 P.M.",
-    "12 P.M. - 2 P.M.",
-    "2 P.M. - 4 P.M.",
-    "2:30 P.M. - 4:30 P.M.",
-    "4 P.M. - 6 P.M.",
-    "4:30 P.M. - 6:30 P.M.",
-    "5 P.M. - 7 P.M.",
-    "6 P.M. - 7 P.M.",
-    "6 P.M. - 8 P.M.",
-    "7 P.M. - 8 P.M.",
-  ];
+
   const paymentTypeOptions = PAYMENT_TYPE_OPTIONS; // centralized list
   const deviceOptions = ["Select", "Yes", "No"];
   const previousCodingExpOptions = [
