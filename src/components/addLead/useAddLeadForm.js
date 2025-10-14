@@ -61,7 +61,19 @@ export default function useAddLeadForm({ courses = [], authToken, onClose, onSav
   }, [courses, formData.course_name, formData.course]);
 
   const handleSubmit = async () => {
-    const requiredFieldsList = ["student_name", "parents_name", "email"];
+    // Required fields (align with labels showing RequiredLabel in AddLeadModal)
+    const requiredFieldsList = [
+      "student_name",
+      "parents_name",
+      "email",
+      "phone_number",
+      "whatsapp_number",
+      "lead_type",
+      "course_name",
+      "class_type",
+      "source",
+      "add_date",
+    ];
     const missing = requiredFieldsList.filter((f) => {
       const v = formData[f];
       if (v === null || v === undefined) return true;
@@ -72,7 +84,7 @@ export default function useAddLeadForm({ courses = [], authToken, onClose, onSav
       const e = {};
       missing.forEach((f) => (e[f] = "This field is required"));
       setErrors(e);
-      return { ok: false, reason: "validation" };
+      return { ok: false, reason: "validation", missing, first: missing[0] };
     }
 
     if (formData.status === "Converted" && !formData.first_invoice) {

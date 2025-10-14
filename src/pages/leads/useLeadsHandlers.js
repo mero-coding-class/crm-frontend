@@ -151,13 +151,20 @@ export default function useLeadsHandlers(ctx) {
           ],
         };
 
+        // Determine if a matching lead already exists BEFORE updating state
+        const norm = (v) => (v === undefined || v === null ? "" : String(v).trim().toLowerCase());
+        const emailKey = norm(formattedLead.email);
+        const namePhoneKey = `${norm(formattedLead.student_name)}-${norm(formattedLead.phone_number)}`;
+        const existedBefore = (allLeads || []).some((l) => {
+          const lEmail = norm(l.email);
+          if (emailKey && lEmail && lEmail === emailKey) return true;
+          const lNamePhone = `${norm(l.student_name)}-${norm(l.phone_number)}`;
+          return namePhoneKey !== "-" && lNamePhone === namePhoneKey;
+        });
+
         // Avoid duplicate rows when optimistic add is followed by server response:
         // Prefer merging/replacing an existing row matched by natural keys (email or name+phone).
         setAllLeads((prevLeads) => {
-          const norm = (v) => (v === undefined || v === null ? "" : String(v).trim().toLowerCase());
-          const emailKey = norm(formattedLead.email);
-          const namePhoneKey = `${norm(formattedLead.student_name)}-${norm(formattedLead.phone_number)}`;
-
           const idx = prevLeads.findIndex((l) => {
             const lEmail = norm(l.email);
             if (emailKey && lEmail && lEmail === emailKey) return true;
@@ -168,18 +175,6 @@ export default function useLeadsHandlers(ctx) {
           let next;
           if (idx >= 0) {
             // Replace/merge the existing optimistic row with the authoritative data (server or refined optimistic)
-        const norm = (v) => (v === undefined || v === null ? "" : String(v).trim().toLowerCase());
-        const existedBefore = (() => {
-          const emailKey = norm(formattedLead.email);
-          const namePhoneKey = `${norm(formattedLead.student_name)}-${norm(formattedLead.phone_number)}`;
-          const idx = (allLeads || []).findIndex((l) => {
-            const lEmail = norm(l.email);
-            if (emailKey && lEmail && lEmail === emailKey) return true;
-            const lNamePhone = `${norm(l.student_name)}-${norm(l.phone_number)}`;
-            return namePhoneKey !== "-" && lNamePhone === namePhoneKey;
-          });
-          return idx >= 0;
-        })();
             next = prevLeads.slice();
             next[idx] = { ...next[idx], ...formattedLead };
           } else {
