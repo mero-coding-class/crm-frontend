@@ -147,6 +147,11 @@ const LeadLogDisplay = ({
         descriptionText = `Remarks updated.`;
       } else if (log.field_changed === "status") {
         descriptionText = `Status changed to '${log.new_value}'.`;
+      } else if (
+        log.field_changed === "substatus" ||
+        log.field_changed === "sub_status"
+      ) {
+        descriptionText = `Substatus changed from '${log.old_value}' to '${log.new_value}'.`;
       } else if (log.field_changed === "last_call")
         descriptionText = `Last Call changed from '${getFormattedDate(
           log.old_value
