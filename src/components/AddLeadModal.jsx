@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import { PAYMENT_TYPE_OPTIONS } from "../constants/paymentOptions";
@@ -42,12 +42,19 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
   const modalContentRef = useRef(null);
   const { users, usersLoading } = useUsers(authToken);
 
+  // Refs to required fields to focus when validation fails
+  const fieldRefs = useRef({});
+  const setFieldRef = (name) => (el) => {
+    if (el) fieldRefs.current[name] = el;
+  };
+
   const handleOverlayClick = (event) => {
     if (
       modalContentRef.current &&
       !modalContentRef.current.contains(event.target)
     ) {
-      onClose();
+      // Only close if there are no current validation errors
+      if (!errors || Object.keys(errors).length === 0) onClose();
     }
   };
 
@@ -58,7 +65,20 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    await handleSubmit();
+    const res = await handleSubmit();
+    if (res && res.ok === false && res.reason === "validation") {
+      const first = res.first;
+      const ref = first ? fieldRefs.current[first] : null;
+      if (ref && typeof ref.focus === "function") {
+        try {
+          ref.focus();
+          // Scroll into view for better UX
+          ref.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch {}
+      }
+      // Do not close modal; show errors inline via FieldError components
+      return;
+    }
   };
 
   const paymentTypeOptions = PAYMENT_TYPE_OPTIONS; // centralized constant
@@ -193,6 +213,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required
+              ref={setFieldRef("lead_type")}
             >
               <option value="">Select type</option>
               <option value="B2B">B2B</option>
@@ -237,7 +258,9 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               value={formData.add_date}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              ref={setFieldRef("add_date")}
             />
+            <FieldError name="add_date" />
           </div>
           <AssignedToSelect
             isAdmin={isAdmin}
@@ -265,6 +288,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="e.g., John & Jane Doe"
               required // Added 'required' attribute
+              ref={setFieldRef("parents_name")}
             />
             <FieldError name="parents_name" />
           </div>
@@ -285,6 +309,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
+              ref={setFieldRef("student_name")}
             />
             <FieldError name="student_name" />
 
@@ -327,6 +352,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
+              ref={setFieldRef("email")}
             />
             <FieldError name="email" />
           </div>
@@ -347,6 +373,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
+              ref={setFieldRef("phone_number")}
             />
             <FieldError name="phone_number" />
           </div>
@@ -369,6 +396,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               required // Added 'required' attribute
+              ref={setFieldRef("whatsapp_number")}
             />
             <FieldError name="whatsapp_number" />
           </div>
@@ -423,6 +451,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               value={formData.course_name}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              ref={setFieldRef("course_name")}
             >
               <option value="">Select a course</option>
               {coursesList.map((course) => {
@@ -440,6 +469,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 );
               })}
             </select>
+            <FieldError name="course_name" />
           </div>
           {/* Course Duration - Now a text field */}
           <div>
@@ -473,6 +503,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               value={formData.source}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              ref={setFieldRef("source")}
             >
               {sourceOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
@@ -480,6 +511,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 </option>
               ))}
             </select>
+            <FieldError name="source" />
           </div>
 
           {/* Last Call */}
@@ -532,6 +564,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               value={formData.class_type}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              ref={setFieldRef("class_type")}
             >
               {classTypeOptions.map((option) => (
                 <option key={option} value={option === "Select" ? "" : option}>
@@ -539,6 +572,7 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
                 </option>
               ))}
             </select>
+            <FieldError name="class_type" />
           </div>
 
           {/* Value */}
