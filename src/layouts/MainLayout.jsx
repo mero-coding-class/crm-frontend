@@ -14,6 +14,7 @@ import {
   UserPlusIcon,
   PlusCircleIcon,
   BookOpenIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
 import { AuthContext } from "../context/AuthContext.jsx";
@@ -146,10 +147,10 @@ const MainLayout = () => {
             Reports
           </NavLink>
 
-          {/* Only admins & superadmins can see these */}
+          {/* Settings (admin/superadmin only) */}
           {canManage(role) && (
             <NavLink
-              to="/register-user"
+              to="/settings"
               className={({ isActive }) =>
                 `flex items-center p-3 rounded-lg transition-colors duration-200 ${
                   isActive
@@ -159,25 +160,8 @@ const MainLayout = () => {
               }
               onClick={() => setSidebarOpen(false)}
             >
-              <PlusCircleIcon className="h-6 w-6 mr-3" />
-              Create User
-            </NavLink>
-          )}
-
-          {canManage(role) && (
-            <NavLink
-              to="/courses/new"
-              className={({ isActive }) =>
-                `flex items-center p-3 rounded-lg transition-colors duration-200 ${
-                  isActive
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "hover:bg-gray-700 text-gray-300"
-                }`
-              }
-              onClick={() => setSidebarOpen(false)}
-            >
-              <BookOpenIcon className="h-6 w-6 mr-3" />
-              Create Course
+              <Cog6ToothIcon className="h-6 w-6 mr-3" />
+              Settings
             </NavLink>
           )}
         </nav>

@@ -17,6 +17,7 @@ import Login from "./pages/Login"; // Adjusted path to assume App.js is in src/
 import Reports from "./pages/Reports"; // Adjusted path to assume App.js is in src/
 import Register from "./pages/Register"; // Adjusted path to assume App.js is in src/
 import CreateCourse from "./pages/CreateCourse"; // Adjusted path to assume App.js is in src/
+import Settings from "./pages/Settings";
 function AppContent() {
   const { authToken } = useContext(AuthContext);
 
@@ -38,10 +39,10 @@ function AppContent() {
           <Route path="/enrolled-students" element={<EnrolledStudents />} />
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/report" element={<Reports />} />
+          <Route path="/settings" element={<Settings />} />
           {/* Catch-all route within the protected area, redirects to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/register-user" element={<Register />} />
-          <Route path="/courses/new" element={<CreateCourse />} />
+          {/* Legacy direct routes removed in favor of Settings */}
         </Route>
 
         {/* Fallback for unauthenticated users trying to access any route directly that isn't /login */}
