@@ -15,6 +15,7 @@ import {
   PlusCircleIcon,
   BookOpenIcon,
   Cog6ToothIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
 import { AuthContext } from "../context/AuthContext.jsx";
@@ -164,6 +165,22 @@ const MainLayout = () => {
               Settings
             </NavLink>
           )}
+
+          {/* Downloads (visible to all roles) */}
+          <NavLink
+            to="/downloads"
+            className={({ isActive }) =>
+              `flex items-center p-3 rounded-lg transition-colors duration-200 ${
+                isActive
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "hover:bg-gray-700 text-gray-300"
+              }`
+            }
+            onClick={() => setSidebarOpen(false)}
+          >
+            <ArrowDownTrayIcon className="h-6 w-6 mr-3" />
+            Downloads
+          </NavLink>
         </nav>
 
         {/* User panel + Logout */}

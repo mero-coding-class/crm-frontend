@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { BASE_URL } from "../../config";
+import { exportsStore } from "../../services/exportsStore";
 import { deduplicateLeads } from "./utils";
 
 export default function useLeadExports(ctx) {
@@ -88,13 +89,26 @@ export default function useLeadExports(ctx) {
           const backendExportUrl = `${BASE_URL}/leads/export-csv/export?${params.toString()}`;
           const resp = await fetch(backendExportUrl, { headers: { Authorization: `Token ${authToken}` } });
           if (resp.ok) {
+            const cloned = resp.clone();
             const blob = await resp.blob();
+            let text = "";
+            try { text = await cloned.text(); } catch {}
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
             a.download = "leads-backend-export.csv";
             a.click();
             window.URL.revokeObjectURL(url);
+            try {
+              const ts = new Date().toISOString().replace(/[:.]/g, "-");
+              exportsStore.save({
+                fileName: `leads-backend-export-${ts}.csv`,
+                mimeType: "text/csv",
+                content: text || "",
+                source: "Leads",
+                meta: { filters },
+              });
+            } catch {}
             return;
           }
         } catch {}
@@ -187,6 +201,17 @@ export default function useLeadExports(ctx) {
         )
         .join("\n");
 
+      try {
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        exportsStore.save({
+          fileName: `leads-${ts}.csv`,
+          mimeType: "text/csv",
+          content: csv,
+          source: "Leads",
+          meta: { filters },
+        });
+      } catch {}
+
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -221,6 +246,16 @@ export default function useLeadExports(ctx) {
       const csv = [headers.join(",")]
         .concat(rows.map((r) => headers.map((h) => r[h] ?? "").join(",")))
         .join("\n");
+      try {
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        exportsStore.save({
+          fileName: `leads-all-${ts}.csv`,
+          mimeType: "text/csv",
+          content: csv,
+          source: "Leads",
+          meta: { type: "all" },
+        });
+      } catch {}
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
