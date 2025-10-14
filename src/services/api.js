@@ -259,7 +259,19 @@ export const leadService = {
 
     const backendUpdates = {};
     if (updates.status !== undefined) backendUpdates.status = updates.status;
-    if (updates.remarks !== undefined) backendUpdates.remarks = updates.remarks;
+    if (updates.remarks !== undefined) {
+      try {
+        const raw = updates.remarks == null ? "" : String(updates.remarks);
+        const lines = raw
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0);
+        backendUpdates.remarks = lines.slice(0, 5).join("\n");
+      } catch {
+        // Fallback to original if any unexpected error occurs
+        backendUpdates.remarks = updates.remarks;
+      }
+    }
     // Update call dates only when explicitly provided by caller.
     // Do not infer or auto-fill when unrelated fields (like assigned_to) change.
     // Only map/format call date fields if they are explicitly provided by caller

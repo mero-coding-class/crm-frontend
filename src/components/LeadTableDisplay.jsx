@@ -91,6 +91,8 @@ const LeadTableDisplay = ({
   handleFieldChange,
 }) => {
   const [selectedLeads, setSelectedLeads] = useState(new Set());
+  // savedRemarks = server-confirmed text for each row (can contain up to 5 lines)
+  // localRemarks = input buffer for adding a new single remark per row
   const [localRemarks, setLocalRemarks] = useState({});
   const [savedRemarks, setSavedRemarks] = useState({});
   const [columns, setColumns] = useState(initialColumns);
@@ -237,12 +239,15 @@ const LeadTableDisplay = ({
 
   // Initialize remarks and selection on lead changes
   useEffect(() => {
-    const initialRemarks = {};
+    const initialSaved = {};
+    const initialLocal = {};
     normalizedLeads.forEach((lead) => {
-      initialRemarks[lead._id] = lead.remarks;
+      initialSaved[lead._id] = lead.remarks || "";
+      // local input starts empty; user types to add a fresh remark
+      initialLocal[lead._id] = "";
     });
-    setLocalRemarks(initialRemarks);
-    setSavedRemarks(initialRemarks);
+    setLocalRemarks(initialLocal);
+    setSavedRemarks(initialSaved);
     setSelectedLeads(new Set());
 
     if (parentControlsPagination) {

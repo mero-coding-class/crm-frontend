@@ -374,12 +374,6 @@ const Dashboard = () => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
-
-    // User requirement: total leads on dashboard should be the sum of
-    // counts returned by leads, enrollments and trash endpoints (raw sum).
-    // NOTE: This will intentionally double count a lead that appears in
-    // both the leads list and has an enrollment (or is also present in trash)
-    // because the explicit instruction was to *add* all three sources.
     const totalLeads =
       (allLeads ? allLeads.length : 0) +
       (enrollments ? enrollments.length : 0) +

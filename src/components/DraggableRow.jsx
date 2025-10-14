@@ -63,6 +63,17 @@ const DraggableRow = ({
     setLocalRemarks((prev) => ({ ...prev, [leadId]: value }));
   };
 
+  // For remarks display: show first (latest) by default, allow show more up to 5
+  const [showAllRemarks, setShowAllRemarks] = useState(false);
+  const savedRemarkText =
+    (savedRemarks && savedRemarks[lead._id]) || lead.remarks || "";
+  const remarkLines = savedRemarkText
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .slice(0, 5);
+  const visibleLines = showAllRemarks ? remarkLines : remarkLines.slice(0, 1);
+
   return (
     <tr
       ref={setNodeRef}
@@ -458,24 +469,78 @@ const DraggableRow = ({
                 </td>
               );
 
-            case "remarks":
+            case "remarks": {
+              const leadKey = lead.id || lead._id;
+              const newRemark = localRemarks[lead._id] || "";
+              const canShowToggle = remarkLines.length > 1;
+              const handleAddRemark = () => {
+                const trimmed = (newRemark || "").trim();
+                if (!trimmed) return;
+                const updated = [trimmed, ...remarkLines]
+                  .slice(0, 5)
+                  .join("\n");
+                // Clear input immediately for UX; saved copy will sync via event
+                setLocalRemarks((prev) => ({ ...prev, [lead._id]: "" }));
+                onRemarkChange(leadKey, updated);
+              };
               return (
                 <td
                   key={key}
-                  className="px-3 py-4 text-sm text-gray-700 min-w-[300px]"
+                  className="px-3 py-4 text-sm text-gray-700 min-w-[320px]"
                 >
-                  <textarea
-                    value={localRemarks[lead._id] || ""}
-                    onChange={(e) => handleLocalRemarkChange(e.target.value)}
-                    onBlur={(e) =>
-                      onRemarkChange(lead.id || lead._id, e.target.value)
-                    }
-                    rows="3"
-                    className="block w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500 resize-y"
-                    placeholder="Add remarks..."
-                  ></textarea>
+                  {/* Existing remarks list */}
+                  <div className="space-y-1 mb-2">
+                    {visibleLines.length === 0 ? (
+                      <p className="text-gray-400 italic">No remarks yet</p>
+                    ) : (
+                      visibleLines.map((line, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <span className="mt-1 inline-block h-2 w-2 rounded-full bg-indigo-400" />
+                          <span className="text-gray-800 break-words">
+                            {line}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                    {canShowToggle && (
+                      <button
+                        type="button"
+                        className="text-indigo-600 text-xs hover:underline"
+                        onClick={() => setShowAllRemarks((v) => !v)}
+                      >
+                        {showAllRemarks
+                          ? "Show less"
+                          : `Show more (${remarkLines.length})`}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Add new remark */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newRemark}
+                      onChange={(e) => handleLocalRemarkChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddRemark();
+                        }
+                      }}
+                      className="flex-1 p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Add a remark and press Enter"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddRemark}
+                      className="px-3 py-2 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                    >
+                      Save
+                    </button>
+                  </div>
                 </td>
               );
+            }
             case "change_log":
               return (
                 <td key={key} className="px-3 py-4 text-sm text-gray-700">
