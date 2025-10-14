@@ -20,6 +20,32 @@ const toYMD = (d) => {
 
 const todayYMD = () => toYMD(new Date());
 
+// Generate an array of YYYY-MM-DD from start to end (inclusive), capped by maxDays
+const enumerateDates = (startYMD, endYMD, maxDays = 60) => {
+  try {
+    const s = toYMD(startYMD);
+    const e = toYMD(endYMD);
+    if (!s || !e || s > e) return [];
+    const out = [];
+    const start = new Date(s + "T00:00:00Z");
+    const end = new Date(e + "T00:00:00Z");
+    let count = 0;
+    for (
+      let d = new Date(start.getTime());
+      d <= end && count < maxDays;
+      d.setUTCDate(d.getUTCDate() + 1), count++
+    ) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${day}`);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+};
+
 // Local persistence of reminder statuses per user and date.
 // Structure in localStorage:
 // key = mcc:reminders:{username}
@@ -200,23 +226,24 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
   }, [visibleLeads]);
 
   const pendingDatesSummary = useMemo(() => {
+    // Only show dates that are actual next_call dates for visible leads and are pending (not completed)
     try {
-      const dates = Object.keys(reminderMap || {});
-      const out = [];
-      dates.forEach((d) => {
-        const per = reminderMap[d] || {};
-        const hasPending = Object.entries(per).some(
-          ([lid, st]) => st !== "completed" && visibleLeadIdSet.has(String(lid))
-        );
-        if (hasPending) out.push(d);
+      const today = todayYMD();
+      const set = new Set();
+      visibleLeads.forEach((l, i) => {
+        const id = String(l._id || l.id || `lead-${i}`);
+        const d = toYMD(l.next_call);
+        if (!d || d > today) return;
+        const st = (reminderMap[d] || {})[id] || "pending";
+        if (st !== "completed") set.add(d);
       });
-      // sort descending (newest first)
+      const out = Array.from(set);
       out.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
       return out;
     } catch {
       return [];
     }
-  }, [reminderMap, visibleLeadIdSet]);
+  }, [reminderMap, visibleLeads]);
 
   // Leads for selected date
   const dateLeads = useMemo(() => {
@@ -226,28 +253,20 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
 
   // Build a map of leadId -> array of dates (YYYY-MM-DD) where status is pending
   const pendingDatesByLead = useMemo(() => {
-    const map = new Map();
+    // For each visible lead, include only its next_call date if it's not completed and not in the future
+    const out = new Map();
     try {
-      const dates = Object.keys(reminderMap || {});
-      dates.forEach((d) => {
-        const perDate = reminderMap[d] || {};
-        Object.entries(perDate).forEach(([leadId, st]) => {
-          if (st !== "completed") {
-            if (!map.has(leadId)) map.set(leadId, new Set());
-            map.get(leadId).add(d);
-          }
-        });
+      const today = todayYMD();
+      visibleLeads.forEach((l, i) => {
+        const id = String(l._id || l.id || `lead-${i}`);
+        const d = toYMD(l.next_call);
+        if (!d || d > today) return;
+        const st = (reminderMap[d] || {})[id] || "pending";
+        if (st !== "completed") out.set(id, [d]);
       });
     } catch {}
-    // Convert Set -> sorted array (oldest first)
-    const out = new Map();
-    map.forEach((set, id) => {
-      const arr = Array.from(set);
-      arr.sort();
-      out.set(id, arr);
-    });
     return out;
-  }, [reminderMap]);
+  }, [reminderMap, visibleLeads]);
 
   // Optional filter: only show leads that have any pending dates in history
   const filteredDateLeads = useMemo(() => {
