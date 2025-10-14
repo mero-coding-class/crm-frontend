@@ -145,7 +145,6 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
   const [columns, setColumns] = useState(defaultColumns);
   const [selectAll, setSelectAll] = useState(false);
   const [showCols, setShowCols] = useState(false);
-  const [backlogOnly, setBacklogOnly] = useState(false);
 
   // Local reminder map persisted per user
   const [reminderMap, setReminderMap] = useState(() =>
@@ -160,13 +159,12 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
   const hasActiveFilters = useMemo(() => {
     try {
       if (assignedFilter !== "ALL") return true;
-      if (backlogOnly) return true;
       if (toYMD(selectedDate) !== todayYMD()) return true;
       return false;
     } catch {
       return false;
     }
-  }, [assignedFilter, backlogOnly, selectedDate]);
+  }, [assignedFilter, selectedDate]);
 
   // Build a list of leads visible to the current user
   const visibleLeads = useMemo(() => {
@@ -268,15 +266,8 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
     return out;
   }, [reminderMap, visibleLeads]);
 
-  // Optional filter: only show leads that have any pending dates in history
-  const filteredDateLeads = useMemo(() => {
-    if (!backlogOnly) return dateLeads;
-    return dateLeads.filter((l, i) => {
-      const id = l._id || l.id || `lead-${i}`;
-      const arr = pendingDatesByLead.get(String(id)) || [];
-      return arr.length > 0;
-    });
-  }, [dateLeads, backlogOnly, pendingDatesByLead]);
+  // Without backlog-only filter, filtered list equals dateLeads
+  const filteredDateLeads = useMemo(() => dateLeads, [dateLeads]);
 
   // Reminder status helpers
   const getStatus = (leadId) => {
@@ -351,14 +342,14 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
+        <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
+          {/* <button
             type="button"
             className="px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700"
             onClick={() => setSelectedDate(todayYMD())}
           >
             Today
-          </button>
+          </button> */}
           <button
             type="button"
             className={
@@ -366,18 +357,15 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
                 ? "inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100"
                 : "inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700"
             }
-            title="Reset filters and jump to Today"
-            aria-label="Reset filters and jump to Today"
             onClick={() => {
               setAssignedFilter("ALL");
-              setBacklogOnly(false);
               setShowCols(false);
               setSelectedDate(todayYMD());
               setExpanded(true);
             }}
           >
             <ResetIcon className="w-4 h-4" />
-            <span>Reset filters (Today)</span>
+            <span>Reset filters</span>
           </button>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <span className="hidden sm:inline">Date</span>
@@ -404,16 +392,8 @@ const CallReminders = ({ leads = [], currentUser = {}, isAdminLike = false }) =>
               </select>
             </label>
           )}
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              checked={backlogOnly}
-              onChange={(e) => setBacklogOnly(e.target.checked)}
-            />
-            <span>Backlog only</span>
-          </label>
-          <div className="relative">
+
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowCols((v) => !v)}

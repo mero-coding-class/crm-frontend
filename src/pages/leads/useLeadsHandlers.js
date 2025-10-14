@@ -31,6 +31,10 @@ export default function useLeadsHandlers(ctx) {
 
         if (!leadObj) leadObj = prevLeads.find((l) => matchId(l, serverId));
 
+        // Keep the previous substatus for change-log purposes
+        const previousSubstatus =
+          (leadObj?.substatus ?? leadObj?.sub_status ?? "") || "";
+
         if (
           fieldName === "status" &&
           (newValue === "Lost" || newValue === "Converted")
@@ -87,7 +91,7 @@ export default function useLeadsHandlers(ctx) {
           updatesToSend.shift = (newValue || "").toString().trim();
         }
 
-        const serverResp = await leadService.updateLead(serverId, updatesToSend, authToken);
+  const serverResp = await leadService.updateLead(serverId, updatesToSend, authToken);
 
         setToast({ show: true, message: `${fieldName} updated successfully`, type: "success" });
 
@@ -109,6 +113,27 @@ export default function useLeadsHandlers(ctx) {
             )
           )
         );
+
+        // If substatus changed, dispatch a log event so LeadLogDisplay can append an entry immediately
+        const normalizedField = (fieldName || "").toLowerCase();
+        if (normalizedField === "substatus" || normalizedField === "sub_status") {
+          const newSub =
+            serverResp?.substatus ?? serverResp?.sub_status ?? newValue ?? "";
+          if (previousSubstatus !== newSub) {
+            try {
+              window.dispatchEvent(
+                new CustomEvent("crm:leadUpdated", {
+                  detail: {
+                    id: serverId,
+                    field_changed: "substatus",
+                    old_value: previousSubstatus || null,
+                    new_value: newSub || null,
+                  },
+                })
+              );
+            } catch {}
+          }
+        }
       } catch (err) {
         setAllLeads(prevLeads);
         setToast({ show: true, message: err.message || `Failed to update ${fieldName}`, type: "error" });
