@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { BASE_URL } from "../../config";
+import { exportsStore } from "../../services/exportsStore";
 
 export default function useEnrollmentExport(authToken) {
   const [exporting, setExporting] = useState(false);
@@ -67,6 +68,19 @@ export default function useEnrollmentExport(authToken) {
           rows.push(row.join(","));
         });
         const csv = rows.join("\n");
+
+        // Save to Downloads
+        try {
+          const ts = new Date().toISOString().replace(/[:.]/g, "-");
+          exportsStore.save({
+            fileName: `enrollments-export-${ts}.csv`,
+            mimeType: "text/csv",
+            content: csv,
+            source: "Enrollments",
+            meta: { searchQuery, searchLastPaymentDate, filterPaymentNotCompleted, filterScheduledTaken },
+          });
+        } catch {}
+
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);

@@ -12,6 +12,7 @@ import {
 import { trashService, leadService, courseService } from "../services/api.js";
 import { BASE_URL } from "../config";
 import DelayedLoader from "../components/common/DelayedLoader";
+import { exportsStore } from "../services/exportsStore";
 
 // Helper: convert array of objects to CSV and trigger download
 const downloadCsv = (rows, filename = "export.csv") => {
@@ -37,6 +38,18 @@ const downloadCsv = (rows, filename = "export.csv") => {
   const csv = [headers.join(",")]
     .concat(rows.map((row) => headers.map((h) => escapeCell(row[h])).join(",")))
     .join("\n");
+
+  // Save to Downloads
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    exportsStore.save({
+      fileName: `${filename.replace(/\.csv$/i, "")}__${ts}.csv`,
+      mimeType: "text/csv",
+      content: csv,
+      source: "Trash",
+      meta: {},
+    });
+  } catch {}
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

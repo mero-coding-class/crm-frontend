@@ -18,6 +18,7 @@ import Reports from "./pages/Reports"; // Adjusted path to assume App.js is in s
 import Register from "./pages/Register"; // Adjusted path to assume App.js is in src/
 import CreateCourse from "./pages/CreateCourse"; // Adjusted path to assume App.js is in src/
 import Settings from "./pages/Settings";
+import Downloads from "./pages/Downloads";
 function AppContent() {
   const { authToken } = useContext(AuthContext);
 
@@ -40,6 +41,7 @@ function AppContent() {
           <Route path="/trash" element={<TrashPage />} />
           <Route path="/report" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/downloads" element={<Downloads />} />
           {/* Catch-all route within the protected area, redirects to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
           {/* Legacy direct routes removed in favor of Settings */}
