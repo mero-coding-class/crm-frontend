@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   TrashIcon,
   ArrowUturnLeftIcon,
-  ClockIcon,
   Bars3Icon,
   Cog6ToothIcon,
   ChevronLeftIcon, // New for pagination
@@ -54,18 +53,7 @@ const formatLogTimestamp = (isoString) => {
   }
 };
 
-const getRoleBadgeClasses = (role) => {
-  switch (role) {
-    case "Admin":
-      return "bg-purple-200 text-purple-800";
-    case "Superadmin":
-      return "bg-pink-200 text-pink-800";
-    case "Sales_rep":
-      return "bg-green-200 text-green-800";
-    default:
-      return "bg-gray-200 text-gray-800";
-  }
-};
+// (role badge classes removed with deletion log UI)
 
 const ColumnToggler = ({ columns, setColumns }) => {
   const toggleColumn = (key) => {
@@ -132,16 +120,27 @@ const TrashTableDisplay = ({
 
   const [columns, setColumns] = useState({
     actions: { label: "Actions", visible: true },
+    id: { label: "ID", visible: true },
     student_name: { label: "Student Name", visible: true },
     parents_name: { label: "Parents' Name", visible: true },
-    email: { label: "Email", visible: true },
+    email: { label: "Email", visible: false },
     phone_number: { label: "Phone", visible: false },
-    whatsapp_number: { label: "WhatsApp", visible: false },
+    whatsapp_number: { label: "WhatsApp", visible: true },
     age: { label: "Age", visible: false },
     grade: { label: "Grade", visible: false },
     source: { label: "Source", visible: true },
     course_name: { label: "Course", visible: true },
-    changeLog: { label: "Deletion Info", visible: true },
+    course: { label: "Course ID", visible: false },
+    class_type: { label: "Class Type", visible: true },
+    shift: { label: "Shift", visible: true },
+    previous_coding_experience: { label: "Prev Coding Exp", visible: false },
+    last_call: { label: "Last Call", visible: false },
+    next_call: { label: "Next Call", visible: true },
+    device: { label: "Device", visible: false },
+    status: { label: "Status", visible: true },
+    remarks: { label: "Remarks", visible: true },
+    created_at: { label: "Created At", visible: false },
+    updated_at: { label: "Updated At", visible: false },
   });
 
   /* ---------------------- HORIZONTAL SCROLL LOGIC ----------------------- */
@@ -426,8 +425,6 @@ const SortableTrashRow = ({
   onPermanentDelete,
   onRestoreLead,
 }) => {
-  const [showAllLogs, setShowAllLogs] = useState(false);
-
   const {
     attributes,
     listeners,
@@ -443,24 +440,55 @@ const SortableTrashRow = ({
     zIndex: isDragging ? 10 : "auto",
   };
 
-  const displayedLogs = showAllLogs
-    ? lead.changeLog
-    : (lead.changeLog || []).slice(0, 2);
-
-  // Detect common deletion metadata fields (backend may use different keys)
-  const deletionBy =
-    lead.deleted_by_name ||
-    lead.deleted_by ||
-    lead.deleted_by_user ||
-    lead.deleter_name ||
-    null;
-  const deletionAtRaw =
-    lead.deleted_at ||
-    lead.deleted_on ||
-    lead.deleted_timestamp ||
-    lead.deleted ||
-    null;
-  const deletionAt = deletionAtRaw ? formatLogTimestamp(deletionAtRaw) : null;
+  // Render cell content based on the column key
+  const renderCellContent = (key) => {
+    switch (key) {
+      case "id":
+        return lead.id;
+      case "student_name":
+        return lead.student_name;
+      case "parents_name":
+        return lead.parents_name || "N/A";
+      case "email":
+        return lead.email;
+      case "phone_number":
+        return lead.phone_number;
+      case "whatsapp_number":
+        return lead.whatsapp_number;
+      case "age":
+        return lead.age || "N/A";
+      case "grade":
+        return lead.grade || "N/A";
+      case "source":
+        return lead.source;
+      case "course_name":
+        return lead.course_name;
+      case "course":
+        return lead.course != null ? String(lead.course) : "N/A";
+      case "class_type":
+        return lead.class_type || "N/A";
+      case "shift":
+        return lead.shift || "N/A";
+      case "previous_coding_experience":
+        return lead.previous_coding_experience || "N/A";
+      case "last_call":
+        return getFormattedDate(lead.last_call) || "N/A";
+      case "next_call":
+        return getFormattedDate(lead.next_call) || "N/A";
+      case "device":
+        return lead.device || "N/A";
+      case "status":
+        return lead.status || "N/A";
+      case "remarks":
+        return lead.remarks || "—";
+      case "created_at":
+        return formatLogTimestamp(lead.created_at) || "N/A";
+      case "updated_at":
+        return formatLogTimestamp(lead.updated_at) || "N/A";
+      default:
+        return "";
+    }
+  };
 
   return (
     <tr
@@ -505,102 +533,23 @@ const SortableTrashRow = ({
           </button>
         </td>
       )}
-      {columns.student_name.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-          {lead.student_name}
-        </td>
-      )}
-      {columns.parents_name.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.parents_name || "N/A"}
-        </td>
-      )}
-      {columns.email.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.email}
-        </td>
-      )}
-      {columns.phone_number.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.phone_number}
-        </td>
-      )}
-      {columns.whatsapp_number.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.whatsapp_number}
-        </td>
-      )}
-      {columns.age.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.age || "N/A"}
-        </td>
-      )}
-      {columns.grade.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.grade || "N/A"}
-        </td>
-      )}
-      {columns.source.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.source}
-        </td>
-      )}
-      {columns.course_name.visible && (
-        <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-700">
-          {lead.course_name}
-        </td>
-      )}
-      {columns.changeLog.visible && (
-        <td className="px-3 py-4 text-sm text-gray-700">
-          <div
-            className="max-h-20 overflow-y-auto text-xs"
-            style={{ minWidth: "200px" }}
-          >
-            {deletionBy || deletionAt ? (
-              <div className="p-2 mb-2 rounded-md bg-yellow-50 border-l-4 border-yellow-300 text-xs">
-                <div className="font-semibold text-gray-900">Deleted</div>
-                <div className="text-gray-700 text-xs flex items-center">
-                  <ClockIcon className="h-3 w-3 mr-1 text-gray-500" />
-                  {deletionAt ? deletionAt : "Unknown time"}
-                  <span className="mx-1">by</span>
-                  <span className="font-medium">{deletionBy || "Unknown"}</span>
-                </div>
-              </div>
-            ) : null}
-
-            {displayedLogs.length > 0
-              ? displayedLogs.map((log, index) => (
-                  <div
-                    key={index}
-                    className={`p-1 my-1 rounded-md ${getRoleBadgeClasses(
-                      log.updaterRole
-                    )}`}
-                  >
-                    <div className="font-semibold text-gray-900">
-                      {log.message}
-                    </div>
-                    <div className="text-gray-700 text-xs flex items-center">
-                      <ClockIcon className="h-3 w-3 mr-1 text-gray-500" />
-                      {formatLogTimestamp(log.timestamp)} by{" "}
-                      <span className="font-medium ml-1">
-                        {log.updaterName}
-                      </span>{" "}
-                      (<span className="font-medium">{log.updaterRole}</span>)
-                    </div>
-                  </div>
-                ))
-              : "No log entries."}
-            {(lead.changeLog || []).length > 2 && (
-              <button
-                onClick={() => setShowAllLogs(!showAllLogs)}
-                className="text-blue-600 hover:text-blue-800 text-xs mt-1"
-              >
-                {showAllLogs ? "Show Less" : "Show More"}
-              </button>
-            )}
-          </div>
-        </td>
-      )}
+      {Object.entries(columns).map(([key, { visible }]) => {
+        if (key === "actions" || !visible) return null;
+        const isName = key === "student_name";
+        const isRemarks = key === "remarks";
+        const baseClass = isName
+          ? "px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900"
+          : "px-3 py-4 whitespace-nowrap text-sm text-gray-700";
+        const className = isRemarks
+          ? `${baseClass} max-w-xs truncate`
+          : baseClass;
+        const title = isRemarks ? lead.remarks || "" : undefined;
+        return (
+          <td key={key} className={className} title={title}>
+            {renderCellContent(key)}
+          </td>
+        );
+      })}
     </tr>
   );
 };
