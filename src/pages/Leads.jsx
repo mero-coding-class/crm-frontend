@@ -95,7 +95,13 @@ const Leads = () => {
   }, [leads, searchTerm]);
 
   // Global CRM events
-  useGlobalLeadEvents(authToken, allLeadsFullRef, setToast, handleRefresh);
+  useGlobalLeadEvents(
+    authToken,
+    allLeadsFullRef,
+    setToast,
+    handleRefresh,
+    setAllLeads
+  );
 
   // Centralized export logic/state
   const {

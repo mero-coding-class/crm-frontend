@@ -325,6 +325,9 @@ const TrashPage = () => {
               })
             );
 
+            // Persist restored lead for Leads page to pick up
+            try { localStorage.setItem("crm:restoredLead", JSON.stringify(restored)); } catch {}
+
             // Remove from local trash list optimistically
             setAllLeads((prevLeads) =>
               prevLeads.filter((lead) => lead.id !== id)
@@ -360,6 +363,8 @@ const TrashPage = () => {
               { status: "Active", changeLog: updatedChangeLog },
               authToken
             );
+            // Persist restored lead for Leads page to pick up
+            try { localStorage.setItem("crm:restoredLead", JSON.stringify({ ...originalLead, status: "Active" })); } catch {}
             setAllLeads((prevLeads) =>
               prevLeads.filter((lead) => lead.id !== id)
             );
@@ -389,6 +394,7 @@ const TrashPage = () => {
     async (leadIds) => {
       setError(null);
       const restoredIds = new Set();
+      const restoredLeads = [];
       const newLogs = {
         timestamp: new Date().toISOString(),
         updaterName: currentUser?.username || "Unknown User",
@@ -408,6 +414,7 @@ const TrashPage = () => {
                 authToken
               );
               restoredIds.add(id);
+              if (restored) restoredLeads.push(restored);
               window.dispatchEvent(
                 new CustomEvent("crm:leadRestored", {
                   detail: { lead: restored },
@@ -429,6 +436,7 @@ const TrashPage = () => {
                 authToken
               );
               restoredIds.add(id);
+              restoredLeads.push({ ...originalLead, status: "Active" });
               window.dispatchEvent(
                 new CustomEvent("crm:leadRestored", {
                   detail: { lead: { ...originalLead, status: "Active" } },
@@ -441,6 +449,14 @@ const TrashPage = () => {
         setAllLeads((prevLeads) =>
           prevLeads.filter((lead) => !restoredIds.has(lead.id))
         );
+
+        // Persist restored leads for Leads page to pick up
+        try {
+          localStorage.setItem(
+            "crm:restoredLeads",
+            JSON.stringify(restoredLeads)
+          );
+        } catch {}
 
         // After bulk restore, navigate to leads page to show restored items
         setTimeout(() => {
