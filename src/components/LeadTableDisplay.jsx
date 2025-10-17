@@ -344,32 +344,17 @@ const LeadTableDisplay = ({
   };
 
   const handlePageChange = (pageNumber) => {
-    console.log(
-      "LeadTableDisplay: handlePageChange called with pageNumber:",
-      pageNumber,
-      "currentPage:",
-      currentPage,
-      "totalPages:",
-      totalPages
-    );
     // If parent controls the page (it passed parentCurrentPage), delegate
     // page changes to the parent's handler. Otherwise update internal state.
     if (typeof parentCurrentPage !== "undefined" && parentOnPageChange) {
-      console.log("LeadTableDisplay: Delegating to parent onPageChange");
       parentOnPageChange(pageNumber);
       return;
     }
 
     if (pageNumber >= 1 && pageNumber <= totalPages) {
-      console.log("LeadTableDisplay: Updating internal page to:", pageNumber);
       setInternalPage(pageNumber);
     } else {
-      console.log(
-        "LeadTableDisplay: Invalid page number:",
-        pageNumber,
-        "totalPages:",
-        totalPages
-      );
+      // invalid page number, ignore
     }
   };
 

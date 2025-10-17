@@ -168,7 +168,6 @@ const sanitizeShift = (s) => {
 export const leadService = {
   getLeads: async (authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
-    console.log('Fetching leads from:', `${BASE_URL}/leads/`);
     const response = await fetch(`${BASE_URL}/leads/`, {
       headers: { 
         'Authorization': `Token ${authToken}`,
@@ -181,18 +180,7 @@ export const leadService = {
     const leadsList = Array.isArray(backendLeads)
       ? backendLeads
       : backendLeads?.results || [];
-    console.log('Backend Leads Response:', backendLeads);
-
-    // Log any leads with course information (format dates for readability)
-    leadsList.forEach((lead) => {
-      if (lead.course || lead.course_name) {
-        console.log("Lead with course info:", {
-          last_call: formatDateForApi(lead.last_call) || null,
-          next_call: formatDateForApi(lead.next_call) || null,
-          course_name: lead.course_name,
-        });
-      }
-    });
+    
 
     return leadsList.map((lead) => ({
       // Use just 'id' since that's what backend uses
@@ -433,15 +421,7 @@ export const leadService = {
         });
       }
 
-      // Debug: log outgoing request details so we can trace missing updates
-      try {
-        console.debug("leadService.updateLead -> PATCH", `${BASE_URL}/leads/${id}/`, {
-          id,
-          payload,
-        });
-      } catch (e) {
-        // ignore
-      }
+      // removed noisy debug logging
 
       // If server returned an error (e.g., 400), read the body and log full details
       if (!resp.ok) {
@@ -476,12 +456,7 @@ export const leadService = {
     // free-text shift values; do not attempt to map to a predefined choice here.
     const data = await doPatch(backendUpdates);
 
-    // Debug: log server response for visibility during dev
-    try {
-      console.debug("leadService.updateLead <- response", { id, data });
-    } catch (e) {
-      // ignore
-    }
+    // removed noisy debug logging
 
     // Some backends return an empty object or 204 No Content on PATCH.
     // In that case we still want the app to have the updated fields the UI sent

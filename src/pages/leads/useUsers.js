@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BASE_URL } from "../../config";
 
 export default function useUsers(authToken) {
   const [users, setUsers] = useState([]);
@@ -10,13 +11,10 @@ export default function useUsers(authToken) {
     const fetchUsers = async () => {
       setUsersLoading(true);
       try {
-        const res = await fetch(
-          "https://crmmerocodingbackend.ktm.yetiappcloud.com/api/users/",
-          {
-            headers: { Authorization: `Token ${authToken}` },
-            credentials: "include",
-          }
-        );
+        const res = await fetch(`${BASE_URL}/users/`, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
         if (!res.ok) return;
         const data = await res.json();
         const list = Array.isArray(data) ? data : data.results || [];

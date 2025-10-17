@@ -191,11 +191,7 @@ const Dashboard = () => {
           });
         }
         setCoursesMap(map);
-        console.info(
-          `Fetched courses for dashboard (auth used: ${usingAuth}) - ${
-            Object.keys(map).length
-          } entries.`
-        );
+
         // Also try to fetch enrollments to build fallback top-courses if needed
         try {
           const enrRes = await fetch(`${BASE_URL}/enrollments/`, {

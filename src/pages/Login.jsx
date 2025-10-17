@@ -174,7 +174,9 @@ const Login = () => {
             </div>
             <button
               type="button"
-              onClick={() => console.log("Navigate to Forgot Password page")}
+              onClick={() => {
+                /* TODO: Implement Forgot Password navigation */
+              }}
               className="text-blue-600 hover:underline font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-md px-1 py-0.5"
             >
               Forgot password?
