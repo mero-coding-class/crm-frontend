@@ -193,6 +193,36 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
     setFormData({ ...DEFAULT_FORM, ...normalized });
   }, [lead]);
 
+  // Ensure invoice/installment are loaded from the detail endpoint even if the list omits them
+  useEffect(() => {
+    const id = (lead && (lead.id || lead._id)) || formData._id || formData.id;
+    if (!id || !authToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await fetch(`${BASE_URL}/leads/${id}/`, {
+          headers: { Authorization: `Token ${authToken}` },
+          credentials: "include",
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (cancelled || !data) return;
+        const fi = data.first_installment ?? data.firstInstallment ?? null;
+        const inv = data.first_invoice ?? data.firstInvoice ?? null;
+        setFormData((prev) => ({
+          ...prev,
+          ...(fi !== undefined ? { first_installment: fi } : {}),
+          ...(inv !== undefined ? { first_invoice: inv } : {}),
+        }));
+      } catch (e) {
+        // non-fatal: simply skip if detail cannot be fetched
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lead, authToken]);
+
   // If the lead being edited is updated elsewhere in the app (inline edit),
   // pick up that change and refresh the modal form so fields (like
   // substatus/course_duration) reflect the latest value.
@@ -313,6 +343,15 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
           scheduled_taken:
             updated.scheduled_taken || updated.demo_scheduled || "",
           demo_scheduled: updated.demo_scheduled || "",
+          // Preserve invoice and installment when updates arrive while modal is open
+          first_installment:
+            updated.first_installment !== undefined
+              ? updated.first_installment
+              : formData.first_installment,
+          first_invoice:
+            updated.first_invoice !== undefined
+              ? updated.first_invoice
+              : formData.first_invoice,
         };
 
         // Preserve backend-level semantics as in the lead prop mapping
