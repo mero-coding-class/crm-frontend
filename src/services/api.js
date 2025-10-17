@@ -201,9 +201,7 @@ export const leadService = {
   // Preserve backend status (fall back to 'New' if not provided)
   status: lead.status || "New",
 
-  // Ensure assignment fields are passed through so the UI shows who a
-  // lead is assigned to. Different backend versions use `assigned_to`
-  // or `assigned_to_username` — include both.
+  
   assigned_to: lead.assigned_to || lead.assigned_to_username || "",
   assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
   // Include both substatus and sub_status variants so the UI can
