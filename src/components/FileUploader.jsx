@@ -59,8 +59,7 @@ const FileUploader = ({
       for (const file of selectedFiles) {
         // TODO: Implement actual file upload API call
         // For now, just simulate upload
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        console.log("File would be uploaded:", file.name);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
       }
       setUploadSuccess("Files uploaded successfully!");
       setSelectedFiles([]); // Clear selected files on success

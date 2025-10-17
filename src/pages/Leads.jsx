@@ -291,62 +291,7 @@ const Leads = () => {
     }
   }
 
-  // DEBUG: print why leads may be filtered out
-  try {
-    const debugUser =
-      (user && user.username) || localStorage.getItem("username") || "";
-    const debugNorm = String(debugUser).trim().toLowerCase();
-    console.log(
-      "[Leads debug] current user:",
-      debugUser,
-      "normalized:",
-      debugNorm
-    );
-    console.log(
-      "[Leads debug] allLeads count:",
-      allLeads.length,
-      "-> displayed count:",
-      currentLeads.length,
-      "filterStatus:",
-      filterStatus
-    );
-    currentLeads.forEach((l) => {
-      const aNorm = (l.assigned_to_normalized || "")
-        .toString()
-        .trim()
-        .toLowerCase();
-      const auNorm = (l.assigned_to_username_normalized || "")
-        .toString()
-        .trim()
-        .toLowerCase();
-      const aRaw = String(l.assigned_to || "").trim();
-      const auRaw = String(l.assigned_to_username || "").trim();
-      const isAssigned =
-        debugNorm &&
-        (aNorm === debugNorm ||
-          auNorm === debugNorm ||
-          aRaw === debugUser ||
-          auRaw === debugUser);
-      console.log(
-        "[Leads debug] lead",
-        l._id,
-        "status",
-        l.status,
-        "assigned_to:",
-        l.assigned_to,
-        "assigned_to_username:",
-        l.assigned_to_username,
-        "aNorm:",
-        aNorm,
-        "auNorm:",
-        auNorm,
-        "isAssigned:",
-        isAssigned
-      );
-    });
-  } catch (e) {
-    console.error("Leads debug error", e);
-  }
+  // removed noisy debug logging
 
   if (loading) {
     return <DelayedLoader message="Loading leads..." minMs={2000} />;
@@ -366,13 +311,7 @@ const Leads = () => {
     );
   }
 
-  // Debugging: reduced logging
-  console.log(
-    "All leads count:",
-    allLeads.length,
-    "Displayed leads count:",
-    currentLeads.length
-  );
+  // removed noisy debug logging
 
   return (
     <div className="container mx-auto p-4 bg-gray-50 min-h-screen text-gray-900">

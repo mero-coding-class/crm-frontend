@@ -68,10 +68,6 @@ async function safeFetchWithRetries(
           e && e.message ? e.message : e
         );
         console.error(`safeFetch: exhausted retries for ${url}`);
-      } else if (typeof console.debug === "function") {
-        console.debug(
-          `safeFetch: retrying ${url} (attempt ${attempt + 1}/$${retries + 1})`
-        );
       }
       if (isLast) return null;
       await new Promise((res) =>

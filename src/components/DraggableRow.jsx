@@ -53,11 +53,6 @@ const DraggableRow = ({
   };
 
   // No need for additional normalization as it's handled in parent component
-  // Debug assigned fields
-  console.log(`Row assigned fields for ${lead._id}:`, {
-    assigned_to: lead.assigned_to,
-    assigned_to_username: lead.assigned_to_username,
-  });
   const handleLocalRemarkChange = (value) => {
     const leadId = lead._id || lead.id; // Use either ID format
     setLocalRemarks((prev) => ({ ...prev, [leadId]: value }));
@@ -286,13 +281,6 @@ const DraggableRow = ({
                 </td>
               );
             case "course_name":
-              // Debug log to check course name value
-              console.log(
-                "Course name for lead:",
-                lead._id,
-                "is:",
-                lead.course_name
-              );
               return (
                 <td
                   key={key}

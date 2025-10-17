@@ -143,7 +143,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
             console.warn("Backend returned non-JSON response for import");
           }
 
-          console.log("✅ Backend CSV import succeeded", body);
+          // removed noisy success log
           const created = Array.isArray(body?.created)
             ? body.created.map((c) => ({ ...c, _id: c.id || c._id }))
             : [];
@@ -302,10 +302,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           console.warn("Failed to dispatch crm:imported event", e);
         }
 
-        console.log(
-          `✅ CSV import finished. Created: ${createdLeads.length}, Skipped: ${skippedRows.length}`
-        );
-        if (skippedRows.length) console.table(skippedRows);
+        // removed noisy import summary logs
       },
     });
   };

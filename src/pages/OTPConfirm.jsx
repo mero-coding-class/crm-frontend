@@ -48,19 +48,19 @@ const OTPConfirm = () => {
 
     // --- TEMPORARY MOCK OTP CONFIRMATION LOGIC ---
     try {
-      console.log(`Simulating OTP confirmation for email: ${email} with OTP: ${otp}`);
       // Simulate an asynchronous operation (like an API call)
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for 1.5 seconds
+      await new Promise((resolve) => setTimeout(resolve, 1500)); // Wait for 1.5 seconds
 
       // Simulate a successful response
-      console.log('Simulated OTP confirmation successful.');
       // After successful OTP, typically navigate to login or directly set token and go to dashboard
       // For now, let's go to login, assuming they'll log in after confirming
-      navigate('/login', { replace: true, state: { registrationSuccess: true, email: email } });
-
+      navigate("/login", {
+        replace: true,
+        state: { registrationSuccess: true, email: email },
+      });
     } catch (err) {
-      console.error('Simulated OTP confirmation error:', err);
-      setError('Simulated OTP confirmation failed. (This should not happen)');
+      console.error("Simulated OTP confirmation error:", err);
+      setError("Simulated OTP confirmation failed. (This should not happen)");
     } finally {
       setLoading(false);
     }
