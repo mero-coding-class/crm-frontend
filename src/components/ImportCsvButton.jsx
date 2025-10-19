@@ -3,32 +3,109 @@ import Papa from "papaparse";
 import { leadService } from "../services/api";
 import { BASE_URL } from "../config";
 
-// ✅ Header mapping dictionary (loose matching)
+
+const USE_SERVER_IMPORT = false;
+
 const headerMapping = {
+  // Names
   "Student Name": "student_name",
+  "Full Name": "student_name",
+  Name: "student_name",
+  Student: "student_name",
   "Parents Name": "parents_name",
   "Parent's Name": "parents_name",
+  "Parent Name": "parents_name",
+  "Guardian Name": "parents_name",
+  // Contacts
   Email: "email",
   "Email Address": "email",
+  "E-mail": "email",
+  Mail: "email",
   Phone: "phone_number",
   "Phone Number": "phone_number",
+  "Phone No": "phone_number",
+  Mobile: "phone_number",
+  "Mobile Number": "phone_number",
+  "Contact Number": "phone_number",
   Whatsapp: "whatsapp_number",
   "WhatsApp Number": "whatsapp_number",
+  "Whatsapp No": "whatsapp_number",
+  WhatsApp: "whatsapp_number",
+  "WA Number": "whatsapp_number",
+  // Basics
   Age: "age",
+  "Age (Years)": "age",
   Grade: "grade",
   Class: "grade",
+  Year: "grade",
   Source: "source",
   "Lead Source": "source",
+  "Source Channel": "source",
   "Class Type": "class_type",
-  // New fields
+  // Courses and types
+  Course: "course",
+  "Course Name": "course",
+  Program: "course",
+  "Course Type": "course_type",
+  Mode: "course_type",
+  "Learning Mode": "course_type",
+  // Addresses
+  "Address Line 1": "address_line_1",
+  "Address Line 2": "address_line_2",
+  City: "city",
+  County: "county",
+  Country: "country",
+  "Post Code": "post_code",
+  Postcode: "post_code",
+  "Postal Code": "post_code",
+  ZIP: "post_code",
+  // Dates / scheduling
+  "Last Call": "last_call",
+  "Recent Call": "last_call",
+  "Next Call": "next_call",
+  "Next Call Date": "next_call",
+  "Scheduled Taken": "scheduled_taken",
+  Scheduled: "scheduled_taken",
+  Demo: "scheduled_taken",
+  "Demo Scheduled": "demo_scheduled",
+  // Misc
+  Device: "device",
+  "Has Device": "device",
+  "Previous Coding Experience": "previous_coding_experience",
+  "Coding Experience": "previous_coding_experience",
+  "Prev Coding": "previous_coding_experience",
+  "Payment Type": "payment_type",
+  "Payment Method": "payment_type",
+  "Adset Name": "adset_name",
+  "Ad Set": "adset_name",
+  Adset: "adset_name",
+  "School/College Name": "school_college_name",
+  "School College": "school_college_name",
+  School: "school_college_name",
+  College: "school_college_name",
+  // Assignment and status
   "Assigned To": "assigned_to",
   "Assigned To Username": "assigned_to_username",
+  Assigned: "assigned_to_username",
+  "Assigned User": "assigned_to_username",
   Status: "status",
   "Sub Status": "substatus",
   SubStatus: "substatus",
   "Lead Type": "lead_type",
-  "School/College Name": "school_college_name",
-  "School College": "school_college_name",
+  // Financials & misc
+  "Deal Value": "value",
+  Amount: "value",
+  Value: "value",
+  "Course Duration": "course_duration",
+  Duration: "course_duration",
+  Remarks: "remarks",
+  Notes: "remarks",
+  Comment: "remarks",
+  "First Installment": "first_installment",
+  "First Payment": "first_installment",
+  "Initial Payment": "first_installment",
+  "First Invoice": "first_invoice",
+  Invoice: "first_invoice",
 };
 
 // ✅ Backend → Frontend key normalization
@@ -42,65 +119,166 @@ const backendToFrontendKeyMap = {
   grade: "grade",
   source: "source",
   class_type: "classType",
+  course: "course",
+  course_name: "course_name",
+  course_type: "courseType",
+  shift: "shift",
+  previous_coding_experience: "previousCodingExp",
+  last_call: "lastCall",
+  next_call: "nextCall",
+  device: "device",
+  status: "status",
+  substatus: "substatus",
+  remarks: "remarks",
+  address_line_1: "permanentAddress",
+  address_line_2: "temporaryAddress",
+  city: "city",
+  county: "county",
+  country: "country",
+  post_code: "postCode",
+  lead_type: "leadType",
+  value: "value",
+  adset_name: "adsetName",
+  course_duration: "course_duration",
+  payment_type: "paymentType",
+  school_college_name: "school_college_name",
+  scheduled_taken: "scheduledTaken",
+  first_installment: "first_installment",
+  first_invoice: "first_invoice",
 };
 
-const mapRowToLead = (row, headerMapLower) => {
+// Produce a compact, punctuation-free key for fuzzy header matching
+const normKey = (s = "") =>
+  s
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[\s._\-()/\\]+/g, "")
+    .replace(/[,:;\"'`’“”]+/g, "");
+
+const mapRowToLead = (row, headerMapLower, headerMapNormalized) => {
   const leadBackend = {};
   const leadFrontend = {};
 
   Object.entries(row).forEach(([key, value]) => {
     if (!key) return;
     const normalized = key.trim().toLowerCase();
-    const mappedKey = headerMapLower[normalized];
+    let mappedKey = headerMapLower[normalized];
+    if (!mappedKey) {
+      const nk = normKey(key);
+      mappedKey = headerMapNormalized[nk];
+    }
     if (mappedKey) {
-      const val = value && String(value).trim() !== "" ? String(value).trim() : null;
+      let val =
+        value && String(value).trim() !== "" ? String(value).trim() : null;
+      // Normalize booleans for scheduled_taken/demo_scheduled
+      if (mappedKey === "scheduled_taken" || mappedKey === "demo_scheduled") {
+        const low = (val || "").toString().trim().toLowerCase();
+        if (["yes", "y", "true", "1"].includes(low)) val = "Yes";
+        else if (["no", "n", "false", "0"].includes(low)) val = "No";
+      }
 
-      // Backend (snake_case)
-      leadBackend[mappedKey] = val;
+      // Skip nulls entirely so backend doesn't get null for optional fields
+      if (val !== null) {
+        // Backend (snake_case)
+        leadBackend[mappedKey] = val;
 
-      // Frontend (camelCase)
-      const frontendKey = backendToFrontendKeyMap[mappedKey] || mappedKey;
-      leadFrontend[frontendKey] = val;
+        // Frontend (camelCase)
+        const frontendKey = backendToFrontendKeyMap[mappedKey] || mappedKey;
+        leadFrontend[frontendKey] = val;
+      }
     }
   });
 
-  // ✅ Provide defaults for required fields
-  // Validate required fields. Backend expects these fields; skip rows that
-  // are missing required data and continue with others. Default status to
-  // 'Active' if not provided (backend allows Active/Converted/Lost).
-  const required = [
-    "student_name",
-    "parents_name",
-    "email",
-    "phone_number",
-    "whatsapp_number",
-    "age",
-    "grade",
-    "source",
-    "class_type",
-    "lead_type",
-  ];
+  // Cross-field mirroring for course values (ensure both present for display/use)
+  if (leadBackend.course && !leadBackend.course_name) {
+    leadBackend.course_name = leadBackend.course;
+    leadFrontend.course_name = leadBackend.course;
+  }
+  if (leadBackend.course_name && !leadBackend.course) {
+    leadBackend.course = leadBackend.course_name;
+    leadFrontend.course = leadBackend.course_name;
+  }
 
-  const missing = required.filter((k) => !leadBackend[k]);
-  if (missing.length > 0) {
-    // Mark this row as invalid by returning an object with an `error` key
+  // scheduled_taken default and legacy demo_scheduled
+  if (!leadBackend.scheduled_taken && leadBackend.demo_scheduled) {
+    leadBackend.scheduled_taken = leadBackend.demo_scheduled;
+    leadFrontend.scheduledTaken = leadBackend.demo_scheduled;
+  }
+  // Don't force a backend default; only set a frontend default for display
+  if (!leadBackend.scheduled_taken) {
+    leadFrontend.scheduledTaken = leadFrontend.scheduledTaken ?? "No";
+  }
+
+  // ✅ Heuristics for essentials
+  // Fill phone_number from whatsapp_number
+  if (!leadBackend.phone_number && leadBackend.whatsapp_number) {
+    leadBackend.phone_number = leadBackend.whatsapp_number;
+    leadFrontend.phone = leadBackend.whatsapp_number;
+  }
+  // If still missing, try to detect a phone-like string from any cell
+  if (!leadBackend.phone_number) {
+    for (const [, v] of Object.entries(row)) {
+      const str = (v ?? "").toString().trim();
+      if (!str) continue;
+      const digits = str.replace(/\D+/g, "");
+      if (digits.length >= 8) {
+        leadBackend.phone_number = str;
+        leadFrontend.phone = str;
+        break;
+      }
+    }
+  }
+  // Derive student_name if absent
+  if (!leadBackend.student_name) {
+    if (leadBackend.parents_name) {
+      leadBackend.student_name = leadBackend.parents_name;
+      leadFrontend.studentName = leadBackend.parents_name;
+    } else {
+      let guessedName = null;
+      for (const [k, v] of Object.entries(row)) {
+        const nk = normKey(k);
+        if (/(fullname|name|student)/.test(nk) && !/parent/.test(nk)) {
+          const sv = (v ?? "").toString().trim();
+          if (sv) {
+            guessedName = sv;
+            break;
+          }
+        }
+      }
+      if (guessedName) {
+        leadBackend.student_name = guessedName;
+        leadFrontend.studentName = guessedName;
+      } else {
+        // default to Unknown if truly absent; allow phone-only rows
+        leadBackend.student_name = "Unknown";
+        leadFrontend.studentName = "Unknown";
+      }
+    }
+  }
+
+  // Require at least a phone number to create a lead
+  if (!leadBackend.phone_number) {
     return {
       leadBackend,
       leadFrontend,
-      error: `Missing required fields: ${missing.join(", ")}`,
+      error: "Missing required fields: phone_number",
     };
   }
 
-  // Default status to Active if absent
-  if (!leadBackend.status) leadBackend.status = "Active";
+  // Default status/substatus for frontend display only; avoid forcing in payload
+  if (!leadBackend.status)
+    leadFrontend.status = leadFrontend.status ?? "Active";
+  if (!leadBackend.substatus)
+    leadFrontend.substatus = leadFrontend.substatus ?? "New";
 
   return { leadBackend, leadFrontend };
 };
 
 const ImportCsvButton = ({ authToken, onImported }) => {
   const [importing, setImporting] = useState(false);
-  // progress percent removed per user request; keep counts
-  const [progress, setProgress] = useState(0); // retained internally for some flows but UI bar will be removed
+  // progress percent removed from UI; keep only setter for internal flow
+  const [, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState("");
   const [importedCount, setImportedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
@@ -116,14 +294,18 @@ const ImportCsvButton = ({ authToken, onImported }) => {
     setFileName(file.name || "");
     setImporting(true);
     setProgress(0);
-    setStatusMessage("Attempting backend import...");
+    setStatusMessage(
+      USE_SERVER_IMPORT
+        ? "Attempting backend import..."
+        : "Using client-side import (server importer temporarily disabled)"
+    );
 
     const backendImportUrl = `${BASE_URL}/leads/import-csv/`;
     abortControllerRef.current = new AbortController();
     isCancelledRef.current = false;
 
     // Try server-side import first
-    if (authToken) {
+    if (authToken && USE_SERVER_IMPORT) {
       try {
         const formData = new FormData();
         formData.append("file", file);
@@ -139,11 +321,9 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           let body = null;
           try {
             body = await resp.json();
-          } catch (e) {
-            console.warn("Backend returned non-JSON response for import");
+          } catch {
+            console.debug("Server import responded without JSON body");
           }
-
-          // removed noisy success log
           const created = Array.isArray(body?.created)
             ? body.created.map((c) => ({ ...c, _id: c.id || c._id }))
             : [];
@@ -154,7 +334,6 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           setStatusMessage("Import successful (server-side)");
           setImporting(false);
 
-          // Notify parent and global listeners so the leads table refreshes immediately
           try {
             if (onImported) onImported(created);
           } catch (e) {
@@ -170,16 +349,19 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           return;
         }
 
-        // If backend returns non-OK, read the response and fall back
         try {
           const errBody = await resp.json();
           console.error("Backend CSV import error body:", errBody);
         } catch (e) {
           try {
             const txt = await resp.text();
-            console.error("Backend CSV import error text:", txt);
+            console.error("Backend CSV import error text:", txt, e);
           } catch (e2) {
-            console.error("Backend CSV import failed with status", resp.status);
+            console.error(
+              "Backend CSV import failed with status",
+              resp.status,
+              e2
+            );
           }
         }
         console.warn(
@@ -199,9 +381,12 @@ const ImportCsvButton = ({ authToken, onImported }) => {
       }
     }
 
-    // Client-side import fallback
+    // Client-side import (primary path while server importer is disabled)
     const headerMapLower = Object.fromEntries(
       Object.entries(headerMapping).map(([k, v]) => [k.trim().toLowerCase(), v])
+    );
+    const headerMapNormalized = Object.fromEntries(
+      Object.entries(headerMapping).map(([k, v]) => [normKey(k), v])
     );
 
     Papa.parse(file, {
@@ -210,7 +395,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
       skipEmptyLines: true,
       complete: async (results) => {
         const mappedRows = results.data.map((r) =>
-          mapRowToLead(r, headerMapLower)
+          mapRowToLead(r, headerMapLower, headerMapNormalized)
         );
 
         const total = mappedRows.length;
@@ -232,10 +417,17 @@ const ImportCsvButton = ({ authToken, onImported }) => {
           }
 
           const { leadBackend, leadFrontend } = row;
+          // Filter out null/empty values to avoid sending nulls
+          const sanitizedPayload = Object.fromEntries(
+            Object.entries(leadBackend).filter(
+              ([, v]) =>
+                v !== null && v !== undefined && String(v).trim() !== ""
+            )
+          );
           try {
             let created = null;
             try {
-              created = await leadService.addLead(leadBackend, authToken);
+              created = await leadService.addLead(sanitizedPayload, authToken);
             } catch (svcErr) {
               console.warn(
                 "leadService.addLead failed, trying direct POST:",
@@ -248,7 +440,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
                     Authorization: `Token ${authToken}`,
                     "Content-Type": "application/json",
                   },
-                  body: JSON.stringify(leadBackend),
+                  body: JSON.stringify(sanitizedPayload),
                 });
                 if (!resp2.ok) {
                   const txt = await resp2.text();
@@ -311,7 +503,9 @@ const ImportCsvButton = ({ authToken, onImported }) => {
     isCancelledRef.current = true;
     try {
       abortControllerRef.current?.abort();
-    } catch (e) {}
+    } catch (e) {
+      console.debug("Abort failed or not needed", e);
+    }
     setImporting(false);
     setStatusMessage("Import cancelled by user");
   };

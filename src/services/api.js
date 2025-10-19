@@ -210,16 +210,25 @@ export const leadService = {
   sub_status: lead.sub_status || lead.substatus || "New",
   // Expose course_duration (backend may use snake_case or camelCase)
   course_duration: lead.course_duration || lead.courseDuration || "",
+  // Ensure class_type and course_type are present for UI consumption
+  class_type: lead.class_type || "",
+  course_type: lead.course_type || lead.courseType || "",
+  // Scheduled flags (new field scheduled_taken with legacy demo_scheduled support)
+  scheduled_taken: (lead.scheduled_taken !== undefined ? lead.scheduled_taken : (lead.demo_scheduled !== undefined ? lead.demo_scheduled : "")) || "",
+  demo_scheduled: (lead.demo_scheduled !== undefined ? lead.demo_scheduled : (lead.scheduled_taken !== undefined ? lead.scheduled_taken : "")) || "",
+  // Call dates (keep raw values; inputs format to YYYY-MM-DD themselves)
+  last_call: lead.last_call || "",
+  next_call: lead.next_call || "",
+  created_at: lead.created_at || "",
+  updated_at: lead.updated_at || "",
   lead_type: lead.lead_type || lead.leadType || "",
   school_college_name: lead.school_college_name || "",
 
   studentName: lead.student_name || "",
       parentsName: lead.parents_name || "",
-      email: lead.email || "",
       phone: lead.phone_number || "",
       contactWhatsapp: lead.whatsapp_number || "",
-      age: lead.age || "",
-      grade: lead.grade || "",
+    // age/grade already provided above; keep only camelCase aliases below if needed elsewhere
       source: lead.source || "",
       // Note: last_call/next_call are available on lead as lead.last_call / lead.next_call
       permanentAddress: lead.address_line_1 || "",
@@ -228,6 +237,10 @@ export const leadService = {
       county: lead.county || "",
       postCode: lead.post_code || "",
       classType: lead.class_type || "",
+      courseType: lead.course_type || lead.courseType || "",
+      scheduledTaken: (lead.scheduled_taken !== undefined ? lead.scheduled_taken : (lead.demo_scheduled !== undefined ? lead.demo_scheduled : "")) || "",
+      lastCall: lead.last_call || "",
+      nextCall: lead.next_call || "",
       value: lead.value || "",
       adsetName: lead.adset_name || "",
       remarks: lead.remarks || "",
