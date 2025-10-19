@@ -685,43 +685,28 @@ const TrashPage = () => {
   // Export current filtered leads to CSV (client-side, no backend)
   const handleExportCsv = useCallback(() => {
     try {
-      // Map leads into flat objects suitable for CSV
+      // Build comprehensive row objects covering all known fields
       const rows = filteredTrashedLeads.map((lead) => {
-        return {
-          id: lead.id,
-          student_name: lead.student_name || "",
-          parents_name: lead.parents_name || "",
-          email: lead.email || "",
-          phone_number: lead.phone_number || "",
-          whatsapp_number: lead.whatsapp_number || "",
-          age: lead.age || "",
-          grade: lead.grade || "",
-          source: lead.source || "",
-          course_name: lead.course_name || lead.course || "",
-          status: lead.status || "",
-          deleted_by:
-            lead.deleted_by_name || lead.deleted_by || lead.deleter_name || "",
-          deleted_at: lead.deleted_at || lead.deleted_on || lead.deleted || "",
-          last_call: lead.last_call || "",
-          next_call: lead.next_call || "",
-          city: lead.city || "",
-          county: lead.county || "",
-          post_code: lead.post_code || "",
-          class_type: lead.class_type || "",
-          shift: lead.shift || "",
-          device: lead.device || "",
-          previous_coding_experience: lead.previous_coding_experience || "",
-          remarks: lead.remarks || "",
-          // Flatten changeLog to a short summary string
-          change_log_summary: (lead.changeLog || lead.change_log || [])
-            .map((c) => {
-              const t = c.timestamp || c.time || "";
-              const name = c.updaterName || c.updater_name || c.user || "";
-              const msg = c.message || c.msg || "";
-              return `${t} by ${name}: ${msg}`;
-            })
-            .join(" | "),
-        };
+        const row = { ...lead };
+        // Normalize/aliases
+        row.substatus = row.substatus || row.sub_status || "";
+        row.course_name =
+          row.course_name || row.course?.course_name || row.course || "";
+        row.post_code = row.post_code || row.postCode || "";
+        row.created_by =
+          row.created_by || row.assigned_to || row.createdBy || "";
+        row.change_log_summary = (row.changeLog || row.change_log || [])
+          .map((c) => {
+            const t = c.timestamp || c.time || "";
+            const name = c.updaterName || c.updater_name || c.user || "";
+            const msg = c.message || c.msg || "";
+            return `${t} by ${name}: ${msg}`;
+          })
+          .join(" | ");
+        row.deleted_by =
+          row.deleted_by_name || row.deleted_by || row.deleter_name || "";
+        row.deleted_at = row.deleted_at || row.deleted_on || row.deleted || "";
+        return row;
       });
 
       const filename = `trashed_leads_page_${currentPage || 1}.csv`;

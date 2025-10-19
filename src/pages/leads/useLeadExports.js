@@ -125,6 +125,7 @@ export default function useLeadExports(ctx) {
       }
       if (!rows.length) throw new Error("No leads to export");
 
+      // Full field coverage from add/edit forms
       const headers = [
         "id",
         "student_name",
@@ -138,6 +139,7 @@ export default function useLeadExports(ctx) {
         "course_name",
         "course",
         "course_duration",
+        "course_type",
         "class_type",
         "shift",
         "status",
@@ -158,46 +160,58 @@ export default function useLeadExports(ctx) {
         "city",
         "county",
         "post_code",
+        "demo_scheduled",
         "add_date",
         "created_by",
+        "created_at",
+        "updated_at",
+        "first_installment",
+        "first_invoice",
         "last_call",
         "next_call",
       ];
 
-      const escape = (v) => {
+      const escapeCell = (v) => {
         if (v === null || v === undefined) return "";
-        return String(v).includes(",") || String(v).includes("\n")
-          ? `"${String(v).replace(/"/g, '""')}"`
+        let s = Array.isArray(v)
+          ? v.map((i) => (i?.name || i?.url || String(i))).join(" | ")
           : String(v);
+        const needs = /[",\n]/.test(s);
+        if (needs) s = '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      };
+
+      const val = (r, h) => {
+        switch (h) {
+          case "substatus":
+            return r.substatus ?? r.sub_status ?? "";
+          case "assigned_to":
+            return r.assigned_to ?? r.created_by ?? "";
+          case "assigned_to_username":
+            return r.assigned_to_username ?? r.assigned_to ?? "";
+          case "course_duration":
+            return r.course_duration ?? r.courseDuration ?? "";
+          case "previous_coding_experience":
+            return r.previous_coding_experience ?? r.previousCodingExp ?? "";
+          case "post_code":
+            return r.post_code ?? r.postCode ?? "";
+          case "created_by":
+            return r.created_by ?? r.assigned_to ?? r.createdBy ?? "";
+          case "course_name":
+            return (
+              r.course_name ?? r.course?.course_name ?? r.course ?? ""
+            );
+          case "first_invoice":
+            // Could be URL or File reference; try url string
+            return r.first_invoice?.url ?? r.first_invoice ?? "";
+          default:
+            return r[h] ?? "";
+        }
       };
 
       const csv = [headers.join(",")]
         .concat(
-          rows.map((r) =>
-            headers
-              .map((h) => {
-                switch (h) {
-                  case "substatus":
-                    return r.substatus || r.sub_status || "";
-                  case "assigned_to":
-                    return r.assigned_to || "";
-                  case "assigned_to_username":
-                    return r.assigned_to_username || r.assigned_to || "";
-                  case "course_duration":
-                    return r.course_duration || r.courseDuration || "";
-                  case "previous_coding_experience":
-                    return r.previous_coding_experience || r.previousCodingExp || "";
-                  case "post_code":
-                    return r.post_code || r.postCode || "";
-                  case "created_by":
-                    return r.created_by || r.assigned_to || r.createdBy || "";
-                  default:
-                    return r[h] ?? "";
-                }
-              })
-              .map(escape)
-              .join(",")
-          )
+          rows.map((r) => headers.map((h) => escapeCell(val(r, h))).join(","))
         )
         .join("\n");
 
@@ -241,10 +255,88 @@ export default function useLeadExports(ctx) {
         rows = allLeads;
       }
       if (!rows || rows.length === 0) throw new Error("No leads to export");
-      // For brevity reuse handleExport CSV logic here would duplicate; inlined simple CSV
-      const headers = ["id", "student_name", "email"]; // minimal fallback
+      // Use the same comprehensive headers and mapping as handleExport
+      const headers = [
+        "id",
+        "student_name",
+        "parents_name",
+        "email",
+        "phone_number",
+        "whatsapp_number",
+        "age",
+        "grade",
+        "source",
+        "course_name",
+        "course",
+        "course_duration",
+        "course_type",
+        "class_type",
+        "shift",
+        "status",
+        "substatus",
+        "assigned_to",
+        "assigned_to_username",
+        "lead_type",
+        "school_college_name",
+        "previous_coding_experience",
+        "value",
+        "adset_name",
+        "remarks",
+        "payment_type",
+        "device",
+        "workshop_batch",
+        "address_line_1",
+        "address_line_2",
+        "city",
+        "county",
+        "post_code",
+        "demo_scheduled",
+        "add_date",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "first_installment",
+        "first_invoice",
+        "last_call",
+        "next_call",
+      ];
+      const escapeCell = (v) => {
+        if (v === null || v === undefined) return "";
+        let s = Array.isArray(v)
+          ? v.map((i) => (i?.name || i?.url || String(i))).join(" | ")
+          : String(v);
+        const needs = /[",\n]/.test(s);
+        if (needs) s = '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      };
+      const val = (r, h) => {
+        switch (h) {
+          case "substatus":
+            return r.substatus ?? r.sub_status ?? "";
+          case "assigned_to":
+            return r.assigned_to ?? r.created_by ?? "";
+          case "assigned_to_username":
+            return r.assigned_to_username ?? r.assigned_to ?? "";
+          case "course_duration":
+            return r.course_duration ?? r.courseDuration ?? "";
+          case "previous_coding_experience":
+            return r.previous_coding_experience ?? r.previousCodingExp ?? "";
+          case "post_code":
+            return r.post_code ?? r.postCode ?? "";
+          case "created_by":
+            return r.created_by ?? r.assigned_to ?? r.createdBy ?? "";
+          case "course_name":
+            return (
+              r.course_name ?? r.course?.course_name ?? r.course ?? ""
+            );
+          case "first_invoice":
+            return r.first_invoice?.url ?? r.first_invoice ?? "";
+          default:
+            return r[h] ?? "";
+        }
+      };
       const csv = [headers.join(",")]
-        .concat(rows.map((r) => headers.map((h) => r[h] ?? "").join(",")))
+        .concat(rows.map((r) => headers.map((h) => escapeCell(val(r, h))).join(",")))
         .join("\n");
       try {
         const ts = new Date().toISOString().replace(/[:.]/g, "-");
