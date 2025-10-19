@@ -13,12 +13,6 @@ import DraggableRow from "./DraggableRow";
 import ColumnToggler from "./ColumnToggler";
 import { leadService } from "../services/api";
 
-// NOTE: This file was rebuilt to remove syntax errors and provide
-// reliable inline update handlers for course_type, class_type, and scheduled_taken.
-// Keep this component focused on display + delegating updates; heavy logic
-// (like change log diffing) should remain in services or row component.
-
-// Initial column configuration
 const initialColumns = {
   actions: { label: "Actions", visible: true },
   id: { label: "ID", visible: true },

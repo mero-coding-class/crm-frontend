@@ -361,12 +361,6 @@ const Dashboard = () => {
 
   // Build all dashboard aggregates from real leads + enrollments
   const dashboardData = useMemo(() => {
-    if (
-      (!allLeads || allLeads.length === 0) &&
-      (!enrollments || enrollments.length === 0)
-    )
-      return null;
-
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -768,14 +762,6 @@ const Dashboard = () => {
     return (
       <div className="text-red-500 p-4 bg-red-100 rounded-md">
         Error: {error}
-      </div>
-    );
-  }
-
-  if (!dashboardData) {
-    return (
-      <div className="text-gray-500 p-4 text-center">
-        No dashboard data available. Please add some leads.
       </div>
     );
   }

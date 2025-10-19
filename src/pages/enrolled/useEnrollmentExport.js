@@ -50,21 +50,56 @@ export default function useEnrollmentExport(authToken) {
         if (!all || all.length === 0) throw new Error("No enrollments to export");
 
         const columns = [
-          "id","student_name","parents_name","email","phone_number","course","batchname","assigned_teacher","scheduled_taken","payment_type","total_payment","first_installment","second_installment","third_installment","last_pay_date","payment_completed","starting_date","created_at","updated_at","invoice","remarks"
+          "id",
+          "student_name",
+          "parents_name",
+          "email",
+          "phone_number",
+          "whatsapp_number",
+          "course_name",
+          "course",
+          "batchname",
+          "assigned_teacher",
+          "scheduled_taken",
+          "payment_type",
+          "total_payment",
+          "first_installment",
+          "second_installment",
+          "third_installment",
+          "last_pay_date",
+          "payment_completed",
+          "starting_date",
+          "enrollment_date",
+          "created_at",
+          "updated_at",
+          "invoice",
+          "remarks",
         ];
         const escapeCsv = (v) => {
           if (v === null || v === undefined) return "";
-          let s = String(v);
-          if (Array.isArray(v)) s = v.map((i) => i.name || i.url || "").join(" | ");
-          if (s.includes(",") || s.includes("\n") || s.includes('"')) s = '"' + s.replace(/"/g, '""') + '"';
+          let s = Array.isArray(v)
+            ? v.map((i) => i?.name || i?.url || "").join(" | ")
+            : String(v);
+          if (/[",\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
           return s;
+        };
+        const val = (r, c) => {
+          switch (c) {
+            case "course_name":
+              return r.course_name ?? r.course?.course_name ?? r.course ?? "";
+            case "invoice":
+              return r.invoice?.url ?? r.invoice ?? "";
+            case "whatsapp_number":
+              return r.whatsapp_number ?? r.lead?.whatsapp_number ?? "";
+            default:
+              if (r[c] !== undefined) return r[c];
+              if (r.lead && r.lead[c] !== undefined) return r.lead[c];
+              return "";
+          }
         };
         const rows = [columns.join(",")];
         all.forEach((r) => {
-          const row = columns.map((c) => {
-            if (r[c] === undefined && r.lead && r.lead[c] !== undefined) return escapeCsv(r.lead[c]);
-            return escapeCsv(r[c]);
-          });
+          const row = columns.map((c) => escapeCsv(val(r, c)));
           rows.push(row.join(","));
         });
         const csv = rows.join("\n");
