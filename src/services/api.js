@@ -602,17 +602,55 @@ export const leadService = {
       // Remove shift if explicitly invalid or blank to avoid backend 400s
       if (backendData.shift !== undefined) delete backendData.shift;
     }
-    
-    const response = await fetch(`${BASE_URL}/leads/`, {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${authToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(backendData),
-    });
+    // If a File object is provided for first_invoice, send as multipart/form-data
+    const hasInvoiceFile =
+      newLeadData && newLeadData.first_invoice && newLeadData.first_invoice instanceof File;
 
-    return handleResponse(response);
+    if (hasInvoiceFile) {
+      const fd = new FormData();
+      Object.entries(backendData).forEach(([k, v]) => {
+        if (k === "first_invoice") return; // append file below
+        if (v === undefined || v === null) return;
+        if (typeof v === "object") {
+          try {
+            fd.append(k, JSON.stringify(v));
+          } catch {
+            fd.append(k, String(v));
+          }
+        } else {
+          fd.append(k, String(v));
+        }
+      });
+      fd.append("first_invoice", newLeadData.first_invoice);
+
+      const response = await fetch(`${BASE_URL}/leads/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          // do not set Content-Type for FormData
+        },
+        body: fd,
+      });
+      return handleResponse(response);
+    } else {
+      // Avoid sending a plain string for file fields (backend expects an uploaded file)
+      if (
+        Object.prototype.hasOwnProperty.call(backendData, "first_invoice") &&
+        typeof backendData.first_invoice === "string"
+      ) {
+        delete backendData.first_invoice;
+      }
+
+      const response = await fetch(`${BASE_URL}/leads/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(backendData),
+      });
+      return handleResponse(response);
+    }
   },
 
   exportLeads: async (authToken) => {

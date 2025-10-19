@@ -125,6 +125,9 @@ export default function useLeadExports(ctx) {
       }
       if (!rows.length) throw new Error("No leads to export");
 
+      // Helper: normalize invoice field to a backend URL string
+      const invoiceUrlOf = (r) => r?.first_invoice?.url ?? r?.first_invoice ?? "";
+
       // Full field coverage from add/edit forms
       const headers = [
         "id",
@@ -166,6 +169,7 @@ export default function useLeadExports(ctx) {
         "created_at",
         "updated_at",
         "first_installment",
+        // Single invoice column: backend URL only
         "first_invoice",
         "last_call",
         "next_call",
@@ -202,8 +206,7 @@ export default function useLeadExports(ctx) {
               r.course_name ?? r.course?.course_name ?? r.course ?? ""
             );
           case "first_invoice":
-            // Could be URL or File reference; try url string
-            return r.first_invoice?.url ?? r.first_invoice ?? "";
+            return invoiceUrlOf(r) || "";
           default:
             return r[h] ?? "";
         }
@@ -224,6 +227,7 @@ export default function useLeadExports(ctx) {
           source: "Leads",
           meta: { filters },
         });
+        // No previews; CSV contains only the backend invoice URL
       } catch {}
 
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -255,6 +259,8 @@ export default function useLeadExports(ctx) {
         rows = allLeads;
       }
       if (!rows || rows.length === 0) throw new Error("No leads to export");
+      // Helper: normalize invoice field to a backend URL string
+      const invoiceUrlOf = (r) => r?.first_invoice?.url ?? r?.first_invoice ?? "";
       // Use the same comprehensive headers and mapping as handleExport
       const headers = [
         "id",
@@ -296,6 +302,7 @@ export default function useLeadExports(ctx) {
         "created_at",
         "updated_at",
         "first_installment",
+        // Single invoice column: backend URL only
         "first_invoice",
         "last_call",
         "next_call",
@@ -330,7 +337,7 @@ export default function useLeadExports(ctx) {
               r.course_name ?? r.course?.course_name ?? r.course ?? ""
             );
           case "first_invoice":
-            return r.first_invoice?.url ?? r.first_invoice ?? "";
+            return invoiceUrlOf(r) || "";
           default:
             return r[h] ?? "";
         }
@@ -347,6 +354,7 @@ export default function useLeadExports(ctx) {
           source: "Leads",
           meta: { type: "all" },
         });
+        // No previews; CSV contains only the backend invoice URL
       } catch {}
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);

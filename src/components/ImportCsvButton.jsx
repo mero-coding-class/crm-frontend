@@ -405,6 +405,47 @@ const ImportCsvButton = ({ authToken, onImported }) => {
         const createdLeads = [];
         const skippedRows = [];
 
+        // helper: attempt to turn an invoice URL or data URI string into a File
+        const toFileFromInvoice = async (invoiceValue) => {
+          try {
+            if (!invoiceValue || typeof invoiceValue !== "string") return null;
+            const url = invoiceValue.trim();
+            // data URI
+            if (url.startsWith("data:")) {
+              const arr = url.split(",");
+              const mime =
+                arr[0].split(":")[1].split(";")[0] ||
+                "application/octet-stream";
+              const bstr = atob(arr[1]);
+              let n = bstr.length;
+              const u8arr = new Uint8Array(n);
+              while (n--) u8arr[n] = bstr.charCodeAt(n);
+              const blob = new Blob([u8arr], { type: mime });
+              const ext = mime.includes("pdf")
+                ? "pdf"
+                : mime.split("/")[1] || "bin";
+              return new File([blob], `invoice.${ext}`, { type: mime });
+            }
+            // http(s) url: fetch and convert to File
+            const resp = await fetch(url, {
+              headers: authToken
+                ? { Authorization: `Token ${authToken}` }
+                : undefined,
+            });
+            if (!resp.ok) return null;
+            const ct =
+              resp.headers.get("content-type") || "application/octet-stream";
+            const blob = await resp.blob();
+            // try to infer name from URL path
+            const nameMatch =
+              url.split("?")[0].split("#")[0].split("/").pop() || "invoice";
+            return new File([blob], nameMatch, { type: ct });
+          } catch (e) {
+            console.debug("toFileFromInvoice failed", e);
+            return null;
+          }
+        };
+
         for (let i = 0; i < mappedRows.length; i++) {
           if (isCancelledRef.current) break;
           const row = mappedRows[i];
@@ -424,24 +465,60 @@ const ImportCsvButton = ({ authToken, onImported }) => {
                 v !== null && v !== undefined && String(v).trim() !== ""
             )
           );
+          // If first_invoice is a URL/data URI string, try to convert to a File
+          let invoiceFile = null;
+          if (typeof sanitizedPayload.first_invoice === "string") {
+            invoiceFile = await toFileFromInvoice(
+              sanitizedPayload.first_invoice
+            );
+            if (invoiceFile) {
+              // backend expects file upload; avoid sending string in JSON
+              delete sanitizedPayload.first_invoice;
+            }
+          }
           try {
             let created = null;
             try {
-              created = await leadService.addLead(sanitizedPayload, authToken);
+              // When we have an invoice File, use multipart path via leadService.addLead
+              if (invoiceFile) {
+                created = await leadService.addLead(
+                  { ...sanitizedPayload, first_invoice: invoiceFile },
+                  authToken
+                );
+              } else {
+                created = await leadService.addLead(
+                  sanitizedPayload,
+                  authToken
+                );
+              }
             } catch (svcErr) {
               console.warn(
                 "leadService.addLead failed, trying direct POST:",
                 svcErr
               );
               if (authToken) {
-                const resp2 = await fetch(`${BASE_URL}/leads/`, {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Token ${authToken}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(sanitizedPayload),
-                });
+                let resp2;
+                if (invoiceFile) {
+                  const fd = new FormData();
+                  Object.entries(sanitizedPayload).forEach(([k, v]) => {
+                    if (v !== null && v !== undefined) fd.append(k, v);
+                  });
+                  fd.append("first_invoice", invoiceFile);
+                  resp2 = await fetch(`${BASE_URL}/leads/`, {
+                    method: "POST",
+                    headers: { Authorization: `Token ${authToken}` },
+                    body: fd,
+                  });
+                } else {
+                  resp2 = await fetch(`${BASE_URL}/leads/`, {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Token ${authToken}`,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(sanitizedPayload),
+                  });
+                }
                 if (!resp2.ok) {
                   const txt = await resp2.text();
                   throw new Error(`Direct POST failed: ${resp2.status} ${txt}`);
