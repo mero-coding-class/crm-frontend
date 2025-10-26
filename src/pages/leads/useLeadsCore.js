@@ -21,7 +21,7 @@ export default function useLeadsCore(authToken, pageSize) {
         courseService.getCourses(authToken),
       ]);
 
-      const processedLeads = (
+      let processedLeads = (
         Array.isArray(leadsData) ? leadsData : leadsData.results || []
       )
         .map((lead) => ({
@@ -38,6 +38,26 @@ export default function useLeadsCore(authToken, pageSize) {
           course_duration: lead.course_duration || "",
         }))
         .slice(0, pageSize);
+
+      // If there are any restored leads persisted by TrashPage, prepend them so they appear on top
+      try {
+        const rawList = localStorage.getItem("crm:restoredLeads");
+        const rawOne = localStorage.getItem("crm:restoredLead");
+        let restored = [];
+        if (rawList) {
+          const arr = JSON.parse(rawList);
+          if (Array.isArray(arr) && arr.length) restored = arr;
+        } else if (rawOne) {
+          const obj = JSON.parse(rawOne);
+          if (obj && typeof obj === "object") restored = [obj];
+        }
+        if (restored.length) {
+          processedLeads = [...restored, ...processedLeads];
+        }
+        // Clear persisted flags after merging
+        try { localStorage.removeItem("crm:restoredLeads"); } catch {}
+        try { localStorage.removeItem("crm:restoredLead"); } catch {}
+      } catch {}
 
       setAllLeads(deduplicateLeads(processedLeads));
     } catch (err) {

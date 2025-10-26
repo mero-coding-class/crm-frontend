@@ -368,12 +368,13 @@ const Leads = () => {
         setShowFilters={setShowFilters}
       />
 
-      {/* Full-screen fetching overlay when fetchingAll is true */}
+      {/* Non-blocking export progress indicator */}
       {exportingAll && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-lg p-6">
-            <Loader message={"Preparing export — fetching all leads..."} />
-          </div>
+        <div className="fixed top-4 right-4 z-50 bg-white border border-gray-200 shadow-lg rounded-md p-3">
+          <Loader
+            message={"Preparing export — fetching all leads..."}
+            fullScreen={false}
+          />
         </div>
       )}
 
