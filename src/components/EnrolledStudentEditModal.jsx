@@ -74,10 +74,16 @@ const EnrolledStudentEditModal = ({
       second_installment: student?.second_installment ?? "",
       third_installment: student?.third_installment ?? "",
       // dedicated invoice urls/files for backend fields
+      // dedicated invoice urls/files for backend fields
+      first_invoice_url: lead?.first_invoice || "",
       second_invoice_url: student?.second_invoice || "",
       third_invoice_url: student?.third_invoice || "",
+      first_invoice_file: null,
       second_invoice_file: null,
       third_invoice_file: null,
+      first_invoice_remove: false,
+      second_invoice_remove: false,
+      third_invoice_remove: false,
       last_pay_date:
         student?.last_pay_date || ""
           ? String(student.last_pay_date || "").split("T")[0]
@@ -372,9 +378,20 @@ const EnrolledStudentEditModal = ({
           third_installment:
             data.third_installment ?? prev.third_installment ?? "",
           // reflect server invoice file urls
+          first_invoice_url:
+            (data.lead && data.lead.first_invoice) ||
+            prev.first_invoice_url ||
+            "",
           second_invoice_url:
             data.second_invoice || prev.second_invoice_url || "",
           third_invoice_url: data.third_invoice || prev.third_invoice_url || "",
+          // reset removal flags and temp files after refresh
+          first_invoice_remove: false,
+          second_invoice_remove: false,
+          third_invoice_remove: false,
+          first_invoice_file: null,
+          second_invoice_file: null,
+          third_invoice_file: null,
           last_pay_date: data.last_pay_date
             ? String(data.last_pay_date).split("T")[0]
             : prev.last_pay_date || "",
@@ -506,7 +523,18 @@ const EnrolledStudentEditModal = ({
     });
   };
 
-  // handle file selection for an invoice row (image or pdf)
+  // handle file selection for invoice rows (image or pdf)
+  const handleFirstInvoiceFileChange = (file) => {
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    setFormData((prev) => ({
+      ...prev,
+      first_invoice_file: file,
+      first_invoice_url: previewUrl,
+      first_invoice_remove: false,
+    }));
+  };
+
   const handleSecondInvoiceFileChange = (file) => {
     if (!file) return;
     const previewUrl = URL.createObjectURL(file);
@@ -514,6 +542,7 @@ const EnrolledStudentEditModal = ({
       ...prev,
       second_invoice_file: file,
       second_invoice_url: previewUrl,
+      second_invoice_remove: false,
     }));
   };
 
@@ -524,6 +553,58 @@ const EnrolledStudentEditModal = ({
       ...prev,
       third_invoice_file: file,
       third_invoice_url: previewUrl,
+      third_invoice_remove: false,
+    }));
+  };
+
+  const handleRemoveFirstInvoice = () => {
+    try {
+      if (
+        formData?.first_invoice_url &&
+        formData.first_invoice_url.startsWith("blob:")
+      ) {
+        URL.revokeObjectURL(formData.first_invoice_url);
+      }
+    } catch {}
+    setFormData((prev) => ({
+      ...prev,
+      first_invoice_file: null,
+      first_invoice_url: "",
+      first_invoice_remove: true,
+    }));
+  };
+
+  const handleRemoveSecondInvoice = () => {
+    try {
+      if (
+        formData?.second_invoice_url &&
+        formData.second_invoice_url.startsWith("blob:")
+      ) {
+        URL.revokeObjectURL(formData.second_invoice_url);
+      }
+    } catch {}
+    setFormData((prev) => ({
+      ...prev,
+      second_invoice_file: null,
+      second_invoice_url: "",
+      second_invoice_remove: true,
+    }));
+  };
+
+  const handleRemoveThirdInvoice = () => {
+    try {
+      if (
+        formData?.third_invoice_url &&
+        formData.third_invoice_url.startsWith("blob:")
+      ) {
+        URL.revokeObjectURL(formData.third_invoice_url);
+      }
+    } catch {}
+    setFormData((prev) => ({
+      ...prev,
+      third_invoice_file: null,
+      third_invoice_url: "",
+      third_invoice_remove: true,
     }));
   };
 
@@ -531,6 +612,12 @@ const EnrolledStudentEditModal = ({
   useEffect(() => {
     return () => {
       try {
+        if (
+          formData?.first_invoice_url &&
+          formData.first_invoice_url.startsWith("blob:")
+        ) {
+          URL.revokeObjectURL(formData.first_invoice_url);
+        }
         if (
           formData?.second_invoice_url &&
           formData.second_invoice_url.startsWith("blob:")
@@ -587,9 +674,14 @@ const EnrolledStudentEditModal = ({
       starting_date: formData.starting_date
         ? String(formData.starting_date).split("T")[0]
         : null,
-      // pass explicit second/third invoice files if chosen
+      // pass explicit invoice files if chosen
+      first_invoice_file: formData.first_invoice_file || null,
       second_invoice_file: formData.second_invoice_file || null,
       third_invoice_file: formData.third_invoice_file || null,
+      // removal flags for clearing invoices on save
+      first_invoice_remove: !!formData.first_invoice_remove,
+      second_invoice_remove: !!formData.second_invoice_remove,
+      third_invoice_remove: !!formData.third_invoice_remove,
     };
 
     // Normalize payment_completed to boolean/null (table sends booleans)
@@ -624,10 +716,15 @@ const EnrolledStudentEditModal = ({
       const snapshotsEqual =
         JSON.stringify(compareSnapshot) === JSON.stringify(original);
       const hasNewFiles =
+        updatedStudentData.first_invoice_file instanceof File ||
         updatedStudentData.second_invoice_file instanceof File ||
         updatedStudentData.third_invoice_file instanceof File;
+      const hasInvoiceRemovals =
+        !!updatedStudentData.first_invoice_remove ||
+        !!updatedStudentData.second_invoice_remove ||
+        !!updatedStudentData.third_invoice_remove;
 
-      if (snapshotsEqual && !hasNewFiles) {
+      if (snapshotsEqual && !hasNewFiles && !hasInvoiceRemovals) {
         setSaveSuccess("No changes to save");
         setTimeout(() => setSaveSuccess(null), 2000);
         return;
@@ -1288,27 +1385,50 @@ const EnrolledStudentEditModal = ({
           {/* Invoice Section */}
           <div className="md:col-span-2 border-t pt-4 mt-4">
             <h3 className="text-lg font-medium text-gray-700 mb-2">Invoices</h3>
-            {/* Lead Invoice (read-only link if available) */}
-            {(() => {
-              const leadInvoice =
-                (formData.lead && formData.lead.first_invoice) || "";
-              if (!leadInvoice) return null;
-              return (
-                <div className="flex items-center justify-between p-2 border rounded-md bg-gray-50 mb-3">
-                  <div className="flex items-center space-x-3">
-                    <a
-                      href={leadInvoice}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm text-blue-600 underline"
-                    >
-                      Lead invoice
-                    </a>
+            {/* First (Lead) Invoice */}
+            <div className="flex flex-col sm:flex-row items-end gap-2 mb-3">
+              <div className="flex-grow">
+                <label className="block text-sm font-medium text-gray-700">
+                  First Invoice
+                </label>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) =>
+                    handleFirstInvoiceFileChange(e.target.files[0])
+                  }
+                  className="mt-1 block w-full text-sm"
+                />
+                {(formData.first_invoice_url || formData.lead?.first_invoice) &&
+                  !formData.first_invoice_remove && (
+                    <div className="mt-2 flex items-center gap-3 text-sm">
+                      <a
+                        href={
+                          formData.first_invoice_url ||
+                          formData.lead?.first_invoice
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        Open first invoice
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handleRemoveFirstInvoice}
+                        className="text-red-600"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                {formData.first_invoice_remove && (
+                  <div className="mt-2 text-sm text-red-600">
+                    Will be removed on save
                   </div>
-                  <span className="text-xs text-gray-500">Read-only</span>
-                </div>
-              );
-            })()}
+                )}
+              </div>
+            </div>
 
             {/* Second Invoice */}
             <div className="flex flex-col sm:flex-row items-end gap-2 mb-3">
@@ -1324,16 +1444,29 @@ const EnrolledStudentEditModal = ({
                   }
                   className="mt-1 block w-full text-sm"
                 />
-                {formData.second_invoice_url && (
-                  <div className="mt-2 text-sm">
-                    <a
-                      href={formData.second_invoice_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-indigo-600 hover:underline"
-                    >
-                      Open second invoice
-                    </a>
+                {formData.second_invoice_url &&
+                  !formData.second_invoice_remove && (
+                    <div className="mt-2 flex items-center gap-3 text-sm">
+                      <a
+                        href={formData.second_invoice_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        Open second invoice
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handleRemoveSecondInvoice}
+                        className="text-red-600"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                {formData.second_invoice_remove && (
+                  <div className="mt-2 text-sm text-red-600">
+                    Will be removed on save
                   </div>
                 )}
               </div>
@@ -1353,16 +1486,29 @@ const EnrolledStudentEditModal = ({
                   }
                   className="mt-1 block w-full text-sm"
                 />
-                {formData.third_invoice_url && (
-                  <div className="mt-2 text-sm">
-                    <a
-                      href={formData.third_invoice_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-indigo-600 hover:underline"
-                    >
-                      Open third invoice
-                    </a>
+                {formData.third_invoice_url &&
+                  !formData.third_invoice_remove && (
+                    <div className="mt-2 flex items-center gap-3 text-sm">
+                      <a
+                        href={formData.third_invoice_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        Open third invoice
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handleRemoveThirdInvoice}
+                        className="text-red-600"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                {formData.third_invoice_remove && (
+                  <div className="mt-2 text-sm text-red-600">
+                    Will be removed on save
                   </div>
                 )}
               </div>
