@@ -207,13 +207,30 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
         if (!resp.ok) return;
         const data = await resp.json();
         if (cancelled || !data) return;
-        const fi = data.first_installment ?? data.firstInstallment ?? null;
-        const inv = data.first_invoice ?? data.firstInvoice ?? null;
-        setFormData((prev) => ({
-          ...prev,
-          ...(fi !== undefined ? { first_installment: fi } : {}),
-          ...(inv !== undefined ? { first_invoice: inv } : {}),
-        }));
+        const fi = data.first_installment ?? data.firstInstallment ?? undefined;
+        const inv = data.first_invoice ?? data.firstInvoice ?? undefined;
+        // Only update from server if it has a concrete non-null value
+        // and we don't have a local pending edit (e.g., selected File or typed amount).
+        setFormData((prev) => {
+          const next = { ...prev };
+          if (fi !== undefined && fi !== null && fi !== "") {
+            // if user hasn't typed a local amount, or local is empty, adopt server fi
+            if (
+              prev.first_installment === undefined ||
+              prev.first_installment === null ||
+              prev.first_installment === ""
+            ) {
+              next.first_installment = fi;
+            }
+          }
+          if (inv !== undefined && inv !== null && inv !== "") {
+            // don't overwrite a locally selected File
+            if (!(prev.first_invoice instanceof File)) {
+              next.first_invoice = inv;
+            }
+          }
+          return next;
+        });
       } catch (e) {
         // non-fatal: simply skip if detail cannot be fetched
       }
@@ -370,7 +387,30 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
             normalized.sub_status || normalized.substatus || "New";
         }
 
-        setFormData((prev) => ({ ...DEFAULT_FORM, ...prev, ...normalized }));
+        // Merge while preserving local, unsaved invoice/installment if server sent empty/null
+        setFormData((prev) => {
+          const merged = { ...DEFAULT_FORM, ...prev, ...normalized };
+          const serverFi = normalized.first_installment;
+          const serverInv = normalized.first_invoice;
+          // If server did not provide a concrete value, keep local
+          if (
+            (serverFi === undefined || serverFi === null || serverFi === "") &&
+            prev.first_installment !== undefined &&
+            prev.first_installment !== null &&
+            prev.first_installment !== ""
+          ) {
+            merged.first_installment = prev.first_installment;
+          }
+          if (
+            (serverInv === undefined ||
+              serverInv === null ||
+              serverInv === "") &&
+            prev.first_invoice
+          ) {
+            merged.first_invoice = prev.first_invoice;
+          }
+          return merged;
+        });
       } catch (err) {
         // ignore
         console.warn("LeadEditModal: failed to apply crm:leadUpdated", err);
@@ -517,6 +557,10 @@ const LeadEditModal = ({ lead, onClose, onSave, courses }) => {
       first_installment: formData.first_installment
         ? parseFloat(formData.first_installment)
         : null,
+      // Only include first_invoice when it's a newly selected File; otherwise omit to keep existing
+      ...(formData.first_invoice instanceof File
+        ? { first_invoice: formData.first_invoice }
+        : {}),
     };
     try {
       onSave(updatedData);

@@ -7,7 +7,6 @@ import { BASE_URL } from "../config";
 const USE_SERVER_IMPORT = false;
 
 const headerMapping = {
-  // Names
   "Student Name": "student_name",
   "Full Name": "student_name",
   Name: "student_name",
@@ -16,7 +15,6 @@ const headerMapping = {
   "Parent's Name": "parents_name",
   "Parent Name": "parents_name",
   "Guardian Name": "parents_name",
-  // Contacts
   Email: "email",
   "Email Address": "email",
   "E-mail": "email",
@@ -32,7 +30,6 @@ const headerMapping = {
   "Whatsapp No": "whatsapp_number",
   WhatsApp: "whatsapp_number",
   "WA Number": "whatsapp_number",
-  // Basics
   Age: "age",
   "Age (Years)": "age",
   Grade: "grade",
@@ -42,14 +39,12 @@ const headerMapping = {
   "Lead Source": "source",
   "Source Channel": "source",
   "Class Type": "class_type",
-  // Courses and types
   Course: "course",
   "Course Name": "course",
   Program: "course",
   "Course Type": "course_type",
   Mode: "course_type",
   "Learning Mode": "course_type",
-  // Addresses
   "Address Line 1": "address_line_1",
   "Address Line 2": "address_line_2",
   City: "city",
@@ -59,7 +54,6 @@ const headerMapping = {
   Postcode: "post_code",
   "Postal Code": "post_code",
   ZIP: "post_code",
-  // Dates / scheduling
   "Last Call": "last_call",
   "Recent Call": "last_call",
   "Next Call": "next_call",
@@ -68,7 +62,6 @@ const headerMapping = {
   Scheduled: "scheduled_taken",
   Demo: "scheduled_taken",
   "Demo Scheduled": "demo_scheduled",
-  // Misc
   Device: "device",
   "Has Device": "device",
   "Previous Coding Experience": "previous_coding_experience",
@@ -83,7 +76,6 @@ const headerMapping = {
   "School College": "school_college_name",
   School: "school_college_name",
   College: "school_college_name",
-  // Assignment and status
   "Assigned To": "assigned_to",
   "Assigned To Username": "assigned_to_username",
   Assigned: "assigned_to_username",
@@ -92,7 +84,6 @@ const headerMapping = {
   "Sub Status": "substatus",
   SubStatus: "substatus",
   "Lead Type": "lead_type",
-  // Financials & misc
   "Deal Value": "value",
   Amount: "value",
   Value: "value",
@@ -104,11 +95,18 @@ const headerMapping = {
   "First Installment": "first_installment",
   "First Payment": "first_installment",
   "Initial Payment": "first_installment",
+  first_installment: "first_installment",
+  "first installment": "first_installment",
+  first_instalment: "first_installment",
+  "first instalment": "first_installment",
   "First Invoice": "first_invoice",
   Invoice: "first_invoice",
+  first_invoice: "first_invoice",
+  "first invoice url": "first_invoice",
+  "invoice url": "first_invoice",
+  "invoice link": "first_invoice",
 };
 
-// ✅ Backend → Frontend key normalization
 const backendToFrontendKeyMap = {
   student_name: "studentName",
   parents_name: "parentsName",
@@ -210,7 +208,6 @@ const mapRowToLead = (row, headerMapLower, headerMapNormalized) => {
     leadFrontend.scheduledTaken = leadFrontend.scheduledTaken ?? "No";
   }
 
-  // ✅ Heuristics for essentials
   // Fill phone_number from whatsapp_number
   if (!leadBackend.phone_number && leadBackend.whatsapp_number) {
     leadBackend.phone_number = leadBackend.whatsapp_number;
@@ -409,7 +406,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
         const toFileFromInvoice = async (invoiceValue) => {
           try {
             if (!invoiceValue || typeof invoiceValue !== "string") return null;
-            const url = invoiceValue.trim();
+            let url = invoiceValue.trim();
             // data URI
             if (url.startsWith("data:")) {
               const arr = url.split(",");
@@ -425,6 +422,13 @@ const ImportCsvButton = ({ authToken, onImported }) => {
                 ? "pdf"
                 : mime.split("/")[1] || "bin";
               return new File([blob], `invoice.${ext}`, { type: mime });
+            }
+            // Resolve relative paths against API base
+            if (!/^https?:\/\//i.test(url)) {
+              // ensure exactly one slash between BASE_URL and path
+              const base = BASE_URL.replace(/\/$/, "");
+              const path = url.startsWith("/") ? url : `/${url}`;
+              url = `${base}${path}`;
             }
             // http(s) url: fetch and convert to File
             const resp = await fetch(url, {
