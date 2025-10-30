@@ -1,7 +1,13 @@
 // C:/Users/aryal/Desktop/EDU_CRM/client/src/layouts/MainLayout.jsx
 
 import React, { useContext, useState } from "react";
-import { NavLink, useNavigate, Outlet } from "react-router-dom";
+import {
+  NavLink,
+  useNavigate,
+  Outlet,
+  useLocation,
+  Link,
+} from "react-router-dom";
 import {
   HomeIcon,
   UserGroupIcon,
@@ -38,6 +44,23 @@ const MainLayout = () => {
   const { logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Allow collapsing the sidebar on desktop via breadcrumb toggle
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
+
+  // Derive breadcrumb items from the current path
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const breadcrumbs = [
+    { label: "Home", to: "/dashboard" },
+    ...pathSegments.map((seg, idx) => {
+      const to = "/" + pathSegments.slice(0, idx + 1).join("/");
+      const label = seg
+        .split("-")
+        .map((s) => (s ? s[0].toUpperCase() + s.slice(1) : s))
+        .join(" ");
+      return { label, to };
+    }),
+  ];
 
   const username = getUsername() || "User";
   const role = getRole(); // "admin" | "superadmin" | "sales_rep" | ""
@@ -67,8 +90,12 @@ const MainLayout = () => {
       <aside
         className={`fixed inset-y-0 left-0 bg-gray-800 text-white w-64 p-4 flex flex-col transition-transform duration-300 ease-in-out z-40
         ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        } md:relative md:flex`}
+          sidebarOpen && !sidebarCollapsed
+            ? "translate-x-0"
+            : "-translate-x-full"
+        }
+        ${sidebarCollapsed ? "md:-translate-x-full" : "md:translate-x-0"}`}
+        style={{ willChange: "transform" }}
       >
         <div className="text-2xl font-bold mb-8 text-center">EDU CRM</div>
 
@@ -207,8 +234,93 @@ const MainLayout = () => {
         </div>
       </aside>
 
+      {/* Mobile overlay (fades in/out) */}
+      <div
+        className={`fixed inset-0 bg-black/30 md:hidden z-30 transition-opacity duration-300 ease-in-out ${
+          sidebarOpen && !sidebarCollapsed
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50">
+      <main
+        className={`flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50 transition-all duration-300 ease-in-out ${
+          sidebarCollapsed ? "md:ml-0" : "md:ml-64"
+        }`}
+      >
+        {/* Breadcrumb with sidebar toggle */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            {/* Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const isDesktop =
+                  typeof window !== "undefined" &&
+                  window.matchMedia &&
+                  window.matchMedia("(min-width: 768px)").matches;
+                if (isDesktop) {
+                  // Desktop: collapse/expand the sidebar (no leftover whitespace when collapsed)
+                  setSidebarCollapsed((p) => !p);
+                  setSidebarOpen(false);
+                } else {
+                  // Mobile: open/close overlay sidebar
+                  setSidebarOpen((p) => !p);
+                }
+              }}
+              className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+              title={
+                sidebarOpen && !sidebarCollapsed
+                  ? "Close sidebar"
+                  : "Open sidebar"
+              }
+            >
+              {sidebarOpen && !sidebarCollapsed ? (
+                <XMarkIcon className="h-5 w-5" />
+              ) : (
+                <Bars3Icon className="h-5 w-5" />
+              )}
+            </button>
+
+            {/* Crumbs */}
+            <nav aria-label="Breadcrumb" className="ml-1">
+              <ol className="flex items-center gap-1">
+                {breadcrumbs.map((b, i) => (
+                  <li key={b.to} className="flex items-center">
+                    {i > 0 && <span className="mx-1 text-gray-400">/</span>}
+                    {i < breadcrumbs.length - 1 ? (
+                      <Link
+                        to={b.to}
+                        className="text-gray-600 hover:text-gray-900 hover:underline"
+                      >
+                        {i === 0 ? (
+                          <span className="inline-flex items-center gap-1">
+                            <HomeIcon className="h-4 w-4" /> {b.label}
+                          </span>
+                        ) : (
+                          b.label
+                        )}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-900 font-medium">
+                        {i === 0 ? (
+                          <span className="inline-flex items-center gap-1">
+                            <HomeIcon className="h-4 w-4" /> {b.label}
+                          </span>
+                        ) : (
+                          b.label
+                        )}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          </div>
+        </div>
+
         <Outlet />
       </main>
     </div>

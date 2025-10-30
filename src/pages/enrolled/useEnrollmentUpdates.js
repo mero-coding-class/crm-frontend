@@ -121,6 +121,9 @@ export default function useEnrollmentUpdates({
             "next_pay_date",
             "payment_completed",
             "remarks",
+            // allow invoice fields for clear via JSON (null)
+            "second_invoice",
+            "third_invoice",
           ]);
           const enrollmentPayload = {};
           for (const [k, vRaw] of Object.entries(obj)) {
@@ -218,6 +221,13 @@ export default function useEnrollmentUpdates({
           const hasSecondFile = value && value.second_invoice_file instanceof File;
           const hasThirdFile = value && value.third_invoice_file instanceof File;
           const hasInvoiceFiles = hasSecondFile || hasThirdFile;
+          const removeSecond = value && value.second_invoice_remove === true;
+          const removeThird = value && value.third_invoice_remove === true;
+          if (removeSecond) enrollmentPayload.second_invoice = null;
+          if (removeThird) enrollmentPayload.third_invoice = null;
+
+          const hasFirstFile = value && value.first_invoice_file instanceof File;
+          const removeFirst = value && value.first_invoice_remove === true;
 
           let enrollmentRespJson = null;
           try {
@@ -269,6 +279,44 @@ export default function useEnrollmentUpdates({
           }
 
           let leadRespJson = null;
+          // Handle first invoice file upload/clear to Leads endpoint if requested
+          if (leadId && (hasFirstFile || removeFirst)) {
+            try {
+              const leadUrl = `${BASE_URL}/leads/${leadId}/`;
+              let lresp;
+              if (hasFirstFile) {
+                const fd = new FormData();
+                fd.append("first_invoice", value.first_invoice_file);
+                lresp = await fetch(leadUrl, {
+                  method: "PATCH",
+                  headers: { Authorization: `Token ${authToken}` },
+                  body: fd,
+                  credentials: "include",
+                });
+              } else if (removeFirst) {
+                lresp = await fetch(leadUrl, {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Token ${authToken}`,
+                  },
+                  body: JSON.stringify({ first_invoice: null }),
+                  credentials: "include",
+                });
+              }
+              if (lresp && lresp.ok) {
+                leadRespJson = await lresp.json().catch(() => null);
+              } else if (lresp) {
+                try {
+                  const t = await lresp.text();
+                  console.warn("Lead first_invoice update failed:", t);
+                } catch {}
+              }
+            } catch (e) {
+              console.warn("Lead first_invoice update exception (non-blocking)", e);
+            }
+          }
+
           if (leadId && Object.keys(leadPayload).length > 0) {
             try {
               const leadUrl = `${BASE_URL}/leads/${leadId}/`;
