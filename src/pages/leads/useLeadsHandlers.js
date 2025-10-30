@@ -113,6 +113,21 @@ export default function useLeadsHandlers(ctx) {
             )
           )
         );
+        // If status changed to Converted, remove from Leads immediately and broadcast the conversion
+        if (
+          (fieldName === "status" && newValue === "Converted") ||
+          (serverResp && serverResp.status === "Converted")
+        ) {
+          setAllLeads((prev) => prev.filter((l) => !matchId(l, serverId)));
+          try {
+            window.dispatchEvent(
+              new CustomEvent("crm:leadConverted", {
+                detail: { leadId: serverId },
+              })
+            );
+          } catch {}
+          setToast({ show: true, message: "Lead converted and moved to Enrolled", type: "success" });
+        }
 
         // If substatus changed, dispatch a log event so LeadLogDisplay can append an entry immediately
         const normalizedField = (fieldName || "").toLowerCase();

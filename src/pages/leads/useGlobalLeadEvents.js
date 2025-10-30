@@ -44,16 +44,30 @@ export default function useGlobalLeadEvents(
 
     const onEnrollmentCreated = () => {};
 
+    // When a lead is converted (and enrollment is created), remove it from the Leads list immediately
+    const onLeadConverted = (e) => {
+      try {
+        const leadId = String(e?.detail?.leadId ?? e?.detail?.lead?.id ?? e?.detail?.lead?._id ?? "");
+        if (!leadId || !setAllLeads) return;
+        setAllLeads((prev) => (prev || []).filter((l) => String(l.id ?? l._id ?? "") !== leadId));
+        setToast?.({ show: true, type: "success", message: "Lead converted and moved to Enrolled" });
+      } catch (err) {
+        console.warn("onLeadConverted handler failed:", err);
+      }
+    };
+
     window.addEventListener("crm:imported", onImported);
     window.addEventListener("crm:leadUpdated", onLeadUpdated);
     window.addEventListener("crm:leadRestored", onLeadRestored);
     window.addEventListener("crm:enrollmentCreated", onEnrollmentCreated);
+  window.addEventListener("crm:leadConverted", onLeadConverted);
 
     return () => {
       window.removeEventListener("crm:imported", onImported);
       window.removeEventListener("crm:leadUpdated", onLeadUpdated);
       window.removeEventListener("crm:leadRestored", onLeadRestored);
       window.removeEventListener("crm:enrollmentCreated", onEnrollmentCreated);
+      window.removeEventListener("crm:leadConverted", onLeadConverted);
       if (importDebounceRef.current) clearTimeout(importDebounceRef.current);
     };
   }, [authToken, allLeadsFullRef, setToast, handleRefresh, setAllLeads]);
