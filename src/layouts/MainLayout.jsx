@@ -250,7 +250,6 @@ const MainLayout = () => {
           sidebarCollapsed ? "md:ml-0" : "md:ml-64"
         }`}
       >
-        {/* Breadcrumb with sidebar toggle */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-sm text-gray-600">
             {/* Toggle Button */}
