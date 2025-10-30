@@ -135,7 +135,6 @@ const LeadEditForm = ({
           value={formData.studentName}
           onChange={onChange}
           className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          required
         />
       </div>
 
@@ -174,7 +173,6 @@ const LeadEditForm = ({
           value={formData.email}
           onChange={onChange}
           className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          required
         />
       </div>
 
