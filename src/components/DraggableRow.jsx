@@ -60,8 +60,46 @@ const DraggableRow = ({
 
   // For remarks display: show first (latest) by default, allow show more up to 5
   const [showAllRemarks, setShowAllRemarks] = useState(false);
-  const savedRemarkText =
-    (savedRemarks && savedRemarks[lead._id]) || lead.remarks || "";
+  // Normalize remarks to a plain string to avoid runtime errors when value is
+  // an array/object/number (e.g., after optimistic updates or server shapes)
+  const normalizeRemarkText = (val) => {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (Array.isArray(val)) {
+      // If it's an array of strings or objects, join by newlines extracting 'text' if present
+      try {
+        return val
+          .map((item) => {
+            if (item == null) return "";
+            if (typeof item === "string") return item;
+            if (typeof item === "object") {
+              if (typeof item.text === "string") return item.text;
+              if (typeof item.remarks === "string") return item.remarks;
+              return JSON.stringify(item);
+            }
+            return String(item);
+          })
+          .filter((s) => s && s.trim().length > 0)
+          .join("\n");
+      } catch {
+        return val.join("\n");
+      }
+    }
+    if (typeof val === "object") {
+      if (typeof val.text === "string") return val.text;
+      if (typeof val.remarks === "string") return val.remarks;
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    }
+    return String(val);
+  };
+
+  const savedRemarkText = normalizeRemarkText(
+    (savedRemarks && savedRemarks[lead._id]) || lead.remarks || ""
+  );
   const remarkLines = savedRemarkText
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -225,7 +263,9 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  {lead.phone_number || ""}
+                  {lead.phone_number && String(lead.phone_number).trim() !== ""
+                    ? lead.phone_number
+                    : "N/A"}
                 </td>
               );
             case "whatsapp_number":
@@ -234,7 +274,10 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  {lead.whatsapp_number || ""}
+                  {lead.whatsapp_number &&
+                  String(lead.whatsapp_number).trim() !== ""
+                    ? lead.whatsapp_number
+                    : "N/A"}
                 </td>
               );
             // ... inside renderCell for "age":
@@ -277,7 +320,9 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  {lead.source}
+                  {lead.source && String(lead.source).trim() !== ""
+                    ? lead.source
+                    : "N/A"}
                 </td>
               );
             case "course_name":
@@ -597,7 +642,11 @@ const DraggableRow = ({
                   key={key}
                   className="px-3 py-4 whitespace-nowrap text-sm text-gray-700"
                 >
-                  {cellValue}
+                  {cellValue === undefined ||
+                  cellValue === null ||
+                  String(cellValue).trim() === ""
+                    ? "N/A"
+                    : cellValue}
                 </td>
               );
           }
