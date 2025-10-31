@@ -838,6 +838,10 @@ export const trashService = {
       headers: { Authorization: `Token ${authToken}` },
     });
     if (!response.ok) {
+      // Treat 404 as already deleted to make bulk delete resilient
+      if (response.status === 404) {
+        return {};
+      }
       let errorMsg = "Failed to permanently delete lead from trash";
       try {
         const errData = await response.json();

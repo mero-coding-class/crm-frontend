@@ -39,9 +39,9 @@ const headerMapping = {
   "Lead Source": "source",
   "Source Channel": "source",
   "Class Type": "class_type",
-  Course: "course",
-  "Course Name": "course",
-  Program: "course",
+  Course: "course_name",
+  "Course Name": "course_name",
+  Program: "course_name",
   "Course Type": "course_type",
   Mode: "course_type",
   "Learning Mode": "course_type",
@@ -188,14 +188,10 @@ const mapRowToLead = (row, headerMapLower, headerMapNormalized) => {
     }
   });
 
-  // Cross-field mirroring for course values (ensure both present for display/use)
-  if (leadBackend.course && !leadBackend.course_name) {
-    leadBackend.course_name = leadBackend.course;
-    leadFrontend.course_name = leadBackend.course;
-  }
-  if (leadBackend.course_name && !leadBackend.course) {
-    leadBackend.course = leadBackend.course_name;
-    leadFrontend.course = leadBackend.course_name;
+  // Do not mirror course_name into course; backend expects course to be a numeric id.
+  // Keep course_name for display. Only include course if it is a numeric id.
+  if (leadBackend.course && !/^\d+$/.test(String(leadBackend.course))) {
+    delete leadBackend.course;
   }
 
   // scheduled_taken default and legacy demo_scheduled
@@ -492,6 +488,13 @@ const ImportCsvButton = ({ authToken, onImported }) => {
                 v !== null && v !== undefined && String(v).trim() !== ""
             )
           );
+          // Ensure 'course' is numeric; otherwise, drop it to avoid backend type error.
+          if (
+            Object.prototype.hasOwnProperty.call(sanitizedPayload, "course") &&
+            !/^\d+$/.test(String(sanitizedPayload.course))
+          ) {
+            delete sanitizedPayload.course;
+          }
           // If first_invoice is a URL/data URI string, try to convert to a File
           let invoiceFile = null;
           if (typeof sanitizedPayload.first_invoice === "string") {
