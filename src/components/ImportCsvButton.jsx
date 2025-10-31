@@ -228,29 +228,13 @@ const mapRowToLead = (row, headerMapLower, headerMapNormalized) => {
   }
   // Derive student_name if absent
   if (!leadBackend.student_name) {
-    if (leadBackend.parents_name) {
-      leadBackend.student_name = leadBackend.parents_name;
-      leadFrontend.studentName = leadBackend.parents_name;
-    } else {
-      let guessedName = null;
-      for (const [k, v] of Object.entries(row)) {
-        const nk = normKey(k);
-        if (/(fullname|name|student)/.test(nk) && !/parent/.test(nk)) {
-          const sv = (v ?? "").toString().trim();
-          if (sv) {
-            guessedName = sv;
-            break;
-          }
-        }
-      }
-      if (guessedName) {
-        leadBackend.student_name = guessedName;
-        leadFrontend.studentName = guessedName;
-      } else {
-        // default to Unknown if truly absent; allow phone-only rows
-        leadBackend.student_name = "Unknown";
-        leadFrontend.studentName = "Unknown";
-      }
+    // Do not derive from other fields; keep backend clean by omitting the key.
+    // For UI display, mark as N/A when missing.
+    if (
+      leadFrontend.studentName === undefined ||
+      leadFrontend.studentName === ""
+    ) {
+      leadFrontend.studentName = "N/A";
     }
   }
 
@@ -268,6 +252,45 @@ const mapRowToLead = (row, headerMapLower, headerMapNormalized) => {
     leadFrontend.status = leadFrontend.status ?? "Active";
   if (!leadBackend.substatus)
     leadFrontend.substatus = leadFrontend.substatus ?? "New";
+
+  // Provide "N/A" as display fallback for common optional fields without
+  // sending placeholder values to the backend.
+  const displayFallbackKeys = [
+    "studentName",
+    "parentsName",
+    "email",
+    "phone",
+    "contactWhatsapp",
+    "age",
+    "grade",
+    "source",
+    "classType",
+    "course_name",
+    "course",
+    "courseType",
+    "shift",
+    "device",
+    "permanentAddress",
+    "temporaryAddress",
+    "city",
+    "county",
+    "country",
+    "postCode",
+    "leadType",
+    "value",
+    "adsetName",
+    "course_duration",
+    "paymentType",
+    "school_college_name",
+    "first_installment",
+  ];
+  displayFallbackKeys.forEach((k) => {
+    const v = leadFrontend[k];
+    if (v === undefined || v === null || String(v).trim() === "") {
+      // Do not override known defaults set above (status/substatus/scheduledTaken)
+      leadFrontend[k] = "N/A";
+    }
+  });
 
   return { leadBackend, leadFrontend };
 };
