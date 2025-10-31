@@ -129,8 +129,12 @@ export const LeadTableRow = ({
           );
         }
 
-        // Default cell display
-        return value || "-";
+        // Default cell display: show N/A when empty
+        return value === undefined ||
+          value === null ||
+          String(value).trim() === ""
+          ? "N/A"
+          : value;
     }
   };
 
