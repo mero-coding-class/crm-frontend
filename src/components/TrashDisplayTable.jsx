@@ -340,23 +340,28 @@ const TrashTableDisplay = ({
                     <span className="sr-only">Drag</span>
                   </th>
                   <th className="px-3 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      onChange={handleSelectAll}
-                      checked={
+                    {(() => {
+                      const allSelected =
                         currentLeads.length > 0 &&
-                        currentLeads.every((lead) => selectedLeads.has(lead.id))
-                      }
-                      indeterminate={
-                        currentLeads.some((lead) =>
+                        currentLeads.every((lead) =>
                           selectedLeads.has(lead.id)
-                        ) &&
-                        !currentLeads.every((lead) =>
-                          selectedLeads.has(lead.id)
-                        )
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
+                        );
+                      const someSelected = currentLeads.some((lead) =>
+                        selectedLeads.has(lead.id)
+                      );
+                      const isIndeterminate = someSelected && !allSelected;
+                      return (
+                        <input
+                          type="checkbox"
+                          onChange={handleSelectAll}
+                          checked={allSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = isIndeterminate;
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      );
+                    })()}
                   </th>
                   {Object.entries(columns).map(([key, { label, visible }]) =>
                     visible ? (
