@@ -62,12 +62,11 @@ export default function useAddLeadForm({ courses = [], authToken, onClose, onSav
 
   const handleSubmit = async () => {
     // Required fields (align with labels showing RequiredLabel in AddLeadModal)
-    // NOTE: student_name, email, class_type are optional per request
+    // Newly optional per request: student_name, email, age, grade, class_type,
+    // parents_name, lead_type
     const requiredFieldsList = [
-      "parents_name",
       "phone_number",
       "whatsapp_number",
-      "lead_type",
       "course_name",
       "source",
       "add_date",
@@ -140,6 +139,7 @@ export default function useAddLeadForm({ courses = [], authToken, onClose, onSav
     const optionalKeys = [
       // Newly optional fields
       "student_name",
+      "parents_name",
       "email",
       "age",
       "grade",
@@ -153,6 +153,7 @@ export default function useAddLeadForm({ courses = [], authToken, onClose, onSav
       "previous_coding_experience",
       "school_college_name",
       "demo_scheduled",
+      "lead_type",
     ];
     optionalKeys.forEach((k) => {
       if (backendPayload[k] === "" || backendPayload[k] === null || backendPayload[k] === undefined) {

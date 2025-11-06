@@ -115,10 +115,12 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
     "demo_scheduled",
     // Newly optional per request
     "student_name",
+    "parents_name",
     "email",
     "age",
     "grade",
     "class_type",
+    "lead_type",
     // server-managed timestamps are optional on the form
     "created_at",
     "updated_at",
@@ -218,7 +220,6 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               value={formData.lead_type}
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
               ref={setFieldRef("lead_type")}
             >
               <option value="">Select type</option>
@@ -293,7 +294,6 @@ const AddLeadModal = ({ onClose, onSave, courses = [], authToken }) => {
               onChange={handleChange}
               className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="e.g., John & Jane Doe"
-              required // Added 'required' attribute
               ref={setFieldRef("parents_name")}
             />
             <FieldError name="parents_name" />
