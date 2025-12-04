@@ -310,11 +310,7 @@ const ImportCsvButton = ({ authToken, onImported }) => {
     setFileName(file.name || "");
     setImporting(true);
     setProgress(0);
-    setStatusMessage(
-      USE_SERVER_IMPORT
-        ? "Attempting backend import..."
-        : "Using client-side import (server importer temporarily disabled)"
-    );
+    setStatusMessage(USE_SERVER_IMPORT ? "Attempting backend import..." : "");
 
     const backendImportUrl = `${BASE_URL}/leads/import-csv/`;
     abortControllerRef.current = new AbortController();
