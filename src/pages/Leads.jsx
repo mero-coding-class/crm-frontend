@@ -8,7 +8,7 @@ import LeadsFilters from "../components/LeadsFilters";
 import Toast from "../components/common/Toast";
 import DelayedLoader from "../components/common/DelayedLoader";
 import Loader from "../components/common/Loader";
-// Modularized Leads page helpers/hooks
+
 import useUsers from "./leads/useUsers";
 import useCourses from "./leads/useCourses";
 import useGlobalLeadEvents from "./leads/useGlobalLeadEvents";
@@ -39,8 +39,7 @@ const Leads = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Core leads state (first page load + helpers to fetch all pages)
-  const pageSize = 20; // used only by initial refresh in core hook
+  const pageSize = 20;
   const {
     allLeads,
     setAllLeads,
@@ -52,9 +51,11 @@ const Leads = () => {
     allLeadsFullRef,
     handleRefresh,
     fetchAllLeads,
+    currentPage,
+    totalPages,
+    goToPage,
   } = useLeadsCore(authToken, pageSize);
 
-  // Filters (these can trigger a full fetch when necessary)
   const {
     leads,
     setLeads,
@@ -94,7 +95,6 @@ const Leads = () => {
     );
   }, [leads, searchTerm]);
 
-  // Global CRM events
   useGlobalLeadEvents(
     authToken,
     allLeadsFullRef,
@@ -103,7 +103,6 @@ const Leads = () => {
     setAllLeads
   );
 
-  // Centralized export logic/state
   const {
     exportConfirmVisible: exportConfirmVisibleHook,
     setExportConfirmVisible: setExportConfirmVisibleHook,
@@ -126,7 +125,6 @@ const Leads = () => {
     setError,
   });
 
-  // Handlers (add/edit/delete/update) from hook
   const {
     isEditModalOpen,
     isAddModalOpen,
@@ -224,9 +222,6 @@ const Leads = () => {
     [setAllLeads]
   );
 
-  // handleAssignedToChange, handleDelete, handleBulkDelete are provided by useLeadsHandlers
-
-  // Admin status check
   const role = user?.role?.toString().toLowerCase();
   const isAdmin =
     user &&
@@ -235,15 +230,12 @@ const Leads = () => {
       role === "superadmin" ||
       role === "super-admin");
 
-  // Admins/super-admins should see all leads by default
-  // For non-admins, hide Converted/Lost/Junk except when the lead is assigned to the current user
-  // Ensure uniqueness before any role-based visibility or extra filter chaining
   let currentLeads = deduplicateLeads([...searchedLeads]);
   if (!isAdmin) {
     const username =
       (user && user.username) || localStorage.getItem("username") || "";
     const normalizedUsername = String(username).trim().toLowerCase();
-    currentLeads = allLeads.filter((lead) => {
+    currentLeads = currentLeads.filter((lead) => {
       // consider the lead assigned to current user if normalized matches
       const aNorm = (lead.assigned_to_normalized || "")
         .toString()
@@ -256,16 +248,13 @@ const Leads = () => {
       const isAssigned =
         normalizedUsername &&
         (aNorm === normalizedUsername || auNorm === normalizedUsername);
-      // keep assigned leads regardless of status; otherwise filter out Converted/Lost
+
       return (
         isAssigned || (lead.status !== "Converted" && lead.status !== "Lost")
       );
     });
   }
 
-  // Search is already applied in searchedLeads; currentLeads now equals searchedLeads with role-based filtering applied above
-
-  // Role-based visibility: non-admin users see only leads assigned to them
   if (!isAdmin) {
     const username =
       (user && user.username) || localStorage.getItem("username") || "";
@@ -522,6 +511,10 @@ const Leads = () => {
         ) : (
           <LeadTableDisplay
             leads={currentLeads}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            leadsPerPage={pageSize}
             handleEdit={handleEdit}
             handleDelete={handleDelete}
             handleBulkDelete={handleBulkDelete}
