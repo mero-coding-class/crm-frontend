@@ -145,7 +145,6 @@ const backendToFrontendKeyMap = {
   first_invoice: "first_invoice",
 };
 
-// Produce a compact, punctuation-free key for fuzzy header matching
 const normKey = (s = "") =>
   s
     .toString()

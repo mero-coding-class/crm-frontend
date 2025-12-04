@@ -253,6 +253,78 @@ export const leadService = {
     }));
   },
 
+  // Fetch a specific page of leads from the backend (supports paginated API)
+  getLeadsPage: async (authToken, page = 1, pageSize = 20) => {
+    if (!authToken) throw new Error("Authentication token not found.");
+    const url = `${BASE_URL}/leads/?page=${page}&page_size=${pageSize}`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Token ${authToken}` },
+    });
+    const json = await handleResponse(resp);
+
+    // Normalize response: backend may return { results: [...], count }
+    const list = Array.isArray(json) ? json : json?.results || [];
+    const count = json && typeof json === "object" && (json.count || json.total || null);
+    const totalPages = count ? Math.max(1, Math.ceil(count / pageSize)) : Math.max(1, Math.ceil((list.length || 0) / pageSize));
+
+    // Reuse the same mapping shape as getLeads to keep UI stable
+    const mapped = (list || []).map((lead) => ({
+      id: lead.id,
+      _id: lead._id || lead.id || lead.email || lead.phone_number || `lead-${lead.id}`,
+      student_name: lead.student_name || "",
+      parents_name: lead.parents_name || "",
+      phone_number: lead.phone_number || "",
+      whatsapp_number: lead.whatsapp_number || "",
+      course_name: lead.course_name,
+      course: lead.course,
+      email: lead.email || "",
+      age: lead.age || "",
+      grade: lead.grade || "",
+      status: lead.status || "New",
+      assigned_to: lead.assigned_to || lead.assigned_to_username || "",
+      assigned_to_username: lead.assigned_to_username || lead.assigned_to || "",
+      substatus: lead.substatus || lead.sub_status || "New",
+      sub_status: lead.sub_status || lead.substatus || "New",
+      course_duration: lead.course_duration || lead.courseDuration || "",
+      class_type: lead.class_type || "",
+      course_type: lead.course_type || lead.courseType || "",
+      scheduled_taken: (lead.scheduled_taken !== undefined ? lead.scheduled_taken : (lead.demo_scheduled !== undefined ? lead.demo_scheduled : "")) || "",
+      demo_scheduled: (lead.demo_scheduled !== undefined ? lead.demo_scheduled : (lead.scheduled_taken !== undefined ? lead.scheduled_taken : "")) || "",
+      last_call: lead.last_call || "",
+      next_call: lead.next_call || "",
+      created_at: lead.created_at || "",
+      updated_at: lead.updated_at || "",
+      lead_type: lead.lead_type || lead.leadType || "",
+      school_college_name: lead.school_college_name || "",
+      studentName: lead.student_name || "",
+      parentsName: lead.parents_name || "",
+      phone: lead.phone_number || "",
+      contactWhatsapp: lead.whatsapp_number || "",
+      source: lead.source || "",
+      permanentAddress: lead.address_line_1 || "",
+      temporaryAddress: lead.address_line_2 || "",
+      city: lead.city || "",
+      county: lead.county || "",
+      postCode: lead.post_code || "",
+      classType: lead.class_type || "",
+      courseType: lead.course_type || lead.courseType || "",
+      scheduledTaken: (lead.scheduled_taken !== undefined ? lead.scheduled_taken : (lead.demo_scheduled !== undefined ? lead.demo_scheduled : "")) || "",
+      lastCall: lead.last_call || "",
+      nextCall: lead.next_call || "",
+      value: lead.value || "",
+      adsetName: lead.adset_name || "",
+      remarks: lead.remarks || "",
+      shift: lead.shift || "",
+      paymentType: lead.payment_type || "",
+      device: lead.device || "",
+      previousCodingExp: lead.previous_coding_experience || "",
+      workshopBatch: lead.workshop_batch || "",
+      changeLog: lead.change_log || [],
+    }));
+
+    return { results: mapped, count: count || null, totalPages };
+  },
+
   updateLead: async (id, updates, authToken) => {
     if (!authToken) throw new Error("Authentication token not found.");
 
