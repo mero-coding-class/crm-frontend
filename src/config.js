@@ -1,1 +1,1 @@
-export const BASE_URL = "https://crmbackend.ktm.yetiappcloud.com//api";
+export const BASE_URL = "https://crmbackend.ktm.yetiappcloud.com/api";
